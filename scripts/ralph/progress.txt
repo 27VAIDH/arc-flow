@@ -23,6 +23,9 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - Context menus use a shared `ContextMenu` component in `src/sidepanel/ContextMenu.tsx` — rendered at App level, state lifted via `setContextMenu`
 - In-sidebar context menus use `onContextMenu` React handler (not `chrome.contextMenus` API which is for page-level context menus)
 - Drag-and-drop uses `@dnd-kit/core` + `@dnd-kit/sortable` + `@dnd-kit/utilities`; PointerSensor with `distance: 5` prevents accidental drags from clicks
+- Chrome context menus (`chrome.contextMenus.create`) must be registered inside `chrome.runtime.onInstalled` listener; use `chrome.contextMenus.update` for dynamic title changes
+- Folder storage helpers in `src/shared/folderStorage.ts`; pinned apps storage in `src/shared/storage.ts`
+- Nesting depth validation: traverse parentId chain counting ancestors; reject at depth >= 3
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -433,4 +436,107 @@ There are still stories with `passes: false` (US-011 through US-041), so the nex
   - `touch-none` Tailwind class needed on draggable items to prevent browser touch scroll interference
   - `draggable={false}` on `<img>` elements inside draggable items prevents browser native image drag behavior
   - `horizontalListSortingStrategy` from `@dnd-kit/sortable` is ideal for horizontal reorder rows
+---
+
+## Iteration 11 - Sun Feb 15 16:14:45 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-11.log
+---
+**US-011 is complete.** Here's what was implemented:
+
+- **`@dnd-kit/core`**, **`@dnd-kit/sortable`**, and **`@dnd-kit/utilities`** installed as dependencies
+- **`SortablePinnedApp`** — New component wrapping each pinned app icon with `useSortable` hook for drag-and-drop
+- **`DndContext` + `SortableContext`** — Wraps the pinned apps row with `horizontalListSortingStrategy` and `closestCenter` collision detection
+- **`PointerSensor`** with `distance: 5` activation constraint prevents accidental drags from click interactions
+- **Optimistic reorder** — `arrayMove` updates local state immediately, then `reorderPinnedApps()` persists to `chrome.storage.local`
+- **Visual feedback** — Dragged item has `opacity: 0.5`, items have `touch-none` class, images have `draggable={false}`
+
+All quality checks pass (typecheck, lint, build). Committed as `2d72ba2`.
+
+There are still stories with `passes: false` (US-012 through US-041), so the next iteration will pick up US-012.
+---
+
+## 2026-02-15 - US-012
+- Implemented Chrome page-level context menu for Pin/Unpin to ArcFlow
+- Files changed:
+  - src/background/service-worker.ts (added contextMenus.create, onClicked handler, dynamic title update)
+- **Learnings for future iterations:**
+  - `chrome.contextMenus.create()` must be called inside `chrome.runtime.onInstalled` listener, not at top level
+  - `chrome.contextMenus.update()` can change the title dynamically — used to toggle between "Pin to ArcFlow" and "Unpin from ArcFlow"
+  - Context menu title updates on `tabs.onActivated` and `tabs.onUpdated` (when URL changes on active tab)
+  - `info.pageUrl` is a fallback when `tab.url` is undefined in the `onClicked` handler
+  - Service worker imports from `../shared/storage` work because Vite bundles the service worker entry
+  - The `contextMenus` permission was already in manifest.json from US-001 scaffolding
+---
+
+## Iteration 12 - Sun Feb 15 16:16:31 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-12.log
+---
+**US-012 is complete.** Here's what was implemented:
+
+- **Chrome page-level context menu** — `chrome.contextMenus.create()` registers "Pin to ArcFlow" with `contexts: ['page']` in the `onInstalled` listener
+- **Pin/Unpin toggle** — Clicking the menu item checks if the current tab's URL origin is already pinned:
+  - If pinned → removes the pinned app via `removePinnedApp()`
+  - If not pinned → adds it via `addPinnedApp()` with tab's URL, title, and favicon
+- **Dynamic menu title** — Menu updates to "Unpin from ArcFlow" when navigating to an already-pinned site, via `chrome.contextMenus.update()` on tab activation and URL changes
+- **Storage integration** — Imports from `src/shared/storage.ts` for `getPinnedApps`, `addPinnedApp`, `removePinnedApp`
+
+All quality checks pass (typecheck, lint, build). Committed as `b53af8b`.
+
+There are still stories with `passes: false` (US-013 through US-041), so the next iteration will pick up US-013.
+---
+
+## 2026-02-15 - US-013
+- Implemented folder storage helpers and data model
+- Files created:
+  - src/shared/folderStorage.ts (getFolders, createFolder, renameFolder, deleteFolder, moveItemToFolder, updateFolder, addItemToFolder, removeItemFromFolder)
+- **Learnings for future iterations:**
+  - Folder storage uses key `folders` in `chrome.storage.local`
+  - `createFolder(name, parentId?)` validates nesting depth via parentId chain traversal; rejects if depth >= 3
+  - `deleteFolder(id)` cascades: collects all descendant folder IDs recursively before deleting
+  - `moveItemToFolder(itemId, targetFolderId)` searches across all folders' items arrays to find the source
+  - Additional helpers `updateFolder`, `addItemToFolder`, `removeItemFromFolder` added for future UI stories
+  - Follows same pattern as `src/shared/storage.ts` (pinned apps): get/save with typed casts, sort by sortOrder
+  - `crypto.randomUUID()` used for ID generation (available in Chrome extension context)
+---
+
+## Iteration 13 - Sun Feb 15 16:18:18 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-13.log
+---
+**US-013 is complete.** Here's what was implemented:
+
+- **`src/shared/folderStorage.ts`** — New module with 8 exported functions:
+  - `getFolders()` — Retrieves all folders sorted by sortOrder
+  - `createFolder(name, parentId?)` — Creates a folder with nesting depth validation (rejects at depth >= 3) and non-empty name validation
+  - `renameFolder(id, name)` — Renames a folder with non-empty name validation
+  - `deleteFolder(id)` — Deletes a folder and all its descendants recursively
+  - `moveItemToFolder(itemId, targetFolderId)` — Moves a FolderItem between folders
+  - `updateFolder(id, data)` — Partial update for folder properties (e.g., isCollapsed, sortOrder)
+  - `addItemToFolder(folderId, item)` — Adds a FolderItem to a folder
+  - `removeItemFromFolder(folderId, itemId)` — Removes a FolderItem from a folder
+
+- All acceptance criteria met: storage helpers, data shapes match types.ts, nesting depth validated, non-empty names enforced, typecheck/lint/build pass
+- Committed as `7e4bc5d`
+
+There are still stories with `passes: false` (US-014 through US-041), so the next iteration will pick up US-014.
+---
+
+## 2026-02-15 - US-014
+- Implemented folder tree UI with create, rename, delete, and collapse functionality
+- Files created:
+  - src/sidepanel/FolderTree.tsx (FolderTree and FolderHeader components)
+- Files changed:
+  - src/sidepanel/App.tsx (imported and placed FolderTree component in Zone 3, between Pinned Apps and tab list)
+  - scripts/ralph/prd.json (marked US-014 passes: true)
+- **Learnings for future iterations:**
+  - FolderTree component listens to `chrome.storage.onChanged` for key `folders` — same pattern as PinnedAppsRow
+  - Collapse toggle updates local state optimistically then persists via `updateFolder(id, { isCollapsed: ... })`
+  - Folder rendering is recursive: `renderFolder(folder, depth)` indents children at 16px per depth level
+  - Double-click folder name enters inline edit mode; blur or Enter commits, Escape cancels
+  - Context menu "Rename" via right-click falls back to `window.prompt` since triggering inline edit from context menu callback is complex; double-click provides the inline editing experience
+  - Folder header shows count badge like `(2 tabs, 1 link)` computed from folder.items
+  - Delete confirmation only shows when folder has tabs (type==='tab'); empty folders delete silently
+  - FolderTree renders "New Folder" button when no folders exist; shows "Folders" section header with + button when folders exist
 ---

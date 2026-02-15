@@ -7,6 +7,7 @@ import {
   removePinnedApp,
 } from "../shared/storage";
 import PinnedAppsRow from "./PinnedAppsRow";
+import FolderTree from "./FolderTree";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
 
 function getOrigin(url: string): string {
@@ -279,6 +280,9 @@ export default function App() {
 
       {/* Pinned Apps Row (Zone 2) */}
       <PinnedAppsRow tabs={tabs} onContextMenu={setContextMenu} />
+
+      {/* Folder Tree (Zone 3) */}
+      <FolderTree onContextMenu={setContextMenu} />
 
       {/* Tab list */}
       <div className="flex-1 px-1">
