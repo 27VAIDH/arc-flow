@@ -163,6 +163,135 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
           </div>
         </section>
 
+        {/* Focus Mode */}
+        <section>
+          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+            Focus Mode
+          </h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-4">
+              <label className="text-sm text-gray-700 dark:text-gray-300 shrink-0">
+                Enable focus mode
+              </label>
+              <button
+                onClick={() => {
+                  const updated = {
+                    ...settings.focusMode,
+                    enabled: !settings.focusMode.enabled,
+                  };
+                  handleUpdate({ focusMode: updated });
+                  chrome.runtime.sendMessage({
+                    type: "UPDATE_FOCUS_MODE",
+                    enabled: updated.enabled,
+                    redirectRules: updated.redirectRules,
+                  });
+                }}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                  settings.focusMode.enabled
+                    ? "bg-red-600"
+                    : "bg-gray-300 dark:bg-gray-600"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                    settings.focusMode.enabled
+                      ? "translate-x-4"
+                      : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              When enabled, navigating to blocked URLs will redirect to the
+              configured productive URL.
+            </p>
+            {settings.focusMode.redirectRules.map((rule, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={rule.blockedPattern}
+                  onChange={(e) => {
+                    const rules = [...settings.focusMode.redirectRules];
+                    rules[index] = {
+                      ...rules[index],
+                      blockedPattern: e.target.value,
+                    };
+                    const updated = {
+                      ...settings.focusMode,
+                      redirectRules: rules,
+                    };
+                    handleUpdate({ focusMode: updated });
+                  }}
+                  placeholder="*twitter.com*"
+                  className="text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-900 dark:text-gray-100 flex-1 min-w-0"
+                />
+                <input
+                  type="text"
+                  value={rule.redirectUrl}
+                  onChange={(e) => {
+                    const rules = [...settings.focusMode.redirectRules];
+                    rules[index] = {
+                      ...rules[index],
+                      redirectUrl: e.target.value,
+                    };
+                    const updated = {
+                      ...settings.focusMode,
+                      redirectRules: rules,
+                    };
+                    handleUpdate({ focusMode: updated });
+                  }}
+                  placeholder="https://notion.so"
+                  className="text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-900 dark:text-gray-100 flex-1 min-w-0"
+                />
+                <button
+                  onClick={() => {
+                    const rules = settings.focusMode.redirectRules.filter(
+                      (_, i) => i !== index
+                    );
+                    const updated = {
+                      ...settings.focusMode,
+                      redirectRules: rules,
+                    };
+                    handleUpdate({ focusMode: updated });
+                    chrome.runtime.sendMessage({
+                      type: "UPDATE_FOCUS_MODE",
+                      enabled: settings.focusMode.enabled,
+                      redirectRules: rules,
+                    });
+                  }}
+                  className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-500 dark:hover:text-red-400 shrink-0"
+                  aria-label="Delete rule"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    className="w-3.5 h-3.5"
+                  >
+                    <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const rules = [
+                    ...settings.focusMode.redirectRules,
+                    { blockedPattern: "", redirectUrl: "" },
+                  ];
+                  handleUpdate({
+                    focusMode: { ...settings.focusMode, redirectRules: rules },
+                  });
+                }}
+                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+              >
+                + Add Redirect Rule
+              </button>
+            </div>
+          </div>
+        </section>
+
         {/* AI Grouping */}
         <section>
           <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">

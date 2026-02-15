@@ -80,7 +80,12 @@ export type SidePanelMessage =
   | { type: "MOVE_TAB_TO_WORKSPACE"; tabId: number; workspaceId: string }
   | { type: "APPLY_WORKSPACE_ISOLATION"; activeWorkspaceId: string }
   | { type: "SUSPEND_TAB"; tabId: number }
-  | { type: "SPLIT_VIEW"; tabId: number };
+  | { type: "SPLIT_VIEW"; tabId: number }
+  | {
+      type: "UPDATE_FOCUS_MODE";
+      enabled: boolean;
+      redirectRules: { blockedPattern: string; redirectUrl: string }[];
+    };
 
 export interface Session {
   id: string;

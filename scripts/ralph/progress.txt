@@ -66,6 +66,10 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - `structuredClone()` used to deep-copy workspace data into session snapshots to avoid reference sharing
 - File download in side panel: `URL.createObjectURL(blob)` + programmatic `<a>` click + `URL.revokeObjectURL(url)`; file input `.value = ""` to allow re-import
 - Session export includes `schemaVersion` for forward compatibility; import validates required fields and assigns new `id`/`savedAt`
+- Focus mode uses `chrome.declarativeNetRequest` dynamic rules for MV3-compliant URL interception; rules are applied/removed via `applyFocusModeRules()` in service worker
+- `chrome.declarativeNetRequest.updateDynamicRules()` requires removing existing rule IDs before adding new ones; always clear first then add
+- Focus mode state synced via `chrome.storage.onChanged` listener for `settings` key; service worker re-applies rules on any settings change
+- `UPDATE_FOCUS_MODE` message type used as explicit signal to service worker to re-apply declarativeNetRequest rules
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -1476,4 +1480,39 @@ US-036 is complete. There are still stories with `passes: false` (US-037, US-038
   - Import validation assigns new `id` (via `crypto.randomUUID()`) and `savedAt` timestamp to avoid ID collisions with existing sessions
   - File input needs `value = ""` reset after import so the same file can be re-imported
   - `structuredClone()` used in export to avoid reference sharing between exported data and live state
+---
+
+## Iteration 3 - Sun Feb 15 22:43:11 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-223132/iter-3.log
+---
+US-037 is complete. There are still stories with `passes: false` (US-038, US-039, US-040, US-041), so another iteration will pick up the next story.
+
+**Summary of US-037 implementation:**
+
+- **`src/shared/sessionStorage.ts`** — Added `SessionExport` interface, `exportSessionToJSON()` (creates JSON with schema version), `validateSessionImport()` (validates required fields: `name`, `workspaceSnapshot.pinnedApps`, `workspaceSnapshot.folders`, `tabUrls`), and `importSession()` helper.
+
+- **`src/sidepanel/SessionManager.tsx`** — Added:
+  - **Export button** on each session card that downloads a `.json` file via `URL.createObjectURL`
+  - **Import button** in the header with a hidden `<input type="file" accept=".json">`
+  - **Error display** for invalid import files with clear error messages
+  - Import assigns new `id` and `savedAt` to avoid collisions
+
+All quality checks pass (typecheck, ESLint, Prettier, build).
+---
+
+## 2026-02-15 - US-038
+- Implemented focus mode with URL redirect using `chrome.declarativeNetRequest`
+- Files changed:
+  - `public/manifest.json` — Added `declarativeNetRequest` permission
+  - `src/shared/types.ts` — Added `UPDATE_FOCUS_MODE` message type to `SidePanelMessage`
+  - `src/background/service-worker.ts` — Added `applyFocusModeRules()` function that manages dynamic declarativeNetRequest rules; listens for settings changes and `UPDATE_FOCUS_MODE` messages; applies rules on startup
+  - `src/sidepanel/App.tsx` — Added `focusModeEnabled` state synced from settings; added focus mode toggle button in footer (Zone 5) with visual indicator (red when active); updated `toggleFocusMode` callback to notify service worker
+  - `src/sidepanel/SettingsPanel.tsx` — Added Focus Mode settings section with enable/disable toggle, description, redirect rule editor (blocked pattern + redirect URL), add/remove rules
+  - `scripts/ralph/prd.json` — Marked US-038 as `passes: true`
+- **Learnings for future iterations:**
+  - `chrome.declarativeNetRequest` dynamic rules require clearing existing IDs before adding new ones
+  - Focus mode uses `MAIN_FRAME` resource type to only intercept top-level navigations
+  - Settings change listener in service worker (`chrome.storage.onChanged`) auto-applies focus mode rules, but explicit `UPDATE_FOCUS_MODE` message provides immediate feedback
+  - Glob-to-regex conversion reused from Air Traffic Control pattern
 ---

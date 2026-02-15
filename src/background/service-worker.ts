@@ -549,6 +549,70 @@ async function openSplitView(tabId: number): Promise<void> {
   });
 }
 
+// --- Focus mode: URL redirect via declarativeNetRequest ---
+
+async function applyFocusModeRules(): Promise<void> {
+  const settings = await getSettings();
+  // Remove all existing dynamic rules first
+  const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
+  const existingIds = existingRules.map((r) => r.id);
+  if (existingIds.length > 0) {
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: existingIds,
+    });
+  }
+
+  // If focus mode is disabled or no rules, nothing to add
+  if (
+    !settings.focusMode.enabled ||
+    settings.focusMode.redirectRules.length === 0
+  ) {
+    return;
+  }
+
+  // Create redirect rules from the focus mode settings
+  const addRules: chrome.declarativeNetRequest.Rule[] =
+    settings.focusMode.redirectRules
+      .filter((r) => r.blockedPattern && r.redirectUrl)
+      .map((rule, index) => {
+        // Convert glob pattern to regex filter for declarativeNetRequest
+        const escaped = rule.blockedPattern.replace(
+          /[.+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+        const regexFilter = escaped.replace(/\*/g, ".*");
+
+        return {
+          id: index + 1,
+          priority: 1,
+          action: {
+            type: chrome.declarativeNetRequest.RuleActionType.REDIRECT,
+            redirect: { url: rule.redirectUrl },
+          },
+          condition: {
+            regexFilter,
+            resourceTypes: [
+              chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
+            ],
+          },
+        };
+      });
+
+  if (addRules.length > 0) {
+    await chrome.declarativeNetRequest.updateDynamicRules({ addRules });
+  }
+}
+
+// Apply focus mode rules on startup
+applyFocusModeRules().catch(() => {});
+
+// Re-apply focus mode rules when settings change
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.settings) {
+    applyFocusModeRules().catch(() => {});
+  }
+});
+
 // Handle messages from side panel
 chrome.runtime.onMessage.addListener(
   (message: SidePanelMessage, _sender, sendResponse) => {
@@ -604,6 +668,9 @@ chrome.runtime.onMessage.addListener(
       openSplitView(message.tabId).catch(() => {
         // Split view setup failed
       });
+    }
+    if (message.type === "UPDATE_FOCUS_MODE") {
+      applyFocusModeRules().catch(() => {});
     }
     if (message.type === "OPEN_PINNED_APP") {
       // Find existing tab with matching origin, or open a new one
