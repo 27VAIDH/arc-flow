@@ -46,3 +46,9 @@ export const WORKSPACE_ISOLATION_OPTIONS = [
   { label: "Sidebar only", value: "sidebar-only" },
   { label: "Full isolation", value: "full-isolation" },
 ] as const;
+
+export const AI_PROVIDER_OPTIONS = [
+  { label: "Select provider...", value: "" },
+  { label: "Anthropic (Claude)", value: "anthropic" },
+  { label: "OpenAI (GPT)", value: "openai" },
+] as const;

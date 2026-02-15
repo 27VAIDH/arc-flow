@@ -1228,3 +1228,99 @@ There are still stories with `passes: false` (US-031 through US-041), so the nex
   - Recent commands stored in `chrome.storage.local` under `commandPaletteRecent` key; top 5 shown first when no search query
   - DOM query `document.querySelector('input[placeholder="Search tabs..."]')` used instead of ref-forwarding to avoid ref-during-render lint issues
 ---
+
+## Iteration 31 - Sun Feb 15 17:21:09 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-31.log
+---
+**US-031 is complete.** Here's what was implemented:
+
+- **`src/sidepanel/CommandPalette.tsx`** — Modal overlay (480px wide, dark backdrop) with:
+  - Search input with fuzzy matching via fuse.js across command names
+  - Arrow keys navigate results (max 8 visible), Enter executes, Escape closes
+  - Recently used commands appear at top (stored in `chrome.storage.local`)
+  - Visual icons for each command category
+
+- **`src/sidepanel/commandRegistry.ts`** — `buildCommands()` function generating all available commands:
+  - Switch Workspace (one per workspace)
+  - New Folder, Suspend Other Tabs, Toggle Theme, Open Settings, Search Tabs, New Workspace, Toggle Focus Mode
+
+- **`public/manifest.json`** — Added `open-command-palette` chrome.command (without `suggested_key` due to Chrome's 4-shortcut limit)
+
+- **`src/shared/types.ts`** — Added `OPEN_COMMAND_PALETTE` to `ServiceWorkerMessage`
+
+- **`src/background/service-worker.ts`** — Handler for `open-command-palette` command that broadcasts to side panel
+
+- **`src/sidepanel/App.tsx`** — Integrated with:
+  - `Ctrl+Shift+K` keydown listener in the side panel
+  - `OPEN_COMMAND_PALETTE` message listener from service worker
+  - Command builders with stable callbacks
+  - CommandPalette render with `showCommandPalette` state
+
+All quality checks pass (typecheck, lint, build). Committed as `02c7c9b`.
+
+There are still stories with `passes: false` (US-032 through US-041), so the next iteration will pick up US-032.
+---
+
+## 2026-02-15 - US-032
+- Implemented AI tab grouping with domain heuristics
+- Files created:
+  - src/sidepanel/OrganizeTabsModal.tsx (organize tabs modal with domain-based grouping, preview, accept/dismiss)
+- Files changed:
+  - src/sidepanel/App.tsx (added "Organize" button in header, showOrganizeTabs state, OrganizeTabsModal render)
+  - scripts/ralph/prd.json (marked US-032 passes: true)
+- **Learnings for future iterations:**
+  - Domain grouping algorithm: `getParentDomain()` merges subdomains (docs.google.com → google.com), `getDisplayName()` maps known domains to friendly names (e.g., "GitHub", "Gmail")
+  - Known domains map provides friendly names for ~30 popular sites; unknown domains use capitalized second-to-last hostname part
+  - Tabs already in folders are excluded from grouping suggestions via collecting all tabIds from folder items
+  - chrome:// and edge:// internal pages are excluded from grouping
+  - Minimum 2 tabs per domain required to suggest a folder group
+  - Users can accept all groups, select individual groups via checkboxes, or dismiss
+  - `react-hooks/set-state-in-effect` rule requires `setTimeout(() => setState(...), 0)` wrapper — applied to initial group selection in useEffect
+  - Groups are sorted by tab count descending for visibility of largest clusters first
+---
+
+## Iteration 32 - Sun Feb 15 17:24:30 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-32.log
+---
+**US-032 is complete.** Here's what was implemented:
+
+- **`src/sidepanel/OrganizeTabsModal.tsx`** — New component that:
+  - Analyzes all ungrouped tabs and clusters them by parent domain (merging subdomains like `docs.google.com` → `google.com`)
+  - Generates friendly folder names from domains (e.g., "GitHub", "Gmail", "Google Docs") using a known domains map + generic capitalization fallback
+  - Shows a preview modal with suggested groupings, each with a checkbox, tab count, and tab preview list
+  - Users can **accept all**, **accept selected** groups, or **dismiss**
+  - Excludes tabs already in folders and chrome:// internal pages
+  - Requires minimum 2 tabs per domain to suggest a group
+
+- **`src/sidepanel/App.tsx`** — Updated with:
+  - **"Organize" button** in the sidebar header
+  - `showOrganizeTabs` state and `OrganizeTabsModal` render
+
+All quality checks pass (typecheck, lint, build). Committed as `0030874`.
+
+There are still stories with `passes: false` (US-033 through US-041), so the next iteration will pick up US-033.
+---
+
+## 2026-02-15 - US-033
+- Implemented optional LLM integration for smarter tab grouping
+- Files created:
+  - src/shared/aiGroupingService.ts (callAnthropicAPI, callOpenAIAPI, parseAIResponse, getAIGroupingSuggestions)
+- Files changed:
+  - src/shared/constants.ts (added AI_PROVIDER_OPTIONS)
+  - src/sidepanel/SettingsPanel.tsx (added AI-Enhanced Grouping section with toggle, privacy notice, provider selector, API key input)
+  - src/sidepanel/OrganizeTabsModal.tsx (integrated AI grouping with fallback to domain heuristics, loading state)
+  - scripts/ralph/prd.json (marked US-033 passes: true)
+- **Learnings for future iterations:**
+  - AI grouping service sends only tab titles + URLs to the API (privacy-conscious payload)
+  - Both Anthropic and OpenAI APIs use 10-second timeout via AbortController
+  - AI response parsed by extracting JSON array from text (handles markdown code block wrapping)
+  - `getAIGroupingSuggestions()` returns `{ groups, source: "ai" | "fallback" }` — source "fallback" indicates AI failed/disabled
+  - OrganizeTabsModal tries AI grouping on mount via useEffect; if it fails or returns empty, falls back to domain heuristics transparently
+  - AI groups use synthetic hostname IDs (`ai-group-0`, `ai-group-1`, etc.) to reuse existing group selection UI
+  - Settings toggle uses a custom switch component (not a native checkbox) for better UX
+  - Privacy notice displayed as amber warning box when AI grouping is enabled
+  - API key stored in chrome.storage.local as part of settings.aiGrouping object
+  - Anthropic API requires `anthropic-dangerous-direct-browser-access: true` header for browser-based calls
+---

@@ -10,6 +10,7 @@ import {
   SUSPEND_THRESHOLD_OPTIONS,
   THEME_OPTIONS,
   WORKSPACE_ISOLATION_OPTIONS,
+  AI_PROVIDER_OPTIONS,
 } from "../shared/constants";
 
 function SelectField({
@@ -156,6 +157,92 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                 handleUpdate({ suspendAfterMinutes: parseInt(v, 10) })
               }
             />
+          </div>
+        </section>
+
+        {/* AI Grouping */}
+        <section>
+          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+            AI-Enhanced Grouping
+          </h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-4">
+              <label className="text-sm text-gray-700 dark:text-gray-300 shrink-0">
+                Enable AI grouping
+              </label>
+              <button
+                onClick={() =>
+                  handleUpdate({
+                    aiGrouping: {
+                      ...settings.aiGrouping,
+                      enabled: !settings.aiGrouping.enabled,
+                    },
+                  })
+                }
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                  settings.aiGrouping.enabled
+                    ? "bg-blue-600"
+                    : "bg-gray-300 dark:bg-gray-600"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                    settings.aiGrouping.enabled
+                      ? "translate-x-4"
+                      : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+            {settings.aiGrouping.enabled && (
+              <>
+                <div className="p-2 rounded bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    Privacy: Only tab titles and URLs are sent to the AI
+                    provider. No page content is shared.
+                  </p>
+                </div>
+                <SelectField
+                  label="Provider"
+                  value={settings.aiGrouping.provider ?? ""}
+                  options={AI_PROVIDER_OPTIONS}
+                  onChange={(v) =>
+                    handleUpdate({
+                      aiGrouping: {
+                        ...settings.aiGrouping,
+                        provider:
+                          v === "anthropic" || v === "openai" ? v : null,
+                      },
+                    })
+                  }
+                />
+                {settings.aiGrouping.provider && (
+                  <div className="flex items-center justify-between gap-4">
+                    <label className="text-sm text-gray-700 dark:text-gray-300 shrink-0">
+                      API Key
+                    </label>
+                    <input
+                      type="password"
+                      value={settings.aiGrouping.apiKey}
+                      onChange={(e) =>
+                        handleUpdate({
+                          aiGrouping: {
+                            ...settings.aiGrouping,
+                            apiKey: e.target.value,
+                          },
+                        })
+                      }
+                      placeholder={
+                        settings.aiGrouping.provider === "anthropic"
+                          ? "sk-ant-..."
+                          : "sk-..."
+                      }
+                      className="text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-900 dark:text-gray-100 min-w-[120px] w-full max-w-[180px]"
+                    />
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </section>
 

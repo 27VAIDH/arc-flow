@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { TabInfo, Folder, FolderItem } from "../shared/types";
 import { createFolder, addItemToFolder } from "../shared/folderStorage";
+import { getAIGroupingSuggestions } from "../shared/aiGroupingService";
+import { getSettings } from "../shared/settingsStorage";
 
 interface TabGroup {
   name: string;
@@ -158,19 +160,90 @@ export default function OrganizeTabsModal({
   const ref = useRef<HTMLDivElement>(null);
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
+  const [aiGroups, setAiGroups] = useState<TabGroup[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [groupingSource, setGroupingSource] = useState<"domain" | "ai">(
+    "domain"
+  );
 
-  const groups = useMemo(
+  const domainGroups = useMemo(
     () => groupTabsByDomain(tabs, folders),
     [tabs, folders]
   );
 
-  // Select all groups by default
+  // Try AI grouping on mount
   useEffect(() => {
-    setTimeout(() => {
-      const allHostnames = new Set(groups.map((g) => g.hostname));
-      setSelectedGroups(allHostnames);
-    }, 0);
-  }, [groups]);
+    let cancelled = false;
+    async function tryAIGrouping() {
+      const settings = await getSettings();
+      if (
+        !settings.aiGrouping.enabled ||
+        !settings.aiGrouping.provider ||
+        !settings.aiGrouping.apiKey
+      ) {
+        return;
+      }
+
+      // Collect tab IDs already in folders
+      const tabIdsInFolders = new Set<number>();
+      for (const folder of folders) {
+        for (const item of folder.items) {
+          if (item.type === "tab" && item.tabId != null) {
+            tabIdsInFolders.add(item.tabId);
+          }
+        }
+      }
+
+      // Filter to ungrouped tabs
+      const ungroupedTabs = tabs.filter((tab) => {
+        if (tabIdsInFolders.has(tab.id)) return false;
+        return (
+          !tab.url.startsWith("chrome://") && !tab.url.startsWith("edge://")
+        );
+      });
+
+      if (ungroupedTabs.length < 2) return;
+
+      setLoading(true);
+      const result = await getAIGroupingSuggestions(
+        ungroupedTabs,
+        settings.aiGrouping
+      );
+
+      if (cancelled) return;
+      setLoading(false);
+
+      if (result.source === "ai" && result.groups.length > 0) {
+        const aiTabGroups: TabGroup[] = result.groups.map((g, i) => ({
+          name: g.name,
+          hostname: `ai-group-${i}`,
+          tabs: g.tabs,
+        }));
+        setAiGroups(aiTabGroups);
+        setTimeout(() => {
+          setGroupingSource("ai");
+          setSelectedGroups(new Set(aiTabGroups.map((g) => g.hostname)));
+        }, 0);
+      }
+    }
+
+    tryAIGrouping();
+    return () => {
+      cancelled = true;
+    };
+  }, [tabs, folders]);
+
+  const groups = aiGroups && groupingSource === "ai" ? aiGroups : domainGroups;
+
+  // Select all groups by default (for domain groups)
+  useEffect(() => {
+    if (groupingSource === "domain") {
+      setTimeout(() => {
+        const allHostnames = new Set(domainGroups.map((g) => g.hostname));
+        setSelectedGroups(allHostnames);
+      }, 0);
+    }
+  }, [domainGroups, groupingSource]);
 
   // Close on Escape
   useEffect(() => {
@@ -260,6 +333,25 @@ export default function OrganizeTabsModal({
     }
   };
 
+  if (loading) {
+    return (
+      <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div
+          ref={ref}
+          className="w-[320px] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 p-4"
+        >
+          <h2 className="text-sm font-semibold mb-2">Organize Tabs</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            Analyzing tabs with AI...
+          </p>
+          <div className="flex justify-center">
+            <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (groups.length === 0) {
     return (
       <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -295,7 +387,7 @@ export default function OrganizeTabsModal({
           <h2 className="text-sm font-semibold">Organize Tabs</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             {groups.length} group{groups.length !== 1 ? "s" : ""} suggested
-            based on domains
+            {groupingSource === "ai" ? " by AI" : " based on domains"}
           </p>
         </div>
 
