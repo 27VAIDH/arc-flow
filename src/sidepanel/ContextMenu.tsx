@@ -38,6 +38,12 @@ export default function ContextMenu({
     };
   }, [onClose]);
 
+  // Focus first item on mount
+  useEffect(() => {
+    const firstBtn = menuRef.current?.querySelector("button");
+    firstBtn?.focus();
+  }, []);
+
   // Adjust position to stay within viewport
   useEffect(() => {
     if (!menuRef.current) return;
@@ -53,20 +59,47 @@ export default function ContextMenu({
     }
   }, [x, y]);
 
+  const handleMenuKeyDown = (e: React.KeyboardEvent) => {
+    const buttons = menuRef.current?.querySelectorAll("button");
+    if (!buttons || buttons.length === 0) return;
+    const focused = document.activeElement as HTMLElement;
+    const idx = Array.from(buttons).indexOf(focused as HTMLButtonElement);
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const next = idx < buttons.length - 1 ? idx + 1 : 0;
+      buttons[next].focus();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const prev = idx > 0 ? idx - 1 : buttons.length - 1;
+      buttons[prev].focus();
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      buttons[0].focus();
+    } else if (e.key === "End") {
+      e.preventDefault();
+      buttons[buttons.length - 1].focus();
+    }
+  };
+
   return (
     <div
       ref={menuRef}
+      role="menu"
+      aria-label="Context menu"
       className="fixed z-50 min-w-[160px] py-1 rounded-md shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
       style={{ left: x, top: y }}
+      onKeyDown={handleMenuKeyDown}
     >
       {items.map((item) => (
         <button
           key={item.label}
+          role="menuitem"
           onClick={() => {
             item.onClick();
             onClose();
           }}
-          className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+          className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700"
         >
           {item.label}
         </button>

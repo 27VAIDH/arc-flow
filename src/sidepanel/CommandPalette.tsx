@@ -254,13 +254,20 @@ export default function CommandPalette({
   return (
     <div
       className="absolute inset-0 z-50 flex items-start justify-center pt-16"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Command palette"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
       onKeyDown={handleKeyDown}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-black/40"
+        onClick={onClose}
+        aria-hidden="true"
+      />
 
       {/* Modal */}
       <div className="relative w-[480px] max-w-[calc(100%-32px)] bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-600 overflow-hidden">
@@ -285,6 +292,15 @@ export default function CommandPalette({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Type a command..."
             className="flex-1 bg-transparent outline-none text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="command-palette-list"
+            aria-activedescendant={
+              visibleCommands[selectedIndex]
+                ? `cmd-${visibleCommands[selectedIndex].id}`
+                : undefined
+            }
+            aria-autocomplete="list"
           />
           <kbd className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">
             esc
@@ -292,7 +308,13 @@ export default function CommandPalette({
         </div>
 
         {/* Command list */}
-        <div ref={listRef} className="max-h-[320px] overflow-y-auto py-1">
+        <div
+          ref={listRef}
+          id="command-palette-list"
+          role="listbox"
+          aria-label="Commands"
+          className="max-h-[320px] overflow-y-auto py-1"
+        >
           {visibleCommands.length === 0 ? (
             <div className="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
               No commands found
@@ -301,6 +323,9 @@ export default function CommandPalette({
             visibleCommands.map((cmd, index) => (
               <button
                 key={cmd.id}
+                id={`cmd-${cmd.id}`}
+                role="option"
+                aria-selected={index === selectedIndex}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   executeCommand(cmd);

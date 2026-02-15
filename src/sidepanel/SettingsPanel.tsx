@@ -95,7 +95,12 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
   if (!settings) return null;
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col bg-gray-50 dark:bg-gray-900">
+    <div
+      className="absolute inset-0 z-50 flex flex-col bg-gray-50 dark:bg-gray-900"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Settings"
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
         <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">

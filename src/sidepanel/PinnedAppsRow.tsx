@@ -80,7 +80,7 @@ function SortablePinnedApp({
       onContextMenu={onContextMenu}
       className="flex flex-col items-center shrink-0 group touch-none"
       title={app.title}
-      aria-label={`Open ${app.title}`}
+      aria-label={`${app.title}${hasOpenTab ? " (open)" : ""}`}
     >
       <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
         {app.favicon ? (
@@ -104,6 +104,7 @@ function SortablePinnedApp({
         className={`w-1.5 h-1.5 rounded-full mt-0.5 ${
           hasOpenTab ? "bg-[#2E75B6]" : "bg-transparent"
         }`}
+        aria-hidden="true"
       />
     </button>
   );
@@ -243,7 +244,10 @@ export default function PinnedAppsRow({
   };
 
   return (
-    <div className="px-2 py-1.5 border-b border-gray-200 dark:border-gray-700">
+    <nav
+      aria-label="Pinned apps"
+      className="px-2 py-1.5 border-b border-gray-200 dark:border-gray-700"
+    >
       {editingApp && (
         <div className="mb-1.5">
           <input
@@ -274,6 +278,8 @@ export default function PinnedAppsRow({
           <div
             ref={scrollRef}
             className="flex gap-2 overflow-x-auto scrollbar-none"
+            role="toolbar"
+            aria-label="Pinned applications"
           >
             {pinnedApps.map((app) => {
               const origin = getOrigin(app.url);
@@ -292,6 +298,6 @@ export default function PinnedAppsRow({
           </div>
         </SortableContext>
       </DndContext>
-    </div>
+    </nav>
   );
 }

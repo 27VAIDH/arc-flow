@@ -274,7 +274,27 @@ export default function WorkspaceSwitcher({
       )}
 
       {/* Icon strip */}
-      <div className="flex items-center gap-1.5 px-3 py-2">
+      <div
+        className="flex items-center gap-1.5 px-3 py-2"
+        role="toolbar"
+        aria-label="Workspace switcher"
+        onKeyDown={(e) => {
+          const buttons = e.currentTarget.querySelectorAll("button");
+          const focused = document.activeElement as HTMLElement;
+          const idx = Array.from(buttons).indexOf(focused as HTMLButtonElement);
+          if (idx === -1) return;
+
+          if (e.key === "ArrowRight") {
+            e.preventDefault();
+            const next = idx < buttons.length - 1 ? idx + 1 : 0;
+            buttons[next].focus();
+          } else if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            const prev = idx > 0 ? idx - 1 : buttons.length - 1;
+            buttons[prev].focus();
+          }
+        }}
+      >
         {workspaces.map((ws) => {
           const isActive = ws.id === activeWorkspaceId;
           return (
@@ -282,7 +302,7 @@ export default function WorkspaceSwitcher({
               key={ws.id}
               onClick={() => handleSwitchWorkspace(ws.id)}
               onContextMenu={(e) => handleContextMenu(e, ws)}
-              className={`w-7 h-7 rounded-md flex items-center justify-center text-sm shrink-0 transition-all ${
+              className={`w-7 h-7 rounded-md flex items-center justify-center text-sm shrink-0 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 isActive
                   ? "ring-2 ring-offset-1 dark:ring-offset-gray-900"
                   : "opacity-70 hover:opacity-100"
@@ -296,8 +316,10 @@ export default function WorkspaceSwitcher({
                     }
                   : {}),
               }}
+              tabIndex={isActive ? 0 : -1}
               title={ws.name}
-              aria-label={`Switch to ${ws.name} workspace`}
+              aria-label={`Switch to ${ws.name} workspace${isActive ? " (active)" : ""}`}
+              aria-pressed={isActive}
             >
               {ws.emoji}
             </button>
@@ -307,9 +329,10 @@ export default function WorkspaceSwitcher({
         {/* Add workspace button */}
         <button
           onClick={handleCreate}
-          className="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0 transition-colors"
+          className="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
           aria-label="New Workspace"
           title="New Workspace"
+          tabIndex={-1}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -326,17 +349,24 @@ export default function WorkspaceSwitcher({
       {showEmojiPicker && (
         <div
           ref={emojiPickerRef}
+          role="dialog"
+          aria-label="Choose emoji"
           className="absolute bottom-full left-3 mb-1 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50"
         >
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">
             Choose emoji
           </p>
-          <div className="grid grid-cols-8 gap-1">
+          <div
+            className="grid grid-cols-8 gap-1"
+            role="radiogroup"
+            aria-label="Emoji options"
+          >
             {CURATED_EMOJIS.map((emoji) => (
               <button
                 key={emoji}
                 onClick={() => handleEmojiSelect(showEmojiPicker, emoji)}
-                className="w-7 h-7 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-base flex items-center justify-center"
+                className="w-7 h-7 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-base flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label={`Select emoji ${emoji}`}
               >
                 {emoji}
               </button>
@@ -349,12 +379,18 @@ export default function WorkspaceSwitcher({
       {showColorPicker && (
         <div
           ref={colorPickerRef}
+          role="dialog"
+          aria-label="Choose color"
           className="absolute bottom-full left-3 mb-1 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50"
         >
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">
             Choose color
           </p>
-          <div className="grid grid-cols-6 gap-1.5">
+          <div
+            className="grid grid-cols-6 gap-1.5"
+            role="radiogroup"
+            aria-label="Color options"
+          >
             {COLOR_PALETTE.map((color) => {
               const ws = workspaces.find((w) => w.id === showColorPicker);
               const isSelected = ws?.accentColor === color;
@@ -362,9 +398,10 @@ export default function WorkspaceSwitcher({
                 <button
                   key={color}
                   onClick={() => handleColorSelect(showColorPicker, color)}
-                  className={`w-6 h-6 rounded-full ${isSelected ? "ring-2 ring-offset-1 ring-gray-400 dark:ring-offset-gray-800" : ""}`}
+                  className={`w-6 h-6 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 ${isSelected ? "ring-2 ring-offset-1 ring-gray-400 dark:ring-offset-gray-800" : ""}`}
                   style={{ backgroundColor: color }}
                   title={color}
+                  aria-label={`Select color ${color}${isSelected ? " (selected)" : ""}`}
                 />
               );
             })}

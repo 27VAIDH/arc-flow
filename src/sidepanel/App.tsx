@@ -48,6 +48,7 @@ import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
 import {
   DndContext,
   PointerSensor,
+  KeyboardSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -58,7 +59,7 @@ import {
   type CollisionDetection,
   useDraggable,
 } from "@dnd-kit/core";
-import { arrayMove } from "@dnd-kit/sortable";
+import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { List } from "react-window";
 import type { CSSProperties } from "react";
 
@@ -188,16 +189,38 @@ const DraggableTabItem = memo(function DraggableTabItem({
     }
   };
 
+  const srLabel = [
+    tab.title || tab.url,
+    tab.active ? "active" : "",
+    tab.audible ? "playing audio" : "",
+    tab.discarded ? "suspended" : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+
   return (
     <li
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
+      role="option"
+      aria-selected={tab.active}
+      aria-label={srLabel}
+      tabIndex={0}
       onClick={handleClick}
       onMouseDown={handleMouseDown}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleClick();
+        } else if (e.key === "Delete" || e.key === "Backspace") {
+          e.preventDefault();
+          chrome.runtime.sendMessage({ type: "CLOSE_TAB", tabId: tab.id });
+        }
+      }}
       onContextMenu={(e) => onContextMenu(e, tab)}
-      className={`flex items-center gap-2 px-2 h-8 text-sm rounded cursor-default hover:bg-gray-200 dark:hover:bg-gray-800 touch-none ${
+      className={`flex items-center gap-2 px-2 h-8 text-sm rounded cursor-default hover:bg-gray-200 dark:hover:bg-gray-800 touch-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ${
         tab.active
           ? "border-l-[3px] border-l-[#2E75B6] font-bold"
           : "border-l-[3px] border-l-transparent"
@@ -208,7 +231,10 @@ const DraggableTabItem = memo(function DraggableTabItem({
       {tab.favIconUrl ? (
         <LazyFavicon src={tab.favIconUrl} alt="" />
       ) : (
-        <span className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600" />
+        <span
+          className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600"
+          aria-hidden="true"
+        />
       )}
       <span className="truncate flex-1 select-none">
         {tab.title || tab.url}
@@ -223,7 +249,7 @@ const DraggableTabItem = memo(function DraggableTabItem({
           strokeLinecap="round"
           strokeLinejoin="round"
           className="w-3.5 h-3.5 shrink-0 text-blue-500 dark:text-blue-400"
-          aria-label="Playing audio"
+          aria-hidden="true"
         >
           <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
           <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
@@ -461,6 +487,9 @@ export default function App() {
       activationConstraint: {
         distance: 5,
       },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
     })
   );
 
@@ -1112,6 +1141,19 @@ export default function App() {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+      {/* Live region for screen reader announcements */}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+        id="arcflow-live-region"
+      >
+        {filteredTabs.length} tab{filteredTabs.length !== 1 ? "s" : ""} open
+        {suspendedCount > 0 &&
+          `. ${suspendedCount} suspended, ~${estimatedMBSaved} MB saved`}
+      </div>
+
       <header className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <h1 className="text-lg font-semibold">ArcFlow</h1>
         <button
@@ -1137,76 +1179,88 @@ export default function App() {
       </header>
 
       {/* Search bar (Zone 1) */}
-      <SearchBar
-        tabs={tabs}
-        folders={folders}
-        onSwitchTab={(tabId) => {
-          chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId });
-        }}
-        onOpenUrl={(url) => {
-          chrome.runtime.sendMessage({ type: "OPEN_URL", url });
-        }}
-      />
+      <nav aria-label="Tab search">
+        <SearchBar
+          tabs={tabs}
+          folders={folders}
+          onSwitchTab={(tabId) => {
+            chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId });
+          }}
+          onOpenUrl={(url) => {
+            chrome.runtime.sendMessage({ type: "OPEN_URL", url });
+          }}
+        />
+      </nav>
 
       {/* Pinned Apps Row (Zone 2) */}
       <PinnedAppsRow tabs={tabs} onContextMenu={setContextMenu} />
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={customCollisionDetection}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        {/* Folder Tree (Zone 3) */}
-        <FolderTree
-          onContextMenu={setContextMenu}
-          folders={folders}
-          setFolders={setFolders}
-          onItemClick={handleFolderItemClick}
-          onItemContextMenu={handleFolderItemContextMenu}
-          onOpenAllTabs={handleOpenAllTabs}
-          onCloseAllTabs={handleCloseAllTabs}
-        />
+      <main aria-label="Tab management">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={customCollisionDetection}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          {/* Folder Tree (Zone 3) */}
+          <FolderTree
+            onContextMenu={setContextMenu}
+            folders={folders}
+            setFolders={setFolders}
+            onItemClick={handleFolderItemClick}
+            onItemContextMenu={handleFolderItemContextMenu}
+            onOpenAllTabs={handleOpenAllTabs}
+            onCloseAllTabs={handleCloseAllTabs}
+          />
 
-        {/* Tab list */}
-        <div className="flex-1 px-1">
-          <p className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1">
-            {filteredTabs.length} tab{filteredTabs.length !== 1 ? "s" : ""} open
-          </p>
-          {filteredTabs.length >= VIRTUAL_LIST_THRESHOLD ? (
-            <List<VirtualTabRowProps>
-              style={{
-                height: Math.min(filteredTabs.length * TAB_ITEM_HEIGHT, 400),
-              }}
-              rowComponent={VirtualTabRow}
-              rowCount={filteredTabs.length}
-              rowHeight={TAB_ITEM_HEIGHT}
-              rowProps={{
-                tabs: filteredTabs,
-                onContextMenu: handleTabContextMenu,
-              }}
-              overscanCount={5}
-            />
-          ) : (
-            <ul className="flex flex-col gap-1">
-              {filteredTabs.map((tab) => (
-                <DraggableTabItem
-                  key={tab.id}
-                  tab={tab}
-                  onContextMenu={handleTabContextMenu}
-                />
-              ))}
-            </ul>
-          )}
-        </div>
+          {/* Tab list */}
+          <section className="flex-1 px-1" aria-label="Open tabs">
+            <p
+              className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1"
+              aria-live="polite"
+            >
+              {filteredTabs.length} tab{filteredTabs.length !== 1 ? "s" : ""}{" "}
+              open
+            </p>
+            {filteredTabs.length >= VIRTUAL_LIST_THRESHOLD ? (
+              <List<VirtualTabRowProps>
+                style={{
+                  height: Math.min(filteredTabs.length * TAB_ITEM_HEIGHT, 400),
+                }}
+                rowComponent={VirtualTabRow}
+                rowCount={filteredTabs.length}
+                rowHeight={TAB_ITEM_HEIGHT}
+                rowProps={{
+                  tabs: filteredTabs,
+                  onContextMenu: handleTabContextMenu,
+                }}
+                overscanCount={5}
+              />
+            ) : (
+              <ul
+                className="flex flex-col gap-1"
+                role="listbox"
+                aria-label="Open tabs"
+              >
+                {filteredTabs.map((tab) => (
+                  <DraggableTabItem
+                    key={tab.id}
+                    tab={tab}
+                    onContextMenu={handleTabContextMenu}
+                  />
+                ))}
+              </ul>
+            )}
+          </section>
 
-        <DragOverlay>
-          {activeDragTab ? <TabDragOverlay tab={activeDragTab} /> : null}
-        </DragOverlay>
-      </DndContext>
+          <DragOverlay>
+            {activeDragTab ? <TabDragOverlay tab={activeDragTab} /> : null}
+          </DragOverlay>
+        </DndContext>
 
-      {/* Archive Section (Zone 4) */}
-      <ArchiveSection />
+        {/* Archive Section (Zone 4) */}
+        <ArchiveSection />
+      </main>
 
       {/* Footer (Zone 5) */}
       <footer className="border-t border-gray-200 dark:border-gray-700">

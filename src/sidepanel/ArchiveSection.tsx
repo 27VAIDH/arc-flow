@@ -63,10 +63,12 @@ export default function ArchiveSection() {
   const visibleEntries = entries.slice(0, 10);
 
   return (
-    <div className="px-1 pb-2">
+    <section className="px-1 pb-2" aria-label="Archived tabs">
       {/* Collapsible header */}
       <button
         onClick={() => setIsCollapsed((prev) => !prev)}
+        aria-expanded={!isCollapsed}
+        aria-controls="archive-list"
         className="flex items-center gap-1 w-full px-2 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
       >
         <svg
@@ -97,21 +99,27 @@ export default function ArchiveSection() {
         <span>Archive ({entries.length})</span>
         <span className="flex-1" />
         {!isCollapsed && (
-          <span
+          <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               handleClearAll();
             }}
             className="text-[10px] text-gray-400 hover:text-red-500 dark:hover:text-red-400 cursor-pointer"
+            aria-label="Clear all archived tabs"
           >
             Clear All
-          </span>
+          </button>
         )}
       </button>
 
       {/* Archive entries list */}
       {!isCollapsed && (
-        <ul className="flex flex-col gap-0.5">
+        <ul
+          id="archive-list"
+          className="flex flex-col gap-0.5"
+          aria-label="Archived tabs"
+        >
           {visibleEntries.map((entry) => (
             <ArchiveItem
               key={entry.id}
@@ -121,7 +129,7 @@ export default function ArchiveSection() {
           ))}
         </ul>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -137,9 +145,18 @@ function ArchiveItem({
   return (
     <li
       onClick={() => onRestore(entry)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onRestore(entry);
+        }
+      }}
+      tabIndex={0}
+      role="button"
+      aria-label={`Restore ${entry.title}, archived ${formatTimeSince(entry.archivedAt)}`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="flex items-center gap-2 px-2 h-7 text-sm rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 opacity-60 hover:opacity-100 transition-opacity"
+      className="flex items-center gap-2 px-2 h-7 text-sm rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 opacity-60 hover:opacity-100 transition-opacity focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
     >
       {entry.favicon ? (
         <img
@@ -161,7 +178,7 @@ function ArchiveItem({
           Restore
         </span>
       ) : (
-        <span className="text-[10px] text-gray-400 dark:text-gray-500 shrink-0 whitespace-nowrap">
+        <span className="text-[10px] text-gray-500 dark:text-gray-400 shrink-0 whitespace-nowrap">
           {formatTimeSince(entry.archivedAt)}
         </span>
       )}

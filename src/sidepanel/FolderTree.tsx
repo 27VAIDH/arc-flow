@@ -141,7 +141,7 @@ function FolderHeader({
 
       {/* Count badge */}
       {badgeParts.length > 0 && (
-        <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
+        <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
           ({badgeParts.join(", ")})
         </span>
       )}
@@ -188,8 +188,18 @@ function DraggableFolderItem({
       style={style}
       {...attributes}
       {...listeners}
-      className={`flex items-center gap-2 px-2 h-7 text-sm rounded cursor-default hover:bg-gray-200 dark:hover:bg-gray-800 touch-none ${item.type === "link" ? "cursor-pointer" : ""}`}
+      role="treeitem"
+      aria-level={depth + 2}
+      aria-label={`${item.type === "link" ? "Saved link: " : ""}${item.title || item.url}`}
+      tabIndex={0}
+      className={`flex items-center gap-2 px-2 h-7 text-sm rounded cursor-default hover:bg-gray-200 dark:hover:bg-gray-800 touch-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ${item.type === "link" ? "cursor-pointer" : ""}`}
       onClick={() => onClick?.(item, folderId)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick?.(item, folderId);
+        }
+      }}
       onContextMenu={(e) => onContextMenu?.(e, item, folderId)}
     >
       {item.favicon ? (
@@ -203,10 +213,13 @@ function DraggableFolderItem({
           }}
         />
       ) : (
-        <span className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600" />
+        <span
+          className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600"
+          aria-hidden="true"
+        />
       )}
       <span
-        className={`truncate flex-1 select-none ${item.type === "link" ? "text-gray-400 dark:text-gray-500 italic" : ""}`}
+        className={`truncate flex-1 select-none ${item.type === "link" ? "text-gray-500 dark:text-gray-400 italic" : ""}`}
       >
         {item.title || item.url}
       </span>
@@ -267,6 +280,10 @@ function SortableFolder({
         setDroppableRef(node);
       }}
       style={{ ...sortableStyle, paddingLeft: depth * 16 }}
+      role="treeitem"
+      aria-expanded={!folder.isCollapsed}
+      aria-level={depth + 1}
+      aria-label={folder.name}
     >
       <div
         {...attributes}
@@ -274,6 +291,22 @@ function SortableFolder({
         className={`touch-none rounded transition-colors ${
           isOver ? "bg-blue-100 dark:bg-blue-900/40 ring-1 ring-blue-400" : ""
         }`}
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowRight" && folder.isCollapsed) {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleCollapse(folder.id);
+          } else if (e.key === "ArrowLeft" && !folder.isCollapsed) {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleCollapse(folder.id);
+          } else if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleCollapse(folder.id);
+          }
+        }}
       >
         <FolderHeader
           folder={folder}
@@ -283,7 +316,7 @@ function SortableFolder({
         />
       </div>
       {!folder.isCollapsed && (
-        <div>
+        <div role="group">
           <SortableContext
             items={itemIds}
             strategy={verticalListSortingStrategy}
@@ -526,7 +559,11 @@ export default function FolderTree({
         items={topLevelFolderIds}
         strategy={verticalListSortingStrategy}
       >
-        <div className="flex flex-col gap-0.5">
+        <div
+          className="flex flex-col gap-0.5"
+          role="tree"
+          aria-label="Folder tree"
+        >
           {topLevelFolders.map((folder) => renderFolder(folder, 0))}
         </div>
       </SortableContext>

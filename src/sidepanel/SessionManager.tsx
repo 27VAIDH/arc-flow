@@ -126,7 +126,12 @@ export default function SessionManager({
   );
 
   return (
-    <div className="absolute inset-0 z-50 bg-gray-50 dark:bg-gray-900 flex flex-col overflow-hidden">
+    <div
+      className="absolute inset-0 z-50 bg-gray-50 dark:bg-gray-900 flex flex-col overflow-hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Saved Sessions"
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
         <h2 className="text-sm font-semibold">Saved Sessions</h2>

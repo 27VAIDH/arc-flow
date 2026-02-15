@@ -78,6 +78,12 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - `React.memo()` (imported as `memo`) wraps `DraggableTabItem` and `LazyFavicon` to prevent unnecessary re-renders
 - Performance API: `performance.mark()` / `performance.measure()` in `main.tsx` for initial render timing; use double `requestAnimationFrame` for post-paint measurement
 - Virtual scrolling threshold: 50 items (`VIRTUAL_LIST_THRESHOLD`); below that, render plain list for DnD compatibility
+- ARIA tree pattern: `role="tree"` on root, `role="treeitem"` with `aria-expanded`/`aria-level` on folders, `role="group"` for children
+- Combobox pattern: `role="combobox"` + `aria-expanded` + `aria-controls` + `aria-activedescendant` + `aria-autocomplete="list"` on input; `role="listbox"` on dropdown, `role="option"` + `aria-selected` on items
+- Color contrast: use `text-gray-500 dark:text-gray-400` (not `text-gray-400 dark:text-gray-500`) for WCAG AA 4.5:1 compliance
+- Modal/dialog pattern: `role="dialog"` + `aria-modal="true"` + `aria-label` on overlay wrapper; `aria-hidden="true"` on backdrop
+- Keyboard DnD: `KeyboardSensor` from `@dnd-kit/core` + `sortableKeyboardCoordinates` from `@dnd-kit/sortable`
+- Roving tabindex for toolbars: active item `tabIndex={0}`, others `tabIndex={-1}`, ArrowLeft/Right to navigate
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -1584,4 +1590,38 @@ US-039 is complete. There are still stories with `passes: false`:
   - Virtual scrolling and @dnd-kit/core can conflict; for lists under 50 items, plain rendering is used to maintain DnD compatibility
   - `IntersectionObserver` with `rootMargin: "50px"` provides good preloading of favicons just before they scroll into view
   - Double `requestAnimationFrame` is needed to measure post-paint timing accurately
+---
+
+## Iteration 6 - Sun Feb 15 23:02:15 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-223132/iter-6.log
+---
+US-040 is complete. There is still one story with `passes: false`:
+- **US-041**: Accessibility audit and keyboard navigation (priority 41)
+
+The next iteration will pick up US-041.
+---
+
+## Sun Feb 15 2026 - US-041
+- Implemented comprehensive accessibility audit and keyboard navigation
+- Files changed:
+  - src/sidepanel/App.tsx: semantic landmarks (nav, main, section), aria-live region, ARIA listbox/option for tab list, keyboard handlers (Enter/Space/Delete) on tab items, focus rings, KeyboardSensor for DnD
+  - src/sidepanel/FolderTree.tsx: ARIA tree pattern (role=tree, treeitem, aria-expanded, aria-level), keyboard navigation (ArrowLeft/Right to collapse/expand, Enter/Space to toggle), focus rings, fixed contrast for saved link text
+  - src/sidepanel/ContextMenu.tsx: role=menu/menuitem, auto-focus first item, ArrowUp/Down/Home/End keyboard navigation, focus styles
+  - src/sidepanel/WorkspaceSwitcher.tsx: role=toolbar with ArrowLeft/Right navigation, aria-pressed, roving tabindex, dialog roles for emoji/color pickers, focus rings
+  - src/sidepanel/PinnedAppsRow.tsx: nav landmark, role=toolbar, aria-hidden on decorative dots, improved aria-labels with open status
+  - src/sidepanel/SearchBar.tsx: role=combobox with aria-expanded/activedescendant/autocomplete, role=listbox/option for results, type=search
+  - src/sidepanel/CommandPalette.tsx: role=dialog with aria-modal, role=combobox/listbox/option, aria-activedescendant
+  - src/sidepanel/SettingsPanel.tsx: role=dialog with aria-modal
+  - src/sidepanel/SessionManager.tsx: role=dialog with aria-modal
+  - src/sidepanel/OrganizeTabsModal.tsx: role=dialog with aria-modal
+  - src/sidepanel/Onboarding.tsx: role=dialog with aria-modal
+  - src/sidepanel/ArchiveSection.tsx: section landmark, aria-expanded on collapse toggle, semantic button for Clear All, keyboard support on archive items, fixed contrast
+- **Learnings for future iterations:**
+  - ARIA tree pattern: use role=tree on root, role=treeitem with aria-expanded/aria-level on folders, role=group for children containers
+  - Combobox pattern: input needs role=combobox, aria-expanded, aria-controls (pointing to listbox id), aria-activedescendant (pointing to selected option id), aria-autocomplete
+  - Color contrast fix: swap `text-gray-400 dark:text-gray-500` to `text-gray-500 dark:text-gray-400` for WCAG AA compliance (4.5:1 for small text)
+  - `aria-expanded` on native HTML elements requires `boolean | undefined`, not `boolean | ""` — use `value || undefined` pattern
+  - Roving tabindex pattern for toolbar: active item tabIndex=0, others tabIndex=-1, ArrowLeft/Right to navigate
+  - @dnd-kit keyboard DnD: import `KeyboardSensor` from @dnd-kit/core and `sortableKeyboardCoordinates` from @dnd-kit/sortable
 ---

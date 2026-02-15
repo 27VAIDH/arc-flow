@@ -335,7 +335,12 @@ export default function OrganizeTabsModal({
 
   if (loading) {
     return (
-      <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div
+        className="absolute inset-0 z-50 flex items-center justify-center bg-black/40"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Organize Tabs"
+      >
         <div
           ref={ref}
           className="w-[320px] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 p-4"
@@ -354,7 +359,12 @@ export default function OrganizeTabsModal({
 
   if (groups.length === 0) {
     return (
-      <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div
+        className="absolute inset-0 z-50 flex items-center justify-center bg-black/40"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Organize Tabs"
+      >
         <div
           ref={ref}
           className="w-[320px] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 p-4"
@@ -377,7 +387,12 @@ export default function OrganizeTabsModal({
   }
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div
+      className="absolute inset-0 z-50 flex items-center justify-center bg-black/40"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Organize Tabs"
+    >
       <div
         ref={ref}
         className="w-[360px] max-h-[80vh] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 flex flex-col"
@@ -414,7 +429,7 @@ export default function OrganizeTabsModal({
                   <path d="M3.75 3A1.75 1.75 0 0 0 2 4.75v3.26a3.235 3.235 0 0 1 1.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0 0 16.25 5h-4.836a.25.25 0 0 1-.177-.073L9.823 3.513A1.75 1.75 0 0 0 8.586 3H3.75ZM3.75 9A1.75 1.75 0 0 0 2 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0 0 18 15.25v-4.5A1.75 1.75 0 0 0 16.25 9H3.75Z" />
                 </svg>
                 <span className="text-sm font-medium flex-1">{group.name}</span>
-                <span className="text-xs text-gray-400 dark:text-gray-500">
+                <span className="text-xs text-gray-500 dark:text-gray-400">
                   {group.tabs.length} tabs
                 </span>
               </label>

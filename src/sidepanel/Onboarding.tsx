@@ -130,7 +130,12 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
   const stepCount = 3;
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div
+      className="absolute inset-0 z-50 flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Welcome to ArcFlow"
+    >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <h1 className="text-lg font-semibold">Welcome to ArcFlow</h1>

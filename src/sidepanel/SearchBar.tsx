@@ -216,7 +216,7 @@ export default function SearchBar({
 
         <input
           ref={inputRef}
-          type="text"
+          type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -227,6 +227,16 @@ export default function SearchBar({
           }}
           placeholder="Search tabs..."
           className="w-full h-8 pl-8 pr-2 rounded bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:ring-1 focus:ring-blue-500"
+          role="combobox"
+          aria-expanded={showResults || undefined}
+          aria-controls="search-results"
+          aria-activedescendant={
+            results[selectedIndex]
+              ? `search-result-${results[selectedIndex].id}`
+              : undefined
+          }
+          aria-autocomplete="list"
+          aria-label="Search tabs, folders, and saved links"
         />
 
         {query && (
@@ -256,11 +266,17 @@ export default function SearchBar({
       {showResults && (
         <div
           ref={resultsRef}
+          id="search-results"
+          role="listbox"
+          aria-label="Search results"
           className="absolute left-2 right-2 top-full mt-1 max-h-[320px] overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50"
         >
           {results.map((result, index) => (
             <button
               key={result.id}
+              id={`search-result-${result.id}`}
+              role="option"
+              aria-selected={index === selectedIndex}
               data-index={index}
               onMouseDown={(e) => {
                 e.preventDefault();
@@ -299,7 +315,7 @@ export default function SearchBar({
               <div className="flex-1 min-w-0">
                 <span className="block truncate">{result.title}</span>
                 {result.url && (
-                  <span className="block truncate text-xs text-gray-400 dark:text-gray-500">
+                  <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
                     {result.url}
                   </span>
                 )}
