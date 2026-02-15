@@ -35,6 +35,11 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - Default workspace (id: "default") created on first install; cannot be deleted or renamed
 - Tab-to-workspace mapping stored as `Record<string, string>` (tabId as string key → workspaceId)
 - `ensureInitialized()` pattern: check if storage key exists before first use, create defaults if missing
+- WorkspaceManager component in `src/sidepanel/WorkspaceManager.tsx` provides workspace CRUD UI with emoji/color pickers
+- Curated emoji list (16 emojis) and color palette (12 Tailwind colors) keep pickers simple and lightweight
+- WorkspaceSwitcher component in `src/sidepanel/WorkspaceSwitcher.tsx` — icon strip in footer (Zone 5) for switching workspaces
+- Active workspace state tracked in App.tsx via `activeWorkspaceId`; loaded from `getActiveWorkspace()` on mount, updated via `chrome.storage.onChanged` listener for `activeWorkspaceId` key
+- Workspace switcher uses `boxShadow` for accent-color ring on active workspace icon (Tailwind ring-color not easily dynamic)
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -793,4 +798,90 @@ There are still stories with `passes: false` (US-021 through US-041), so the nex
   - `deleteWorkspace()` also cleans up tab-workspace mappings and switches active workspace to Default if deleted workspace was active
   - Schema version (key: `schemaVersion`, initial: 1) stored for future migration support
   - Each workspace stores independent `pinnedApps[]` and `folders[]` — helpers `getWorkspacePinnedApps` and `getWorkspaceFolders` provide typed access
+---
+
+## Iteration 21 - Sun Feb 15 16:43:27 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-21.log
+---
+**US-021 is complete.** Here's what was implemented:
+
+- **`src/shared/workspaceStorage.ts`** — New module with 11 exported functions:
+  - `getWorkspaces()` — Retrieves all workspaces sorted by sortOrder, auto-initializes on first access
+  - `createWorkspace(name)` — Creates a workspace with default emoji/color
+  - `updateWorkspace(id, data)` — Partial update (blocks renaming Default workspace)
+  - `deleteWorkspace(id)` — Deletes workspace, cleans up tab mappings, switches active if needed (blocks deleting Default)
+  - `getActiveWorkspace()` — Returns the currently active workspace
+  - `setActiveWorkspace(id)` — Sets the active workspace
+  - `getTabWorkspaceMap()` — Returns tab-to-workspace mappings
+  - `assignTabToWorkspace(tabId, workspaceId)` — Maps a tab to a workspace
+  - `removeTabFromMap(tabId)` — Removes a tab's workspace mapping
+  - `getWorkspacePinnedApps(workspaceId)` / `getWorkspaceFolders(workspaceId)` — Workspace-scoped accessors
+
+- **Storage keys**: `workspaces` (Workspace[]), `activeWorkspaceId` (string), `schemaVersion` (1), `tabWorkspaceMap` (Record<string, string>)
+- **Default workspace** created on first install, cannot be deleted or renamed
+- **Quota error handling** in `saveWorkspaces()`
+
+All quality checks pass (typecheck, lint, build). Committed as `5937267`.
+
+There are still stories with `passes: false` (US-022 through US-041), so the next iteration will pick up US-022.
+---
+
+## 2026-02-15 - US-022
+- Implemented workspace CRUD UI: create, rename, emoji picker, color picker, delete
+- Files created:
+  - src/sidepanel/WorkspaceManager.tsx (workspace list with inline rename, emoji picker, color picker, context menu)
+- Files changed:
+  - src/sidepanel/App.tsx (imported and placed WorkspaceManager above folder tree)
+  - scripts/ralph/prd.json (marked US-022 passes: true)
+- **Learnings for future iterations:**
+  - WorkspaceManager follows same patterns as FolderTree and PinnedAppsRow: listens to `chrome.storage.onChanged` for `workspaces` key, uses context menu via `onContextMenu` prop
+  - Emoji picker is a curated grid of 16 emojis (not full emoji-mart) — keeps bundle small
+  - Color palette uses 12 Tailwind-inspired colors from the extended palette
+  - Default workspace (id: "default") protection: cannot be renamed or deleted, enforced in both UI (context menu items omitted) and storage layer
+  - Double-click to rename workspace name inline; right-click context menu also offers Rename
+  - Delete confirmation via `window.confirm()` mentions tabs will be moved to Default workspace
+  - Emoji/color pickers render inline below the workspace list (not as fixed-position overlays) for simplicity in side panel context
+  - Click-outside dismissal for pickers uses refs and mousedown event listener
+---
+
+## Iteration 22 - Sun Feb 15 16:46:11 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-22.log
+---
+**US-022 is complete.** Here's what was implemented:
+
+- **`src/sidepanel/WorkspaceManager.tsx`** — New component that:
+  - Displays all workspaces with emoji icons (accent color background) and names
+  - **"New Workspace" button** (+) creates a workspace named "New Workspace" with inline editable name
+  - **Double-click rename** on workspace name enters inline edit mode (blur/Enter commits, Escape cancels)
+  - **Emoji picker** — curated grid of 16 emojis, click on emoji icon or via context menu "Change Emoji"
+  - **Color picker** — 12-color palette from Tailwind, accessible via hover dot or context menu "Change Color"
+  - **Right-click context menu** — Rename, Change Emoji, Change Color, Delete (Rename/Delete hidden for Default workspace)
+  - **Delete confirmation** — `window.confirm` prompt offering to move tabs to Default workspace
+  - **Default workspace protection** — cannot be renamed or deleted (enforced in both UI and storage)
+
+- **`src/sidepanel/App.tsx`** — Integrated `WorkspaceManager` above the folder tree
+
+All quality checks pass (typecheck, lint, build). Committed as `fe1806b`.
+
+There are still stories with `passes: false` (US-023 through US-041), so the next iteration will pick up US-023.
+---
+
+## 2026-02-15 - US-023
+- Implemented workspace switcher UI in sidebar footer (Zone 5)
+- Files created:
+  - src/sidepanel/WorkspaceSwitcher.tsx (icon strip with workspace emoji icons, active ring, new workspace button, emoji/color pickers, context menu)
+- Files changed:
+  - src/sidepanel/App.tsx (replaced WorkspaceManager with WorkspaceSwitcher in footer, added activeWorkspaceId state, added handleWorkspaceChange callback, listens for activeWorkspaceId storage changes)
+  - scripts/ralph/prd.json (marked US-023 passes: true)
+- **Learnings for future iterations:**
+  - WorkspaceSwitcher is an icon strip in the footer; each workspace shows as a 28x28 emoji button with accent-color tinted background
+  - Active workspace indicated via `boxShadow: 0 0 0 2px ${ws.accentColor}` since Tailwind ring-color can't be set dynamically via inline styles
+  - Non-active workspace icons have `opacity-70` with `hover:opacity-100` transition
+  - '+' button at the end creates a new workspace and immediately switches to it + opens inline rename
+  - Emoji/color picker popovers positioned absolutely `bottom-full` to appear above the footer
+  - Right-click context menu on workspace icons: Rename, Change Emoji, Change Color, Delete (Rename/Delete hidden for Default workspace)
+  - Active workspace ID tracked in App.tsx state and synced via `chrome.storage.onChanged` listener for `activeWorkspaceId` key
+  - The old WorkspaceManager list view above folders was removed; the switcher replaces it as the primary workspace UI
 ---

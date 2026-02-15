@@ -20,10 +20,11 @@ import {
   reorderFolders,
   reorderItemsInFolder,
 } from "../shared/folderStorage";
+import { getActiveWorkspace } from "../shared/workspaceStorage";
 import PinnedAppsRow from "./PinnedAppsRow";
 import FolderTree from "./FolderTree";
 import SearchBar from "./SearchBar";
-import WorkspaceManager from "./WorkspaceManager";
+import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
 import {
   DndContext,
@@ -339,6 +340,7 @@ export default function App() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [activeDragTab, setActiveDragTab] = useState<TabInfo | null>(null);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState("default");
   const [folderPicker, setFolderPicker] = useState<{
     tab: TabInfo;
     x: number;
@@ -352,6 +354,28 @@ export default function App() {
       },
     })
   );
+
+  // Load active workspace on mount
+  useEffect(() => {
+    getActiveWorkspace().then((ws) => {
+      setActiveWorkspaceId(ws.id);
+    });
+
+    const handleStorageChange = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      area: string
+    ) => {
+      if (area === "local" && changes.activeWorkspaceId) {
+        const newId = changes.activeWorkspaceId.newValue as string;
+        if (newId) setActiveWorkspaceId(newId);
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
+  }, []);
 
   // Load folders and listen for storage changes
   useEffect(() => {
@@ -428,6 +452,10 @@ export default function App() {
     return () => {
       chrome.runtime.onMessage.removeListener(handleMessage);
     };
+  }, []);
+
+  const handleWorkspaceChange = useCallback((workspaceId: string) => {
+    setActiveWorkspaceId(workspaceId);
   }, []);
 
   const { theme, cycleTheme } = useTheme();
@@ -739,9 +767,6 @@ export default function App() {
       {/* Pinned Apps Row (Zone 2) */}
       <PinnedAppsRow tabs={tabs} onContextMenu={setContextMenu} />
 
-      {/* Workspace Manager */}
-      <WorkspaceManager onContextMenu={setContextMenu} />
-
       <DndContext
         sensors={sensors}
         collisionDetection={customCollisionDetection}
@@ -780,9 +805,16 @@ export default function App() {
         </DragOverlay>
       </DndContext>
 
-      {/* Footer */}
-      <footer className="flex items-center justify-end px-3 py-2 border-t border-gray-200 dark:border-gray-700">
-        <ThemeToggle theme={theme} onCycle={cycleTheme} />
+      {/* Footer (Zone 5) */}
+      <footer className="border-t border-gray-200 dark:border-gray-700">
+        <WorkspaceSwitcher
+          activeWorkspaceId={activeWorkspaceId}
+          onWorkspaceChange={handleWorkspaceChange}
+          onContextMenu={setContextMenu}
+        />
+        <div className="flex items-center justify-end px-3 pb-2">
+          <ThemeToggle theme={theme} onCycle={cycleTheme} />
+        </div>
       </footer>
 
       {/* Folder Picker Dropdown */}
