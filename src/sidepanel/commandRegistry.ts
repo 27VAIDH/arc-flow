@@ -12,6 +12,8 @@ export function buildCommands({
   onNewWorkspace,
   onToggleFocusMode,
   onSplitView,
+  onSaveSession,
+  onRestoreSession,
 }: {
   workspaces: Workspace[];
   onSwitchWorkspace: (workspaceId: string) => void;
@@ -23,6 +25,8 @@ export function buildCommands({
   onNewWorkspace: () => void;
   onToggleFocusMode: () => void;
   onSplitView: () => void;
+  onSaveSession: () => void;
+  onRestoreSession: () => void;
 }): Command[] {
   const commands: Command[] = [];
 
@@ -90,6 +94,20 @@ export function buildCommands({
     name: "Split View Current Tab",
     icon: "split",
     action: onSplitView,
+  });
+
+  commands.push({
+    id: "save-session",
+    name: "Save Session",
+    icon: "save",
+    action: onSaveSession,
+  });
+
+  commands.push({
+    id: "restore-session",
+    name: "Restore Session",
+    icon: "restore",
+    action: onRestoreSession,
   });
 
   return commands;

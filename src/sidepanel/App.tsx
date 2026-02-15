@@ -6,6 +6,7 @@ import type {
   ServiceWorkerMessage,
   Folder,
   FolderItem,
+  Session,
 } from "../shared/types";
 import { useTheme, type ThemePreference } from "./useTheme";
 import type { Settings } from "../shared/types";
@@ -38,6 +39,8 @@ import ArchiveSection from "./ArchiveSection";
 import SettingsPanel from "./SettingsPanel";
 import CommandPalette from "./CommandPalette";
 import OrganizeTabsModal from "./OrganizeTabsModal";
+import SessionManager from "./SessionManager";
+import { createSessionFromState } from "../shared/sessionStorage";
 import { buildCommands } from "./commandRegistry";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
 import {
@@ -369,6 +372,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showOrganizeTabs, setShowOrganizeTabs] = useState(false);
+  const [showSessionManager, setShowSessionManager] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -608,6 +612,42 @@ export default function App() {
     createFolder("New Folder");
   }, []);
 
+  const handleSaveSession = useCallback(() => {
+    const defaultName = `Session ${new Date().toLocaleString()}`;
+    const name = window.prompt("Enter session name:", defaultName);
+    if (!name) return;
+    createSessionFromState({
+      name,
+      pinnedApps,
+      folders,
+      tabUrls: filteredTabs.map((t) => ({
+        url: t.url,
+        title: t.title || t.url,
+        favicon: t.favIconUrl || "",
+      })),
+    });
+  }, [pinnedApps, folders, filteredTabs]);
+
+  const handleRestoreSession = useCallback(
+    (session: Session, mode: "replace" | "add") => {
+      if (mode === "replace") {
+        // Close all current tabs in this workspace, then open session tabs
+        const tabIds = filteredTabs.filter((t) => !t.active).map((t) => t.id);
+        if (tabIds.length > 0) {
+          chrome.runtime.sendMessage({ type: "CLOSE_TABS", tabIds });
+        }
+      }
+      // Open all session tabs
+      for (const tab of session.tabUrls) {
+        chrome.runtime.sendMessage({ type: "OPEN_URL", url: tab.url });
+      }
+      setShowSessionManager(false);
+    },
+    [filteredTabs]
+  );
+
+  const openSessionManager = useCallback(() => setShowSessionManager(true), []);
+
   // Build command palette commands
   const commands = useMemo(
     () =>
@@ -622,6 +662,8 @@ export default function App() {
         onNewWorkspace: createNewWorkspace,
         onToggleFocusMode: toggleFocusMode,
         onSplitView: splitViewActiveTab,
+        onSaveSession: handleSaveSession,
+        onRestoreSession: openSessionManager,
       }),
     [
       workspaces,
@@ -634,6 +676,8 @@ export default function App() {
       createNewWorkspace,
       toggleFocusMode,
       splitViewActiveTab,
+      handleSaveSession,
+      openSessionManager,
     ]
   );
 
@@ -1054,6 +1098,7 @@ export default function App() {
           activeWorkspaceId={activeWorkspaceId}
           onWorkspaceChange={handleWorkspaceChange}
           onContextMenu={setContextMenu}
+          onSaveSession={handleSaveSession}
         />
         {suspendedCount > 0 && (
           <div className="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 text-center">
@@ -1149,6 +1194,14 @@ export default function App() {
           tabs={filteredTabs}
           folders={folders}
           onClose={() => setShowOrganizeTabs(false)}
+        />
+      )}
+
+      {/* Session Manager */}
+      {showSessionManager && (
+        <SessionManager
+          onClose={() => setShowSessionManager(false)}
+          onRestore={handleRestoreSession}
         />
       )}
     </div>

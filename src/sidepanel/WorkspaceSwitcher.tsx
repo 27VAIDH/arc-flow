@@ -52,12 +52,14 @@ interface WorkspaceSwitcherProps {
     y: number;
     items: { label: string; onClick: () => void }[];
   }) => void;
+  onSaveSession?: () => void;
 }
 
 export default function WorkspaceSwitcher({
   activeWorkspaceId,
   onWorkspaceChange,
   onContextMenu,
+  onSaveSession,
 }: WorkspaceSwitcherProps) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
@@ -232,6 +234,13 @@ export default function WorkspaceSwitcher({
         },
       });
 
+      if (onSaveSession) {
+        items.push({
+          label: "Save Session",
+          onClick: onSaveSession,
+        });
+      }
+
       if (ws.id !== DEFAULT_WORKSPACE_ID) {
         items.push({
           label: "Delete",
@@ -241,7 +250,7 @@ export default function WorkspaceSwitcher({
 
       onContextMenu({ x: e.clientX, y: e.clientY, items });
     },
-    [onContextMenu, handleDelete]
+    [onContextMenu, handleDelete, onSaveSession]
   );
 
   return (

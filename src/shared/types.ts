@@ -82,6 +82,17 @@ export type SidePanelMessage =
   | { type: "SUSPEND_TAB"; tabId: number }
   | { type: "SPLIT_VIEW"; tabId: number };
 
+export interface Session {
+  id: string;
+  name: string;
+  savedAt: number;
+  workspaceSnapshot: {
+    pinnedApps: PinnedApp[];
+    folders: Folder[];
+  };
+  tabUrls: { url: string; title: string; favicon: string }[];
+}
+
 export interface Settings {
   theme: "system" | "light" | "dark";
   autoArchiveMinutes: number;

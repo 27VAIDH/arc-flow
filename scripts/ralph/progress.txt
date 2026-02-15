@@ -61,6 +61,9 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - Split view uses `chrome.windows.create({ tabId })` to move a tab into a new window; positions windows at left/right halves using `workArea` bounds
 - Air Traffic Control routing rules: `globToRegex()` in service-worker.ts converts glob patterns (`*` → `.*`) to regex; evaluated on both `tabs.onCreated` and `tabs.onUpdated` (URL change); first match wins
 - New tabs often start as `chrome://newtab` then navigate; re-evaluate routing rules on `tabs.onUpdated` when `changeInfo.url` is present
+- Session storage in `src/shared/sessionStorage.ts`; key: `sessions`, max 20 sessions, sorted by `savedAt` descending
+- Session data stores workspace snapshot (pinnedApps, folders) and tab URLs separately from live workspace state
+- `structuredClone()` used to deep-copy workspace data into session snapshots to avoid reference sharing
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -1425,4 +1428,21 @@ US-035 is complete. There are still stories with `passes: false` (US-036 through
   - `routingRules` type and defaults were already defined in `types.ts` and `constants.ts` — always check existing types before adding new ones
   - New tabs often start with `chrome://newtab` URL; routing must also run on `tabs.onUpdated` with `changeInfo.url` to catch navigations
   - SettingsPanel imports `getWorkspaces` from `workspaceStorage.ts` to populate workspace picker dropdowns
+---
+
+## 2026-02-15 - US-036
+- Implemented session save and restore functionality
+- Files created:
+  - `src/shared/sessionStorage.ts` (session CRUD helpers: getSessions, saveSession, createSessionFromState, updateSession, deleteSession)
+  - `src/sidepanel/SessionManager.tsx` (session list UI with restore/delete actions, tab previews)
+- Files changed:
+  - `src/shared/types.ts` (added Session interface with id, name, savedAt, workspaceSnapshot, tabUrls)
+  - `src/sidepanel/commandRegistry.ts` (added Save Session and Restore Session commands)
+  - `src/sidepanel/WorkspaceSwitcher.tsx` (added "Save Session" to workspace right-click context menu)
+  - `src/sidepanel/App.tsx` (integrated session save/restore logic, SessionManager modal, command palette wiring)
+- **Learnings for future iterations:**
+  - `structuredClone()` is useful for deep-cloning workspace state into session snapshots
+  - Session restore uses "Replace" vs "Add" mode via `window.confirm()` — OK = replace, Cancel = add alongside
+  - When adding props to a component that uses `useCallback`, always update the dependency array to satisfy React compiler's `preserve-manual-memoization` rule
+  - Max 20 sessions enforced by removing oldest when limit reached
 ---
