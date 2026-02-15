@@ -77,7 +77,8 @@ export type SidePanelMessage =
   | { type: "OPEN_URL"; url: string }
   | { type: "GET_TAB_WORKSPACE_MAP" }
   | { type: "MOVE_TAB_TO_WORKSPACE"; tabId: number; workspaceId: string }
-  | { type: "APPLY_WORKSPACE_ISOLATION"; activeWorkspaceId: string };
+  | { type: "APPLY_WORKSPACE_ISOLATION"; activeWorkspaceId: string }
+  | { type: "SUSPEND_TAB"; tabId: number };
 
 export interface Settings {
   theme: "system" | "light" | "dark";

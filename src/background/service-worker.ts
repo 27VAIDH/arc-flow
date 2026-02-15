@@ -394,10 +394,64 @@ async function runAutoArchive(): Promise<void> {
   }
 }
 
+// Auto-suspend tabs inactive beyond suspendAfterMinutes
+async function runAutoSuspend(): Promise<void> {
+  const settings = await getSettings();
+  if (settings.suspendAfterMinutes <= 0) return;
+
+  const thresholdMs = settings.suspendAfterMinutes * 60_000;
+  const now = Date.now();
+
+  // Get pinned app origins to exempt them
+  const pinnedApps = await getPinnedApps();
+  const pinnedOrigins = new Set(
+    pinnedApps.map((app) => getOrigin(app.url)).filter(Boolean)
+  );
+
+  // Get all tabs in the current window
+  const allTabs = await chrome.tabs.query({ currentWindow: true });
+
+  // Get folder items to check lastActiveAt for tabs in folders
+  const result = await chrome.storage.local.get("folders");
+  const folders = (result.folders as import("../shared/types").Folder[]) ?? [];
+
+  // Build a map of tabId -> lastActiveAt from folder items
+  const tabLastActive = new Map<number, number>();
+  for (const folder of folders) {
+    for (const item of folder.items) {
+      if (item.type === "tab" && item.tabId != null && item.lastActiveAt) {
+        tabLastActive.set(item.tabId, item.lastActiveAt);
+      }
+    }
+  }
+
+  for (const tab of allTabs) {
+    if (tab.id == null || tab.active || tab.discarded) continue;
+
+    // Skip pinned app origins
+    if (pinnedOrigins.has(getOrigin(tab.url ?? ""))) continue;
+
+    // Check lastActiveAt from folder items; skip if no tracking data
+    const lastActive = tabLastActive.get(tab.id);
+    if (!lastActive) continue;
+
+    if (now - lastActive > thresholdMs) {
+      try {
+        await chrome.tabs.discard(tab.id);
+      } catch {
+        // Tab cannot be discarded
+      }
+    }
+  }
+}
+
 // Listen for the auto-archive alarm
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ARCHIVE_ALARM_NAME) {
     runAutoArchive().catch(() => {
+      // Silently fail — will retry on next alarm
+    });
+    runAutoSuspend().catch(() => {
       // Silently fail — will retry on next alarm
     });
   }
@@ -447,6 +501,11 @@ chrome.runtime.onMessage.addListener(
     if (message.type === "APPLY_WORKSPACE_ISOLATION") {
       applyWorkspaceIsolation(message.activeWorkspaceId).catch(() => {
         // Tab groups API may not be available
+      });
+    }
+    if (message.type === "SUSPEND_TAB") {
+      chrome.tabs.discard(message.tabId).catch(() => {
+        // Tab may not exist or cannot be discarded
       });
     }
     if (message.type === "OPEN_PINNED_APP") {

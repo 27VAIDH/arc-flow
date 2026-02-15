@@ -49,6 +49,7 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - Archive entries stored in `src/shared/archiveStorage.ts`; key: `archiveEntries`, capped at 100 entries, sorted by `archivedAt` descending
 - `chrome.alarms` used for periodic tasks (auto-archive every 5 minutes); alarm name: `arcflow-auto-archive`
 - Pinned apps are exempt from auto-archiving; checked via origin matching against pinned app origins set
+- Auto-suspension (`runAutoSuspend`) runs on the same alarm as auto-archive; uses `suspendAfterMinutes` setting; skips active/discarded/pinned tabs
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -1047,4 +1048,87 @@ There are still stories with `passes: false` (US-027 through US-041), so the nex
   - Archive entries stored in `chrome.storage.local` under `archiveEntries` key, capped at 100 entries
   - `autoArchiveMinutes <= 0` is treated as "never auto-archive"
   - Archive storage helpers follow same pattern as pinned apps and folder storage
+---
+
+## Iteration 27 - Sun Feb 15 17:04:14 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-27.log
+---
+**US-027 is complete.** Here's what was implemented:
+
+- **`src/shared/archiveStorage.ts`** — New module with archive entry CRUD:
+  - `getArchiveEntries()` — Retrieves entries sorted by most recently archived
+  - `addArchiveEntry(entry)` — Adds an entry, capped at 100
+  - `removeArchiveEntry(id)` / `clearArchiveEntries()` — Delete helpers
+
+- **`public/manifest.json`** — Added `alarms` permission
+
+- **`src/background/service-worker.ts`** — Updated with:
+  - **Alarm registration**: `chrome.alarms.create("arcflow-auto-archive", { periodInMinutes: 5 })` in `onInstalled`
+  - **`updateLastActiveAt(tabId)`**: Updates `lastActiveAt` on FolderItems matching the activated tab, called from `tabs.onActivated`
+  - **`runAutoArchive()`**: Alarm handler that checks all tab-type folder items against the configurable threshold, discards stale tabs via `chrome.tabs.discard()`, marks them `isArchived: true`, and creates archive entries
+  - **Pinned apps exempt**: Builds a set of pinned app origins and skips matching tabs
+  - **Configurable threshold**: Uses `settings.autoArchiveMinutes` (default 720 = 12h); `<= 0` means "never"
+
+All quality checks pass (typecheck, lint, build). Committed as `a1e3e3b`.
+
+There are still stories with `passes: false` (US-028 through US-041), so the next iteration will pick up US-028.
+---
+
+## 2026-02-15 - US-028
+- Implemented archive section UI with restore functionality
+- Files created:
+  - src/sidepanel/ArchiveSection.tsx (collapsible archive section with restore and clear actions)
+- Files changed:
+  - src/sidepanel/App.tsx (imported and placed ArchiveSection in Zone 4, between tab list and footer)
+  - scripts/ralph/prd.json (marked US-028 passes: true)
+- **Learnings for future iterations:**
+  - ArchiveSection follows same `chrome.storage.onChanged` pattern as other components (listens for `archiveEntries` key)
+  - Archive section is collapsible (default collapsed) and returns `null` when no entries exist
+  - Shows 10 most recent entries with `formatTimeSince()` helper for relative time display
+  - Clicking an archived tab restores it: sends `OPEN_URL` message (reuses existing message type) + removes from archive storage
+  - "Clear All" action uses `window.confirm()` for confirmation before calling `clearArchiveEntries()`
+  - Archive entries already capped at 100 in `archiveStorage.ts` from US-027
+  - Hover state on archive items shows "Restore" text instead of relative time
+---
+
+## Iteration 28 - Sun Feb 15 17:06:42 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-28.log
+---
+**US-028 is complete.** Here's what was implemented:
+
+- **`src/sidepanel/ArchiveSection.tsx`** — New component that:
+  - Displays in Zone 4 of the sidebar, below the folder tree and tab list
+  - **Collapsible header** showing "Archive (X)" with the count of archived items, defaulting to collapsed
+  - Shows **10 most recently archived tabs** with favicon, title, and relative time since archived
+  - **Click to restore**: Clicking an archived tab opens it as a new tab via `OPEN_URL` message and removes it from the archive
+  - **"Clear All" action** with `window.confirm()` confirmation removes all entries
+  - Listens to `chrome.storage.onChanged` for real-time updates when archive entries change
+  - Returns `null` when no entries exist (clean empty state)
+  - Hover state shows "Restore" text instead of the relative time
+
+- **`src/sidepanel/App.tsx`** — Integrated `ArchiveSection` between the DndContext (tab list) and footer
+
+- Archive entries already stored as `ArchiveEntry[]` in `chrome.storage.local`, capped at 100 (from US-027)
+
+All quality checks pass (typecheck, lint, build). Committed as `65568b6`.
+
+There are still stories with `passes: false` (US-029 through US-041), so the next iteration will pick up US-029.
+---
+
+## 2026-02-15 - US-029
+- Implemented tab suspension and memory management
+- Files changed:
+  - src/shared/types.ts (added SUSPEND_TAB to SidePanelMessage union)
+  - src/background/service-worker.ts (added SUSPEND_TAB handler, runAutoSuspend function on same alarm as auto-archive)
+  - src/sidepanel/App.tsx (added "Suspend Tab" context menu item, suspension stats in footer showing count + estimated MB saved)
+  - scripts/ralph/prd.json (marked US-029 passes: true)
+- **Learnings for future iterations:**
+  - `chrome.tabs.discard(tabId)` suspends a tab; clicking a suspended tab via SWITCH_TAB (chrome.tabs.update active:true) automatically restores it
+  - Suspended tab styling (opacity-50 + italic via `tab.discarded`) was already implemented in US-019
+  - Auto-suspension runs on the same `arcflow-auto-archive` alarm (every 5 minutes), checking `suspendAfterMinutes` setting
+  - Suspension stats use `useMemo` to count `tabs.filter(t => t.discarded)` and multiply by 50 for estimated MB saved
+  - Stats only display when suspendedCount > 0 to keep footer clean
+  - Auto-suspend skips: active tabs, already-discarded tabs, pinned app origins, tabs without lastActiveAt tracking data
 ---

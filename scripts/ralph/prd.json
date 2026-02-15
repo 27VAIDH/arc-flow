@@ -493,7 +493,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 29,
-      "passes": false,
+      "passes": true,
       "notes": "50MB per tab is a conservative memory estimate."
     },
     {

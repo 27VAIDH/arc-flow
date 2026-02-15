@@ -532,6 +532,13 @@ export default function App() {
 
   const { theme, cycleTheme } = useTheme();
 
+  // Suspension stats
+  const suspendedCount = useMemo(
+    () => tabs.filter((t) => t.discarded).length,
+    [tabs]
+  );
+  const estimatedMBSaved = suspendedCount * 50;
+
   const handleTabContextMenu = useCallback(
     (e: React.MouseEvent, tab: TabInfo) => {
       e.preventDefault();
@@ -572,6 +579,19 @@ export default function App() {
           label: "Save Link to Folder...",
           onClick: () => {
             setFolderPicker({ tab, x: e.clientX, y: e.clientY });
+          },
+        });
+      }
+
+      // Add "Suspend Tab" if the tab is not already discarded
+      if (!tab.discarded) {
+        items.push({
+          label: "Suspend Tab",
+          onClick: () => {
+            chrome.runtime.sendMessage({
+              type: "SUSPEND_TAB",
+              tabId: tab.id,
+            });
           },
         });
       }
@@ -906,6 +926,12 @@ export default function App() {
           onWorkspaceChange={handleWorkspaceChange}
           onContextMenu={setContextMenu}
         />
+        {suspendedCount > 0 && (
+          <div className="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 text-center">
+            {suspendedCount} tab{suspendedCount !== 1 ? "s" : ""} suspended | ~
+            {estimatedMBSaved} MB saved
+          </div>
+        )}
         <div className="flex items-center justify-between px-3 pb-2">
           <button
             onClick={handleToggleIsolation}
