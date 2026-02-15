@@ -37,6 +37,7 @@ import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import ArchiveSection from "./ArchiveSection";
 import SettingsPanel from "./SettingsPanel";
 import CommandPalette from "./CommandPalette";
+import OrganizeTabsModal from "./OrganizeTabsModal";
 import { buildCommands } from "./commandRegistry";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
 import {
@@ -367,6 +368,7 @@ export default function App() {
     useState<Settings["workspaceIsolation"]>("sidebar-only");
   const [showSettings, setShowSettings] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showOrganizeTabs, setShowOrganizeTabs] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -946,8 +948,28 @@ export default function App() {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
-      <header className="p-4 border-b border-gray-200 dark:border-gray-700">
+      <header className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <h1 className="text-lg font-semibold">ArcFlow</h1>
+        <button
+          onClick={() => setShowOrganizeTabs(true)}
+          className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
+          title="Organize Tabs"
+          aria-label="Organize Tabs"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="w-4 h-4"
+          >
+            <path
+              fillRule="evenodd"
+              d="M2 3.75A.75.75 0 0 1 2.75 3h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 3.75Zm0 4.167a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Zm0 4.166a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Zm0 4.167a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Z"
+              clipRule="evenodd"
+            />
+          </svg>
+          Organize
+        </button>
       </header>
 
       {/* Search bar (Zone 1) */}
@@ -1098,6 +1120,15 @@ export default function App() {
         <CommandPalette
           commands={commands}
           onClose={() => setShowCommandPalette(false)}
+        />
+      )}
+
+      {/* Organize Tabs Modal */}
+      {showOrganizeTabs && (
+        <OrganizeTabsModal
+          tabs={filteredTabs}
+          folders={folders}
+          onClose={() => setShowOrganizeTabs(false)}
         />
       )}
     </div>
