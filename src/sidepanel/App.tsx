@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   TabInfo,
   PinnedApp,
+  Workspace,
   ServiceWorkerMessage,
   Folder,
   FolderItem,
@@ -20,7 +21,7 @@ import {
   reorderFolders,
   reorderItemsInFolder,
 } from "../shared/folderStorage";
-import { getActiveWorkspace } from "../shared/workspaceStorage";
+import { getActiveWorkspace, getWorkspaces } from "../shared/workspaceStorage";
 import PinnedAppsRow from "./PinnedAppsRow";
 import FolderTree from "./FolderTree";
 import SearchBar from "./SearchBar";
@@ -341,6 +342,10 @@ export default function App() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [activeDragTab, setActiveDragTab] = useState<TabInfo | null>(null);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState("default");
+  const [tabWorkspaceMap, setTabWorkspaceMap] = useState<
+    Record<string, string>
+  >({});
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [folderPicker, setFolderPicker] = useState<{
     tab: TabInfo;
     x: number;
@@ -355,19 +360,41 @@ export default function App() {
     })
   );
 
-  // Load active workspace on mount
+  // Load active workspace, workspaces list, and tab-workspace map on mount
   useEffect(() => {
     getActiveWorkspace().then((ws) => {
       setActiveWorkspaceId(ws.id);
     });
+    getWorkspaces().then(setWorkspaces);
+
+    // Request initial tab-workspace map from service worker
+    chrome.runtime.sendMessage(
+      { type: "GET_TAB_WORKSPACE_MAP" },
+      (response: Record<string, string>) => {
+        if (response) {
+          setTabWorkspaceMap(response);
+        }
+      }
+    );
 
     const handleStorageChange = (
       changes: { [key: string]: chrome.storage.StorageChange },
       area: string
     ) => {
-      if (area === "local" && changes.activeWorkspaceId) {
-        const newId = changes.activeWorkspaceId.newValue as string;
-        if (newId) setActiveWorkspaceId(newId);
+      if (area === "local") {
+        if (changes.activeWorkspaceId) {
+          const newId = changes.activeWorkspaceId.newValue as string;
+          if (newId) setActiveWorkspaceId(newId);
+        }
+        if (changes.tabWorkspaceMap) {
+          const newMap =
+            (changes.tabWorkspaceMap.newValue as Record<string, string>) ?? {};
+          setTabWorkspaceMap(newMap);
+        }
+        if (changes.workspaces) {
+          const updated = (changes.workspaces.newValue as Workspace[]) ?? [];
+          setWorkspaces(updated.sort((a, b) => a.sortOrder - b.sortOrder));
+        }
       }
     };
 
@@ -437,6 +464,8 @@ export default function App() {
     const handleMessage = (message: ServiceWorkerMessage) => {
       if (message.type === "TABS_UPDATED") {
         setTabs(message.tabs);
+      } else if (message.type === "TAB_WORKSPACE_MAP_UPDATED") {
+        setTabWorkspaceMap(message.tabWorkspaceMap);
       } else if (message.type === "TAB_ACTIVATED") {
         setTabs((prev) =>
           prev.map((tab) => ({
@@ -457,6 +486,16 @@ export default function App() {
   const handleWorkspaceChange = useCallback((workspaceId: string) => {
     setActiveWorkspaceId(workspaceId);
   }, []);
+
+  // Filter tabs by active workspace
+  const filteredTabs = useMemo(() => {
+    return tabs.filter((tab) => {
+      const wsId = tabWorkspaceMap[String(tab.id)];
+      // Show tabs that are assigned to the active workspace,
+      // or tabs that have no workspace assignment (unassigned tabs go to active workspace)
+      return !wsId || wsId === activeWorkspaceId;
+    });
+  }, [tabs, tabWorkspaceMap, activeWorkspaceId]);
 
   const { theme, cycleTheme } = useTheme();
 
@@ -504,9 +543,28 @@ export default function App() {
         });
       }
 
+      // Add "Move to Workspace..." if there are multiple workspaces
+      if (workspaces.length > 1) {
+        const otherWorkspaces = workspaces.filter(
+          (ws) => ws.id !== activeWorkspaceId
+        );
+        for (const ws of otherWorkspaces) {
+          items.push({
+            label: `Move to ${ws.emoji} ${ws.name}`,
+            onClick: () => {
+              chrome.runtime.sendMessage({
+                type: "MOVE_TAB_TO_WORKSPACE",
+                tabId: tab.id,
+                workspaceId: ws.id,
+              });
+            },
+          });
+        }
+      }
+
       setContextMenu({ x: e.clientX, y: e.clientY, items });
     },
-    [pinnedApps, folders]
+    [pinnedApps, folders, workspaces, activeWorkspaceId]
   );
 
   const closeContextMenu = useCallback(() => {
@@ -787,10 +845,10 @@ export default function App() {
         {/* Tab list */}
         <div className="flex-1 px-1">
           <p className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1">
-            {tabs.length} tab{tabs.length !== 1 ? "s" : ""} open
+            {filteredTabs.length} tab{filteredTabs.length !== 1 ? "s" : ""} open
           </p>
           <ul className="flex flex-col gap-1">
-            {tabs.map((tab) => (
+            {filteredTabs.map((tab) => (
               <DraggableTabItem
                 key={tab.id}
                 tab={tab}

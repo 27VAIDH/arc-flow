@@ -60,7 +60,11 @@ export interface TabInfo {
 // Messages sent from service worker to side panel
 export type ServiceWorkerMessage =
   | { type: "TABS_UPDATED"; tabs: TabInfo[] }
-  | { type: "TAB_ACTIVATED"; tabId: number; windowId: number };
+  | { type: "TAB_ACTIVATED"; tabId: number; windowId: number }
+  | {
+      type: "TAB_WORKSPACE_MAP_UPDATED";
+      tabWorkspaceMap: Record<string, string>;
+    };
 
 // Messages sent from side panel to service worker
 export type SidePanelMessage =
@@ -70,7 +74,9 @@ export type SidePanelMessage =
   | { type: "SWITCH_TAB"; tabId: number }
   | { type: "OPEN_PINNED_APP"; url: string; origin: string }
   | { type: "OPEN_PINNED_APP_NEW_TAB"; url: string }
-  | { type: "OPEN_URL"; url: string };
+  | { type: "OPEN_URL"; url: string }
+  | { type: "GET_TAB_WORKSPACE_MAP" }
+  | { type: "MOVE_TAB_TO_WORKSPACE"; tabId: number; workspaceId: string };
 
 export interface Settings {
   theme: "system" | "light" | "dark";

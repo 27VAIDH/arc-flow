@@ -9,6 +9,11 @@ import {
   addPinnedApp,
   removePinnedApp,
 } from "../shared/storage";
+import {
+  getTabWorkspaceMap,
+  assignTabToWorkspace,
+  removeTabFromMap,
+} from "../shared/workspaceStorage";
 
 const CONTEXT_MENU_ID = "arcflow-pin-toggle";
 
@@ -63,6 +68,18 @@ function broadcastTabs(tabs: TabInfo[]): void {
   const message: ServiceWorkerMessage = { type: "TABS_UPDATED", tabs };
   chrome.runtime.sendMessage(message).catch(() => {
     // Side panel may not be open; ignore the error
+  });
+}
+
+function broadcastTabWorkspaceMap(): void {
+  getTabWorkspaceMap().then((tabWorkspaceMap) => {
+    const message: ServiceWorkerMessage = {
+      type: "TAB_WORKSPACE_MAP_UPDATED",
+      tabWorkspaceMap,
+    };
+    chrome.runtime.sendMessage(message).catch(() => {
+      // Side panel may not be open
+    });
   });
 }
 
@@ -155,11 +172,25 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
 });
 
 // Tab lifecycle event listeners
-chrome.tabs.onCreated.addListener(() => {
+chrome.tabs.onCreated.addListener((tab) => {
+  // Auto-assign new tabs to the active workspace
+  if (tab.id != null) {
+    chrome.storage.local.get("activeWorkspaceId", (result) => {
+      const activeWsId =
+        (result.activeWorkspaceId as string | undefined) ?? "default";
+      assignTabToWorkspace(tab.id!, activeWsId).then(() => {
+        broadcastTabWorkspaceMap();
+      });
+    });
+  }
   debouncedRefresh();
 });
 
-chrome.tabs.onRemoved.addListener(() => {
+chrome.tabs.onRemoved.addListener((tabId) => {
+  // Clean up tab-workspace mapping
+  removeTabFromMap(tabId).then(() => {
+    broadcastTabWorkspaceMap();
+  });
   debouncedRefresh();
 });
 
@@ -213,6 +244,17 @@ chrome.runtime.onMessage.addListener(
     }
     if (message.type === "OPEN_URL") {
       chrome.tabs.create({ url: message.url }).catch(() => {});
+    }
+    if (message.type === "GET_TAB_WORKSPACE_MAP") {
+      getTabWorkspaceMap().then((map) => {
+        sendResponse(map);
+      });
+      return true; // async response
+    }
+    if (message.type === "MOVE_TAB_TO_WORKSPACE") {
+      assignTabToWorkspace(message.tabId, message.workspaceId).then(() => {
+        broadcastTabWorkspaceMap();
+      });
     }
     if (message.type === "OPEN_PINNED_APP") {
       // Find existing tab with matching origin, or open a new one
