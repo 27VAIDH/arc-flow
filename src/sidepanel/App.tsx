@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   TabInfo,
   PinnedApp,
@@ -15,6 +15,7 @@ import {
 import {
   getFolders,
   addItemToFolder,
+  removeItemFromFolder,
   moveItemToFolder,
   reorderFolders,
   reorderItemsInFolder,
@@ -147,6 +148,89 @@ function TabDragOverlay({ tab }: { tab: TabInfo }) {
   );
 }
 
+function FolderPickerDropdown({
+  folders,
+  x,
+  y,
+  onSelect,
+  onClose,
+}: {
+  folders: Folder[];
+  x: number;
+  y: number;
+  onSelect: (folderId: string) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [onClose]);
+
+  // Adjust position to stay within viewport
+  const style: React.CSSProperties = {
+    position: "fixed",
+    left: Math.min(x, window.innerWidth - 200),
+    top: Math.min(y, window.innerHeight - 200),
+    zIndex: 1000,
+  };
+
+  const renderFolderOption = (
+    folder: Folder,
+    depth: number
+  ): React.ReactNode => {
+    const children = folders.filter((f) => f.parentId === folder.id);
+    return (
+      <div key={folder.id}>
+        <button
+          onClick={() => onSelect(folder.id)}
+          className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+          style={{ paddingLeft: 12 + depth * 16 }}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="w-4 h-4 shrink-0 text-gray-500 dark:text-gray-400"
+          >
+            <path d="M3.75 3A1.75 1.75 0 0 0 2 4.75v3.26a3.235 3.235 0 0 1 1.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0 0 16.25 5h-4.836a.25.25 0 0 1-.177-.073L9.823 3.513A1.75 1.75 0 0 0 8.586 3H3.75ZM3.75 9A1.75 1.75 0 0 0 2 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0 0 18 15.25v-4.5A1.75 1.75 0 0 0 16.25 9H3.75Z" />
+          </svg>
+          <span className="truncate">{folder.name}</span>
+        </button>
+        {children.map((child) => renderFolderOption(child, depth + 1))}
+      </div>
+    );
+  };
+
+  const topLevelFolders = folders.filter((f) => f.parentId === null);
+
+  return (
+    <div
+      ref={ref}
+      style={style}
+      className="min-w-[180px] max-w-[240px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg py-1 max-h-[200px] overflow-y-auto"
+    >
+      <div className="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 font-medium">
+        Save to folder
+      </div>
+      {topLevelFolders.map((folder) => renderFolderOption(folder, 0))}
+    </div>
+  );
+}
+
 const THEME_LABELS: Record<ThemePreference, string> = {
   system: "System",
   light: "Light",
@@ -236,6 +320,11 @@ export default function App() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [activeDragTab, setActiveDragTab] = useState<TabInfo | null>(null);
+  const [folderPicker, setFolderPicker] = useState<{
+    tab: TabInfo;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -358,14 +447,80 @@ export default function App() {
         });
       }
 
+      // Add "Save Link to Folder..." if there are folders
+      if (folders.length > 0) {
+        items.push({
+          label: "Save Link to Folder...",
+          onClick: () => {
+            setFolderPicker({ tab, x: e.clientX, y: e.clientY });
+          },
+        });
+      }
+
       setContextMenu({ x: e.clientX, y: e.clientY, items });
     },
-    [pinnedApps]
+    [pinnedApps, folders]
   );
 
   const closeContextMenu = useCallback(() => {
     setContextMenu(null);
   }, []);
+
+  const handleSaveLinkToFolder = useCallback(
+    async (folderId: string) => {
+      if (!folderPicker) return;
+      const { tab } = folderPicker;
+      const newItem: FolderItem = {
+        id: crypto.randomUUID(),
+        type: "link",
+        tabId: null,
+        url: tab.url,
+        title: tab.title || tab.url,
+        favicon: tab.favIconUrl || "",
+        isArchived: false,
+        lastActiveAt: Date.now(),
+      };
+      await addItemToFolder(folderId, newItem);
+      setFolderPicker(null);
+    },
+    [folderPicker]
+  );
+
+  const handleFolderItemClick = useCallback((item: FolderItem) => {
+    if (item.type === "link") {
+      chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
+    } else if (item.type === "tab" && item.tabId != null) {
+      chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: item.tabId });
+    }
+  }, []);
+
+  const handleFolderItemContextMenu = useCallback(
+    (e: React.MouseEvent, item: FolderItem, folderId: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const items: ContextMenuItem[] = [];
+
+      if (item.type === "link") {
+        items.push({
+          label: "Open Link",
+          onClick: () => {
+            chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
+          },
+        });
+        items.push({
+          label: "Remove",
+          onClick: () => {
+            removeItemFromFolder(folderId, item.id);
+          },
+        });
+      }
+
+      if (items.length > 0) {
+        setContextMenu({ x: e.clientX, y: e.clientY, items });
+      }
+    },
+    []
+  );
 
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
@@ -553,6 +708,8 @@ export default function App() {
           onContextMenu={setContextMenu}
           folders={folders}
           setFolders={setFolders}
+          onItemClick={handleFolderItemClick}
+          onItemContextMenu={handleFolderItemContextMenu}
         />
 
         {/* Tab list */}
@@ -580,6 +737,17 @@ export default function App() {
       <footer className="flex items-center justify-end px-3 py-2 border-t border-gray-200 dark:border-gray-700">
         <ThemeToggle theme={theme} onCycle={cycleTheme} />
       </footer>
+
+      {/* Folder Picker Dropdown */}
+      {folderPicker && (
+        <FolderPickerDropdown
+          folders={folders}
+          x={folderPicker.x}
+          y={folderPicker.y}
+          onSelect={handleSaveLinkToFolder}
+          onClose={() => setFolderPicker(null)}
+        />
+      )}
 
       {/* Context Menu */}
       {contextMenu && (

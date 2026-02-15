@@ -25,6 +25,12 @@ interface FolderTreeProps {
   onContextMenu: (state: ContextMenuState) => void;
   folders: Folder[];
   setFolders: React.Dispatch<React.SetStateAction<Folder[]>>;
+  onItemClick?: (item: FolderItem, folderId: string) => void;
+  onItemContextMenu?: (
+    e: React.MouseEvent,
+    item: FolderItem,
+    folderId: string
+  ) => void;
 }
 
 function FolderHeader({
@@ -144,9 +150,19 @@ function FolderHeader({
 function DraggableFolderItem({
   item,
   depth,
+  folderId,
+  onClick,
+  onContextMenu,
 }: {
   item: FolderItem;
   depth: number;
+  folderId: string;
+  onClick?: (item: FolderItem, folderId: string) => void;
+  onContextMenu?: (
+    e: React.MouseEvent,
+    item: FolderItem,
+    folderId: string
+  ) => void;
 }) {
   const {
     attributes,
@@ -170,7 +186,9 @@ function DraggableFolderItem({
       style={style}
       {...attributes}
       {...listeners}
-      className="flex items-center gap-2 px-2 h-7 text-sm rounded cursor-default hover:bg-gray-200 dark:hover:bg-gray-800 touch-none"
+      className={`flex items-center gap-2 px-2 h-7 text-sm rounded cursor-default hover:bg-gray-200 dark:hover:bg-gray-800 touch-none ${item.type === "link" ? "cursor-pointer" : ""}`}
+      onClick={() => onClick?.(item, folderId)}
+      onContextMenu={(e) => onContextMenu?.(e, item, folderId)}
     >
       {item.favicon ? (
         <img
@@ -202,6 +220,8 @@ function SortableFolder({
   onContextMenu,
   getChildren,
   renderFolder,
+  onItemClick,
+  onItemContextMenu,
 }: {
   folder: Folder;
   depth: number;
@@ -210,6 +230,12 @@ function SortableFolder({
   onContextMenu: (e: React.MouseEvent, folder: Folder) => void;
   getChildren: (parentId: string) => Folder[];
   renderFolder: (folder: Folder, depth: number) => React.ReactNode;
+  onItemClick?: (item: FolderItem, folderId: string) => void;
+  onItemContextMenu?: (
+    e: React.MouseEvent,
+    item: FolderItem,
+    folderId: string
+  ) => void;
 }) {
   const {
     attributes,
@@ -261,7 +287,14 @@ function SortableFolder({
             strategy={verticalListSortingStrategy}
           >
             {folder.items.map((item) => (
-              <DraggableFolderItem key={item.id} item={item} depth={depth} />
+              <DraggableFolderItem
+                key={item.id}
+                item={item}
+                depth={depth}
+                folderId={folder.id}
+                onClick={onItemClick}
+                onContextMenu={onItemContextMenu}
+              />
             ))}
           </SortableContext>
           {getChildren(folder.id).map((child) =>
@@ -277,6 +310,8 @@ export default function FolderTree({
   onContextMenu,
   folders,
   setFolders,
+  onItemClick,
+  onItemContextMenu,
 }: FolderTreeProps) {
   const [toast, setToast] = useState<string | null>(null);
 
@@ -382,6 +417,8 @@ export default function FolderTree({
       onContextMenu={handleFolderContextMenu}
       getChildren={getChildren}
       renderFolder={renderFolder}
+      onItemClick={onItemClick}
+      onItemContextMenu={onItemContextMenu}
     />
   );
 

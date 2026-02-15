@@ -26,6 +26,9 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - Chrome context menus (`chrome.contextMenus.create`) must be registered inside `chrome.runtime.onInstalled` listener; use `chrome.contextMenus.update` for dynamic title changes
 - Folder storage helpers in `src/shared/folderStorage.ts`; pinned apps storage in `src/shared/storage.ts`
 - Nesting depth validation: traverse parentId chain counting ancestors; reject at depth >= 3
+- DnD across components (tabs → folders): use a single `DndContext` at App level wrapping both FolderTree and tab list; use ID prefixes (`tab:`, `folder:`, `folder-item:`, `folder-drop:`) to distinguish drag/drop types in `onDragEnd`
+- Folder state (folders, setFolders) lifted to App level for cross-component DnD; FolderTree receives folders/setFolders as props
+- Custom collision detection: `pointerWithin` for folder drop targets, `rectIntersection` fallback for sortable items
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -574,4 +577,76 @@ There are still stories with `passes: false` (US-015 through US-041), so the nex
   - Error toast displayed inline below folder tree when nesting depth >= 3; auto-dismisses after 3 seconds
   - 16px indentation per level and parent collapse hiding nested children were already implemented in US-014's recursive `renderFolder(folder, depth)`
   - `handleCreateFolder` changed from no-args to optional `parentId` arg to support both top-level and subfolder creation
+---
+
+## Iteration 15 - Sun Feb 15 16:23:36 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-15.log
+---
+**US-015 is complete.** Here's what was implemented:
+
+- **"New Subfolder" context menu option** — Right-clicking a folder now shows "New Subfolder" which creates a child folder via `createFolder(name, parentId)`
+- **Error toast for depth limit** — When attempting to nest beyond 3 levels, an inline error toast appears below the folder tree and auto-dismisses after 3 seconds
+- **16px indentation per level** — Already implemented in US-014's recursive `renderFolder`
+- **Collapsing parent hides nested children** — Already works via the recursive render structure from US-014
+
+All quality checks pass (typecheck, lint, build). Committed as `24a527b`.
+
+There are still stories with `passes: false` (US-016 through US-041), so the next iteration will pick up US-016.
+---
+
+## 2026-02-15 - US-016
+- Implemented drag-and-drop tabs into folders with full reorder support
+- Files changed:
+  - src/sidepanel/App.tsx (added DndContext wrapping folder tree + tab list, DraggableTabItem component, DragOverlay, custom collision detection, drag end handler for 4 cases: tab→folder, item→folder, item reorder, folder reorder)
+  - src/sidepanel/FolderTree.tsx (refactored to receive folders/setFolders as props, added SortableFolder with useDroppable for drop targets, DraggableFolderItem with useSortable, SortableContext for folder items and top-level folders)
+  - src/shared/folderStorage.ts (added reorderFolders and reorderItemsInFolder helpers)
+  - scripts/ralph/prd.json (marked US-016 passes: true)
+- **Learnings for future iterations:**
+  - When DnD spans multiple components (tabs → folders), use a single `DndContext` at the common ancestor (App) wrapping all draggable/droppable areas
+  - ID prefixes (`tab:`, `folder:`, `folder-item:`, `folder-drop:`) disambiguate drag source/target types in `onDragEnd`
+  - `useDroppable` on folder nodes creates drop targets; `useSortable` on folder items enables reorder; both can coexist on same node via combined ref callback
+  - Custom collision detection using `pointerWithin` (prioritizing `folder-drop:` targets) + `rectIntersection` fallback gives good behavior for both folder drops and sortable reorder
+  - Folder state was lifted from FolderTree to App level to enable cross-component DnD; storage listener for `folders` key moved to App
+  - `DragOverlay` renders a styled clone of the dragged tab for better visual feedback during drag
+  - `touch-none` class on draggable items prevents browser touch scroll interference
+  - `draggable={false}` on `<img>` elements inside draggable items prevents native browser image drag
+---
+
+## Iteration 16 - Sun Feb 15 16:28:57 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-16.log
+---
+**US-016 is complete.** Here's what was implemented:
+
+- **Draggable tabs** — Tab items in the sidebar are now draggable using `useDraggable` from `@dnd-kit/core`, with a `DragOverlay` showing a styled clone during drag
+- **Folder drop targets** — Each folder is wrapped with `useDroppable`, highlighting with a blue ring and background when a tab is dragged over it
+- **Tab → folder drop** — Dropping a tab onto a folder creates a new `FolderItem` (type: 'tab') and adds it to the folder via `addItemToFolder()`
+- **Item reorder within folders** — Folder items use `useSortable` for drag-and-drop reordering, persisted via `reorderItemsInFolder()`
+- **Folder reorder** — Folders use `useSortable` for drag-and-drop reordering among siblings, persisted via `reorderFolders()`
+- **Cross-folder item moves** — Dragging a folder item onto a different folder moves it via `moveItemToFolder()`
+- **Custom collision detection** — Uses `pointerWithin` prioritizing folder drop targets, with `rectIntersection` fallback for sortable items
+- **State lifted** — Folder state moved from FolderTree to App level to enable cross-component DnD
+
+New storage helpers added: `reorderFolders()` and `reorderItemsInFolder()` in `src/shared/folderStorage.ts`.
+
+All quality checks pass (typecheck, lint, build). Committed as `03d4e5d`.
+
+There are still stories with `passes: false` (US-017 through US-041), so the next iteration will pick up US-017.
+---
+
+## 2026-02-15 - US-017
+- Implemented saved links in folders
+- Files changed:
+  - src/shared/types.ts (added OPEN_URL to SidePanelMessage union)
+  - src/background/service-worker.ts (added OPEN_URL handler to open URLs as new tabs)
+  - src/sidepanel/App.tsx (added "Save Link to Folder..." tab context menu option, FolderPickerDropdown component, folder item click/context menu handlers)
+  - src/sidepanel/FolderTree.tsx (added onItemClick and onItemContextMenu props to DraggableFolderItem, SortableFolder, and FolderTree)
+  - scripts/ralph/prd.json (marked US-017 passes: true)
+- **Learnings for future iterations:**
+  - Saved links are FolderItem with `type: 'link'` and `tabId: null`
+  - Saved links already had dimmed styling in DraggableFolderItem from US-016 (`text-gray-400 dark:text-gray-500 italic` when type === "link")
+  - FolderPickerDropdown renders as a fixed-position overlay with click-outside and Escape dismissal
+  - Folder item interactions (click, context menu) are passed from App → FolderTree → SortableFolder → DraggableFolderItem as callback props
+  - `OPEN_URL` message type opens a new tab via `chrome.tabs.create({ url })` — distinct from `OPEN_PINNED_APP` which does origin matching
 ---
