@@ -59,6 +59,8 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - Recent commands stored in `commandPaletteRecent` key in `chrome.storage.local`
 - `chrome.system.display.getInfo()` requires `system.display` permission in manifest; used for screen dimensions in split view
 - Split view uses `chrome.windows.create({ tabId })` to move a tab into a new window; positions windows at left/right halves using `workArea` bounds
+- Air Traffic Control routing rules: `globToRegex()` in service-worker.ts converts glob patterns (`*` → `.*`) to regex; evaluated on both `tabs.onCreated` and `tabs.onUpdated` (URL change); first match wins
+- New tabs often start as `chrome://newtab` then navigate; re-evaluate routing rules on `tabs.onUpdated` when `changeInfo.url` is present
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -1402,4 +1404,25 @@ US-034 is complete. There are still stories with `passes: false` (US-035 through
 - **Learnings for future iterations:**
   - Some stories may already be implemented as part of other story implementations; always check existing code first
   - The routing rules were implemented alongside the settings panel and workspace features
+---
+
+## Iteration 1 - Sun Feb 15 22:33:56 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-223132/iter-1.log
+---
+US-035 is complete. There are still stories with `passes: false` (US-036 through US-041), so the next iteration will pick up **US-036: Session save and restore**.
+---
+
+## 2026-02-15 - US-035
+- Implemented Air Traffic Control: link routing rules
+- Added `globToRegex()` and `getWorkspaceForUrl()` utility functions in service-worker.ts
+- Updated `tabs.onCreated` handler to evaluate routing rules before falling back to active workspace
+- Added routing rule re-evaluation on `tabs.onUpdated` when URL changes (handles new tab → navigation)
+- Added "Air Traffic Control" section to SettingsPanel.tsx with add/edit/delete rule UI
+- Each rule has a glob pattern input and workspace picker dropdown
+- Files changed: `src/background/service-worker.ts`, `src/sidepanel/SettingsPanel.tsx`
+- **Learnings for future iterations:**
+  - `routingRules` type and defaults were already defined in `types.ts` and `constants.ts` — always check existing types before adding new ones
+  - New tabs often start with `chrome://newtab` URL; routing must also run on `tabs.onUpdated` with `changeInfo.url` to catch navigations
+  - SettingsPanel imports `getWorkspaces` from `workspaceStorage.ts` to populate workspace picker dropdowns
 ---
