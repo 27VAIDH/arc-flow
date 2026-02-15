@@ -4,12 +4,26 @@ import type {
   ServiceWorkerMessage,
   SidePanelMessage,
 } from "../shared/types";
+import {
+  getPinnedApps,
+  addPinnedApp,
+  removePinnedApp,
+} from "../shared/storage";
+
+const CONTEXT_MENU_ID = "arcflow-pin-toggle";
 
 // Register side panel on install
 chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel.setOptions({
     path: "src/sidepanel/index.html",
     enabled: true,
+  });
+
+  // Create context menu for page-level pin/unpin
+  chrome.contextMenus.create({
+    id: CONTEXT_MENU_ID,
+    title: "Pin to ArcFlow",
+    contexts: ["page"],
   });
 });
 
@@ -72,6 +86,73 @@ async function initialize(): Promise<void> {
 }
 
 initialize();
+
+// --- Chrome context menu: Pin/Unpin to ArcFlow ---
+
+function getOrigin(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return "";
+  }
+}
+
+async function updateContextMenuTitle(tabId: number): Promise<void> {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    const tabOrigin = getOrigin(tab.url ?? "");
+    if (!tabOrigin) return;
+
+    const apps = await getPinnedApps();
+    const isPinned = apps.some((app) => getOrigin(app.url) === tabOrigin);
+
+    chrome.contextMenus.update(CONTEXT_MENU_ID, {
+      title: isPinned ? "Unpin from ArcFlow" : "Pin to ArcFlow",
+    });
+  } catch {
+    // Tab may not exist or context menu not ready
+  }
+}
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== CONTEXT_MENU_ID || !tab?.id) return;
+
+  const tabUrl = tab.url ?? info.pageUrl ?? "";
+  const tabOrigin = getOrigin(tabUrl);
+  if (!tabOrigin) return;
+
+  const apps = await getPinnedApps();
+  const existing = apps.find((app) => getOrigin(app.url) === tabOrigin);
+
+  if (existing) {
+    await removePinnedApp(existing.id);
+  } else {
+    await addPinnedApp({
+      id: crypto.randomUUID(),
+      url: tabUrl,
+      title: tab.title ?? tabUrl,
+      favicon: tab.favIconUrl ?? "",
+    }).catch(() => {
+      // Max pinned apps reached
+    });
+  }
+
+  // Update menu title after toggle
+  if (tab.id) {
+    await updateContextMenuTitle(tab.id);
+  }
+});
+
+// Update context menu title when active tab changes
+chrome.tabs.onActivated.addListener((activeInfo) => {
+  updateContextMenuTitle(activeInfo.tabId);
+});
+
+chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+  if (changeInfo.url && tab.active && tab.id != null) {
+    updateContextMenuTitle(tab.id);
+  }
+});
 
 // Tab lifecycle event listeners
 chrome.tabs.onCreated.addListener(() => {
