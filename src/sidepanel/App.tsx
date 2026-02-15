@@ -1,6 +1,55 @@
 import { useEffect, useState } from "react";
 import type { TabInfo, ServiceWorkerMessage } from "../shared/types";
 
+function TabItem({ tab }: { tab: TabInfo }) {
+  const [hovered, setHovered] = useState(false);
+
+  const handleClose = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    chrome.runtime.sendMessage({ type: "CLOSE_TAB", tabId: tab.id });
+  };
+
+  return (
+    <li
+      className="flex items-center gap-2 px-2 h-8 text-sm rounded group cursor-default hover:bg-gray-200 dark:hover:bg-gray-800"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {tab.favIconUrl ? (
+        <img
+          src={tab.favIconUrl}
+          alt=""
+          className="w-4 h-4 shrink-0"
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = "none";
+          }}
+        />
+      ) : (
+        <span className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600" />
+      )}
+      <span className="truncate flex-1 select-none">
+        {tab.title || tab.url}
+      </span>
+      {hovered && (
+        <button
+          onClick={handleClose}
+          className="shrink-0 w-4 h-4 flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+          aria-label={`Close ${tab.title}`}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            className="w-3.5 h-3.5"
+          >
+            <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
+          </svg>
+        </button>
+      )}
+    </li>
+  );
+}
+
 export default function App() {
   const [tabs, setTabs] = useState<TabInfo[]>([]);
 
@@ -46,21 +95,22 @@ export default function App() {
       <header className="p-4 border-b border-gray-200 dark:border-gray-700">
         <h1 className="text-lg font-semibold">ArcFlow</h1>
       </header>
-      <div className="p-2">
+
+      {/* Placeholder search bar area */}
+      <div className="px-2 py-2">
+        <div className="flex items-center h-8 px-2 rounded bg-gray-200 dark:bg-gray-800 text-gray-400 dark:text-gray-500 text-sm">
+          Search tabs...
+        </div>
+      </div>
+
+      {/* Tab list */}
+      <div className="px-1">
         <p className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1">
           {tabs.length} tab{tabs.length !== 1 ? "s" : ""} open
         </p>
-        <ul>
+        <ul className="flex flex-col gap-1">
           {tabs.map((tab) => (
-            <li
-              key={tab.id}
-              className="flex items-center gap-2 px-2 py-1 text-sm truncate"
-            >
-              {tab.favIconUrl && (
-                <img src={tab.favIconUrl} alt="" className="w-4 h-4 shrink-0" />
-              )}
-              <span className="truncate">{tab.title || tab.url}</span>
-            </li>
+            <TabItem key={tab.id} tab={tab} />
           ))}
         </ul>
       </div>

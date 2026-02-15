@@ -112,5 +112,10 @@ chrome.runtime.onMessage.addListener(
       });
       return true; // async response
     }
+    if (message.type === "CLOSE_TAB") {
+      chrome.tabs.remove(message.tabId).catch(() => {
+        // Tab may already be closed
+      });
+    }
   }
 );
