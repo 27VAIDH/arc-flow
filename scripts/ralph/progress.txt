@@ -1,0 +1,108 @@
+# Ralph Progress Log
+Started: Sun Feb 15 15:44:51 IST 2026
+
+## Codebase Patterns
+- Tailwind CSS v4 uses `@import "tailwindcss"` instead of `@tailwind` directives
+- Dark mode uses Tailwind `class` strategy via `tailwind.config.ts`
+- Vite builds Chrome extension with multi-entry: sidepanel HTML + service-worker TS
+- manifest.json lives in `public/` and is copied to `dist/` by a custom Vite plugin
+- Side panel HTML path in manifest must match Vite's output: `src/sidepanel/index.html`
+- ESLint 9 flat config in `eslint.config.js` (not .eslintrc)
+- All data model types in `src/shared/types.ts`
+- Chrome types via `@types/chrome` devDependency
+- Prettier checks only `src/**/*.{ts,tsx,css,html}` to avoid .gitkeep issues
+---
+
+## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154451/iter-1.log
+---
+Error: Claude Code cannot be launched inside another Claude Code session.
+Nested sessions share runtime resources and will crash all active sessions.
+To bypass this check, unset the CLAUDECODE environment variable.
+⚠️  timeout failed with ITER_TIMEOUT='1200'. Running without timeout.
+Error: Claude Code cannot be launched inside another Claude Code session.
+Nested sessions share runtime resources and will crash all active sessions.
+To bypass this check, unset the CLAUDECODE environment variable.
+---
+
+## Iteration 2 - Sun Feb 15 15:44:54 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154451/iter-2.log
+---
+Error: Claude Code cannot be launched inside another Claude Code session.
+Nested sessions share runtime resources and will crash all active sessions.
+To bypass this check, unset the CLAUDECODE environment variable.
+⚠️  timeout failed with ITER_TIMEOUT='1200'. Running without timeout.
+Error: Claude Code cannot be launched inside another Claude Code session.
+Nested sessions share runtime resources and will crash all active sessions.
+To bypass this check, unset the CLAUDECODE environment variable.
+---
+
+## Iteration 3 - Sun Feb 15 15:44:56 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154451/iter-3.log
+---
+Error: Claude Code cannot be launched inside another Claude Code session.
+Nested sessions share runtime resources and will crash all active sessions.
+To bypass this check, unset the CLAUDECODE environment variable.
+⚠️  timeout failed with ITER_TIMEOUT='1200'. Running without timeout.
+Error: Claude Code cannot be launched inside another Claude Code session.
+Nested sessions share runtime resources and will crash all active sessions.
+To bypass this check, unset the CLAUDECODE environment variable.
+---
+
+## 2026-02-15 15:49 IST - US-001
+- Implemented full project scaffolding: Vite + React 18 + TypeScript + Tailwind CSS v4 + Chrome Manifest V3
+- Files created:
+  - package.json (with dev, build, typecheck, lint scripts)
+  - tsconfig.json (strict mode enabled)
+  - tailwind.config.ts (dark mode class strategy)
+  - vite.config.ts (multi-entry build for sidepanel + service-worker)
+  - eslint.config.js + .prettierrc
+  - public/manifest.json (MV3 with sidePanel, tabs, storage, contextMenus)
+  - src/shared/types.ts (Workspace, PinnedApp, Folder, FolderItem, ArchiveEntry, Settings)
+  - src/sidepanel/ (index.html, main.tsx, App.tsx, index.css)
+  - src/background/service-worker.ts
+  - src/content/.gitkeep
+  - .gitignore
+- **Learnings for future iterations:**
+  - Tailwind v4 uses `@import "tailwindcss"` not `@tailwind base/components/utilities`
+  - ESLint 9 uses flat config format, not .eslintrc
+  - Vite service-worker entry produces empty chunk (expected, will fill in US-002/003)
+  - manifest.json side_panel path must match Vite output: `src/sidepanel/index.html` not `sidepanel.html`
+  - eslint-plugin-react-hooks v7 needs eslint@9 specifically (not 10)
+  - Node 20.12 shows version warnings with Vite 7 but builds successfully
+---
+
+## Iteration 1 - Sun Feb 15 15:51:19 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-1.log
+---
+US-001 is complete. There are still stories with `passes: false` (US-002 through US-041), so the next iteration will pick up US-002.
+
+**Summary of US-001 completion:**
+- Created branch `ralph/arcflow-sidebar`
+- Scaffolded complete project: Vite + React 18 + TypeScript + Tailwind CSS v4 + Chrome MV3
+- All acceptance criteria met:
+  - `package.json` with all required dependencies
+  - `manifest.json` with MV3, sidePanel, tabs, storage, contextMenus
+  - `tsconfig.json` with strict mode
+  - Tailwind with dark mode class strategy
+  - Source structure: `src/sidepanel/`, `src/background/`, `src/shared/`, `src/content/`
+  - All data model interfaces in `src/shared/types.ts`
+  - Build produces loadable `dist/` folder
+  - ESLint + Prettier with `npm run lint`
+  - Typecheck passes
+---
+
+## 2026-02-15 - US-002
+- Implemented side panel registration and basic React rendering
+- Files changed:
+  - src/background/service-worker.ts (added sidePanel registration and setPanelBehavior)
+- **Learnings for future iterations:**
+  - `chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })` should be called at top level of service worker, not inside a listener
+  - `chrome.sidePanel.setOptions()` called inside `onInstalled` to set the panel path
+  - The side panel HTML, main.tsx, and App.tsx were already created in US-001 scaffolding
+  - Service worker just needed the chrome.sidePanel API calls to complete this story
+---

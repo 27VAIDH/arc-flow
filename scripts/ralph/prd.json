@@ -20,7 +20,7 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Foundation story. Use @crxjs/vite-plugin or vite-plugin-chrome-extension for HMR. File structure per PRD Section 4.5."
     },
     {
@@ -38,7 +38,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Panel persists across tab switches and page navigations. This is Chrome's native behavior for side panels."
     },
     {
