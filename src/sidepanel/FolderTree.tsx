@@ -31,6 +31,8 @@ interface FolderTreeProps {
     item: FolderItem,
     folderId: string
   ) => void;
+  onOpenAllTabs?: (folder: Folder) => void;
+  onCloseAllTabs?: (folder: Folder) => void;
 }
 
 function FolderHeader({
@@ -312,6 +314,8 @@ export default function FolderTree({
   setFolders,
   onItemClick,
   onItemContextMenu,
+  onOpenAllTabs,
+  onCloseAllTabs,
 }: FolderTreeProps) {
   const [toast, setToast] = useState<string | null>(null);
 
@@ -372,13 +376,56 @@ export default function FolderTree({
     }
   }, []);
 
+  const handleCollapseAll = useCallback(
+    async (folder: Folder) => {
+      // Collect this folder and all descendant folder IDs
+      const collectDescendantIds = (parentId: string): string[] => {
+        const children = folders.filter((f) => f.parentId === parentId);
+        const ids: string[] = [];
+        for (const child of children) {
+          ids.push(child.id);
+          ids.push(...collectDescendantIds(child.id));
+        }
+        return ids;
+      };
+
+      const idsToCollapse = [folder.id, ...collectDescendantIds(folder.id)];
+
+      // Optimistic update
+      setFolders((prev) =>
+        prev.map((f) =>
+          idsToCollapse.includes(f.id) ? { ...f, isCollapsed: true } : f
+        )
+      );
+
+      // Persist all collapse states
+      await Promise.all(
+        idsToCollapse.map((id) => updateFolder(id, { isCollapsed: true }))
+      );
+    },
+    [folders, setFolders]
+  );
+
   const handleFolderContextMenu = useCallback(
     (e: React.MouseEvent, folder: Folder) => {
       e.preventDefault();
+
       const items: ContextMenuItem[] = [
         {
           label: "New Subfolder",
           onClick: () => handleCreateFolder(folder.id),
+        },
+        {
+          label: "Open All Tabs",
+          onClick: () => onOpenAllTabs?.(folder),
+        },
+        {
+          label: "Close All Tabs",
+          onClick: () => onCloseAllTabs?.(folder),
+        },
+        {
+          label: "Collapse All Subfolders",
+          onClick: () => handleCollapseAll(folder),
         },
         {
           label: "Rename",
@@ -396,7 +443,15 @@ export default function FolderTree({
       ];
       onContextMenu({ x: e.clientX, y: e.clientY, items });
     },
-    [onContextMenu, handleRename, handleDelete, handleCreateFolder]
+    [
+      onContextMenu,
+      handleRename,
+      handleDelete,
+      handleCreateFolder,
+      handleCollapseAll,
+      onOpenAllTabs,
+      onCloseAllTabs,
+    ]
   );
 
   // Build tree structure: top-level folders and their children

@@ -203,6 +203,11 @@ chrome.runtime.onMessage.addListener(
         // Tab may already be closed
       });
     }
+    if (message.type === "CLOSE_TABS") {
+      chrome.tabs.remove(message.tabIds).catch(() => {
+        // Tabs may already be closed
+      });
+    }
     if (message.type === "OPEN_PINNED_APP_NEW_TAB") {
       chrome.tabs.create({ url: message.url }).catch(() => {});
     }

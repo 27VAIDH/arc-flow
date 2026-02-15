@@ -504,6 +504,24 @@ export default function App() {
     [folderPicker]
   );
 
+  const handleOpenAllTabs = useCallback((folder: Folder) => {
+    // Open all saved links (type === 'link') as new tabs
+    const links = folder.items.filter((i) => i.type === "link");
+    for (const link of links) {
+      chrome.runtime.sendMessage({ type: "OPEN_URL", url: link.url });
+    }
+  }, []);
+
+  const handleCloseAllTabs = useCallback((folder: Folder) => {
+    // Close all active tabs (type === 'tab') via chrome.tabs.remove; saved links remain
+    const tabIds = folder.items
+      .filter((i) => i.type === "tab" && i.tabId != null)
+      .map((i) => i.tabId as number);
+    if (tabIds.length > 0) {
+      chrome.runtime.sendMessage({ type: "CLOSE_TABS", tabIds });
+    }
+  }, []);
+
   const handleFolderItemClick = useCallback((item: FolderItem) => {
     if (item.type === "link") {
       chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
@@ -733,6 +751,8 @@ export default function App() {
           setFolders={setFolders}
           onItemClick={handleFolderItemClick}
           onItemContextMenu={handleFolderItemContextMenu}
+          onOpenAllTabs={handleOpenAllTabs}
+          onCloseAllTabs={handleCloseAllTabs}
         />
 
         {/* Tab list */}
