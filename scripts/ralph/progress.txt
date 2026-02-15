@@ -46,6 +46,9 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - `chrome.tabs.group({ tabIds })` requires `tabIds` as non-empty tuple `[number, ...number[]]`; cast from `number[]`
 - Workspace isolation toggle in sidebar footer; `applyWorkspaceIsolation()` in service worker creates/updates Chrome tab groups
 - Chrome limits extensions to 4 `chrome.commands`; `chrome.commands.onCommand` listener in service-worker.ts handles global shortcuts
+- Archive entries stored in `src/shared/archiveStorage.ts`; key: `archiveEntries`, capped at 100 entries, sorted by `archivedAt` descending
+- `chrome.alarms` used for periodic tasks (auto-archive every 5 minutes); alarm name: `arcflow-auto-archive`
+- Pinned apps are exempt from auto-archiving; checked via origin matching against pinned app origins set
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -1004,4 +1007,44 @@ There are still stories with `passes: false` (US-026 through US-041), so the nex
   - Mac uses `Command+Shift+N` while Windows/Linux uses `Ctrl+Shift+N` — set via `suggested_key.mac` and `suggested_key.default`
   - After switching workspace, `applyWorkspaceIsolation()` is called to update Chrome tab groups if full isolation is enabled
   - The side panel auto-detects workspace change via `chrome.storage.onChanged` listener for `activeWorkspaceId` key (already in App.tsx from US-023)
+---
+
+## Iteration 26 - Sun Feb 15 17:01:38 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-26.log
+---
+**US-026 is complete.** Here's what was implemented:
+
+- **`public/manifest.json`** — Added `commands` section with 4 keyboard shortcuts:
+  - `Ctrl+Shift+1` through `Ctrl+Shift+4` (Mac: `Command+Shift+1-4`) for switching workspaces 1-4
+- **`src/background/service-worker.ts`** — Added `chrome.commands.onCommand` listener that:
+  - Parses the command name to extract workspace index (1-based)
+  - Gets sorted workspaces and switches to the one at that index
+  - Applies workspace isolation (tab groups) if enabled
+  - Works globally even when sidebar is not focused (Chrome's native `chrome.commands` behavior)
+- The side panel already auto-updates via the `chrome.storage.onChanged` listener for `activeWorkspaceId` (from US-023)
+
+All quality checks pass (typecheck, lint, build). Committed as `9080b6b`.
+
+There are still stories with `passes: false` (US-027 through US-041), so the next iteration will pick up US-027.
+---
+
+## 2026-02-15 - US-027
+- Implemented auto-archive engine with timestamp tracking and stale tab archiving
+- Files created:
+  - src/shared/archiveStorage.ts (getArchiveEntries, addArchiveEntry, removeArchiveEntry, clearArchiveEntries)
+- Files changed:
+  - public/manifest.json (added `alarms` permission)
+  - src/background/service-worker.ts (added chrome.alarms registration, updateLastActiveAt on tabs.onActivated, runAutoArchive alarm handler, archive logic with pinned app exemption)
+  - scripts/ralph/prd.json (marked US-027 passes: true)
+- **Learnings for future iterations:**
+  - `chrome.alarms.create(name, { periodInMinutes })` registers a recurring alarm; must be called inside `chrome.runtime.onInstalled`
+  - `chrome.alarms.onAlarm` listener fires when the alarm triggers — use `alarm.name` to identify which alarm
+  - `chrome.tabs.discard(tabId)` suspends a tab without closing it — the tab retains its title and favicon
+  - `lastActiveAt` is updated on `tabs.onActivated` by scanning all folder items for matching tabId
+  - Pinned apps are exempted from auto-archiving by checking origins against pinned app origins set
+  - FolderItems with `lastActiveAt === 0` (never tracked) are treated as recently active to avoid archiving tabs that existed before the feature
+  - Archive entries stored in `chrome.storage.local` under `archiveEntries` key, capped at 100 entries
+  - `autoArchiveMinutes <= 0` is treated as "never auto-archive"
+  - Archive storage helpers follow same pattern as pinned apps and folder storage
 ---

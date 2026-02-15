@@ -17,6 +17,7 @@ import {
   removeTabFromMap,
 } from "../shared/workspaceStorage";
 import { getSettings } from "../shared/settingsStorage";
+import { addArchiveEntry } from "../shared/archiveStorage";
 
 const CONTEXT_MENU_ID = "arcflow-pin-toggle";
 
@@ -33,6 +34,9 @@ chrome.runtime.onInstalled.addListener(() => {
     title: "Pin to ArcFlow",
     contexts: ["page"],
   });
+
+  // Register auto-archive alarm (every 5 minutes)
+  chrome.alarms.create("arcflow-auto-archive", { periodInMinutes: 5 });
 });
 
 // Open side panel when the toolbar icon is clicked
@@ -209,6 +213,8 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
   chrome.runtime.sendMessage(message).catch(() => {
     // Side panel may not be open
   });
+  // Update lastActiveAt for auto-archive tracking
+  updateLastActiveAt(activeInfo.tabId).catch(() => {});
   debouncedRefresh();
 });
 
@@ -297,6 +303,104 @@ chrome.commands.onCommand.addListener(async (command) => {
 
   // Apply workspace isolation if enabled
   await applyWorkspaceIsolation(targetWorkspace.id).catch(() => {});
+});
+
+// --- Auto-archive engine ---
+
+const ARCHIVE_ALARM_NAME = "arcflow-auto-archive";
+
+// Update lastActiveAt timestamp on folder items matching the activated tab
+async function updateLastActiveAt(tabId: number): Promise<void> {
+  const result = await chrome.storage.local.get("folders");
+  const folders = (result.folders as import("../shared/types").Folder[]) ?? [];
+  let changed = false;
+  for (const folder of folders) {
+    for (const item of folder.items) {
+      if (item.type === "tab" && item.tabId === tabId) {
+        item.lastActiveAt = Date.now();
+        changed = true;
+      }
+    }
+  }
+  if (changed) {
+    await chrome.storage.local.set({ folders });
+  }
+}
+
+// Check for stale tabs and archive them
+async function runAutoArchive(): Promise<void> {
+  const settings = await getSettings();
+  // "never" means autoArchiveMinutes <= 0 or a very large sentinel
+  if (settings.autoArchiveMinutes <= 0) return;
+
+  const thresholdMs = settings.autoArchiveMinutes * 60_000;
+  const now = Date.now();
+
+  // Get pinned app origins to exempt them
+  const pinnedApps = await getPinnedApps();
+  const pinnedOrigins = new Set(
+    pinnedApps.map((app) => getOrigin(app.url)).filter(Boolean)
+  );
+
+  // Get all folders and check items
+  const result = await chrome.storage.local.get("folders");
+  const folders = (result.folders as import("../shared/types").Folder[]) ?? [];
+  let changed = false;
+
+  // Get active workspace ID for archive entries
+  const wsResult = await chrome.storage.local.get("activeWorkspaceId");
+  const activeWorkspaceId =
+    (wsResult.activeWorkspaceId as string | undefined) ?? "default";
+
+  for (const folder of folders) {
+    for (const item of folder.items) {
+      if (item.type !== "tab" || item.isArchived || item.tabId == null)
+        continue;
+
+      // Skip if lastActiveAt is 0 (never tracked yet — treat as recently active)
+      if (!item.lastActiveAt) continue;
+
+      // Skip pinned app origins
+      if (pinnedOrigins.has(getOrigin(item.url))) continue;
+
+      // Check if stale
+      if (now - item.lastActiveAt > thresholdMs) {
+        // Discard the tab
+        try {
+          await chrome.tabs.discard(item.tabId);
+        } catch {
+          // Tab may not exist or cannot be discarded
+        }
+
+        // Mark as archived
+        item.isArchived = true;
+        changed = true;
+
+        // Add to archive entries
+        await addArchiveEntry({
+          id: crypto.randomUUID(),
+          url: item.url,
+          title: item.title,
+          favicon: item.favicon,
+          archivedAt: now,
+          workspaceId: activeWorkspaceId,
+        });
+      }
+    }
+  }
+
+  if (changed) {
+    await chrome.storage.local.set({ folders });
+  }
+}
+
+// Listen for the auto-archive alarm
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === ARCHIVE_ALARM_NAME) {
+    runAutoArchive().catch(() => {
+      // Silently fail — will retry on next alarm
+    });
+  }
 });
 
 // Handle messages from side panel
