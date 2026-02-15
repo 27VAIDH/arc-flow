@@ -23,6 +23,7 @@ import {
 import PinnedAppsRow from "./PinnedAppsRow";
 import FolderTree from "./FolderTree";
 import SearchBar from "./SearchBar";
+import WorkspaceManager from "./WorkspaceManager";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
 import {
   DndContext,
@@ -737,6 +738,9 @@ export default function App() {
 
       {/* Pinned Apps Row (Zone 2) */}
       <PinnedAppsRow tabs={tabs} onContextMenu={setContextMenu} />
+
+      {/* Workspace Manager */}
+      <WorkspaceManager onContextMenu={setContextMenu} />
 
       <DndContext
         sensors={sensors}
