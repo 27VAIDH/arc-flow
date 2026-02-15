@@ -64,7 +64,8 @@ export type ServiceWorkerMessage =
   | {
       type: "TAB_WORKSPACE_MAP_UPDATED";
       tabWorkspaceMap: Record<string, string>;
-    };
+    }
+  | { type: "OPEN_COMMAND_PALETTE" };
 
 // Messages sent from side panel to service worker
 export type SidePanelMessage =

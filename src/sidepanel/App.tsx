@@ -17,19 +17,27 @@ import {
 import { getSettings, updateSettings } from "../shared/settingsStorage";
 import {
   getFolders,
+  createFolder,
   addItemToFolder,
   removeItemFromFolder,
   moveItemToFolder,
   reorderFolders,
   reorderItemsInFolder,
 } from "../shared/folderStorage";
-import { getActiveWorkspace, getWorkspaces } from "../shared/workspaceStorage";
+import {
+  getActiveWorkspace,
+  getWorkspaces,
+  createWorkspace,
+  setActiveWorkspace as setActiveWorkspaceStorage,
+} from "../shared/workspaceStorage";
 import PinnedAppsRow from "./PinnedAppsRow";
 import FolderTree from "./FolderTree";
 import SearchBar from "./SearchBar";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import ArchiveSection from "./ArchiveSection";
 import SettingsPanel from "./SettingsPanel";
+import CommandPalette from "./CommandPalette";
+import { buildCommands } from "./commandRegistry";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
 import {
   DndContext,
@@ -358,6 +366,7 @@ export default function App() {
   const [workspaceIsolation, setWorkspaceIsolation] =
     useState<Settings["workspaceIsolation"]>("sidebar-only");
   const [showSettings, setShowSettings] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -366,6 +375,18 @@ export default function App() {
       },
     })
   );
+
+  // Listen for Ctrl+Shift+K to open command palette
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "K") {
+        e.preventDefault();
+        setShowCommandPalette((prev) => !prev);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Load active workspace, workspaces list, tab-workspace map, and settings on mount
   useEffect(() => {
@@ -478,7 +499,9 @@ export default function App() {
 
     // Listen for tab state updates from service worker
     const handleMessage = (message: ServiceWorkerMessage) => {
-      if (message.type === "TABS_UPDATED") {
+      if (message.type === "OPEN_COMMAND_PALETTE") {
+        setShowCommandPalette(true);
+      } else if (message.type === "TABS_UPDATED") {
         setTabs(message.tabs);
       } else if (message.type === "TAB_WORKSPACE_MAP_UPDATED") {
         setTabWorkspaceMap(message.tabWorkspaceMap);
@@ -540,6 +563,68 @@ export default function App() {
     [tabs]
   );
   const estimatedMBSaved = suspendedCount * 50;
+
+  // Stable callbacks for command palette actions
+  const focusSearchInput = useCallback(() => {
+    const input = document.querySelector<HTMLInputElement>(
+      'input[placeholder="Search tabs..."]'
+    );
+    input?.focus();
+  }, []);
+
+  const suspendOtherTabs = useCallback(() => {
+    const nonActive = filteredTabs.filter((t) => !t.active && !t.discarded);
+    for (const tab of nonActive) {
+      chrome.runtime.sendMessage({ type: "SUSPEND_TAB", tabId: tab.id });
+    }
+  }, [filteredTabs]);
+
+  const createNewWorkspace = useCallback(() => {
+    createWorkspace("New Workspace").then((ws) => {
+      setActiveWorkspaceStorage(ws.id);
+      handleWorkspaceChange(ws.id);
+    });
+  }, [handleWorkspaceChange]);
+
+  const toggleFocusMode = useCallback(() => {
+    getSettings().then((s) => {
+      updateSettings({
+        focusMode: { ...s.focusMode, enabled: !s.focusMode.enabled },
+      });
+    });
+  }, []);
+
+  const openSettings = useCallback(() => setShowSettings(true), []);
+  const createNewFolder = useCallback(() => {
+    createFolder("New Folder");
+  }, []);
+
+  // Build command palette commands
+  const commands = useMemo(
+    () =>
+      buildCommands({
+        workspaces,
+        onSwitchWorkspace: handleWorkspaceChange,
+        onCreateFolder: createNewFolder,
+        onSuspendOthers: suspendOtherTabs,
+        onToggleTheme: cycleTheme,
+        onOpenSettings: openSettings,
+        onSearchTabs: focusSearchInput,
+        onNewWorkspace: createNewWorkspace,
+        onToggleFocusMode: toggleFocusMode,
+      }),
+    [
+      workspaces,
+      handleWorkspaceChange,
+      createNewFolder,
+      suspendOtherTabs,
+      cycleTheme,
+      openSettings,
+      focusSearchInput,
+      createNewWorkspace,
+      toggleFocusMode,
+    ]
+  );
 
   const handleTabContextMenu = useCallback(
     (e: React.MouseEvent, tab: TabInfo) => {
@@ -1007,6 +1092,14 @@ export default function App() {
 
       {/* Settings Panel */}
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+
+      {/* Command Palette */}
+      {showCommandPalette && (
+        <CommandPalette
+          commands={commands}
+          onClose={() => setShowCommandPalette(false)}
+        />
+      )}
     </div>
   );
 }

@@ -50,6 +50,13 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - `chrome.alarms` used for periodic tasks (auto-archive every 5 minutes); alarm name: `arcflow-auto-archive`
 - Pinned apps are exempt from auto-archiving; checked via origin matching against pinned app origins set
 - Auto-suspension (`runAutoSuspend`) runs on the same alarm as auto-archive; uses `suspendAfterMinutes` setting; skips active/discarded/pinned tabs
+- Default settings values and option lists centralized in `src/shared/constants.ts`; `settingsStorage.ts` imports from there
+- Settings panel opens as `absolute inset-0 z-50` overlay within the side panel; closed via Escape or close button
+- Chrome limits to 4 `chrome.commands` with `suggested_key`; additional commands registered without key, users configure manually
+- React compiler disallows ref access inside `useMemo`/render; use `useCallback` for stable callbacks that access refs
+- `react-hooks/set-state-in-effect` requires `setTimeout(() => setState(...), 0)` wrapper pattern
+- Command palette commands defined in `src/sidepanel/commandRegistry.ts`; component in `src/sidepanel/CommandPalette.tsx`
+- Recent commands stored in `commandPaletteRecent` key in `chrome.storage.local`
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -1131,4 +1138,93 @@ There are still stories with `passes: false` (US-029 through US-041), so the nex
   - Suspension stats use `useMemo` to count `tabs.filter(t => t.discarded)` and multiply by 50 for estimated MB saved
   - Stats only display when suspendedCount > 0 to keep footer clean
   - Auto-suspend skips: active tabs, already-discarded tabs, pinned app origins, tabs without lastActiveAt tracking data
+---
+
+## Iteration 29 - Sun Feb 15 17:09:54 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-29.log
+---
+**US-029 is complete.** Here's what was implemented:
+
+- **`SUSPEND_TAB` message type** added to `SidePanelMessage` in `types.ts`, with handler in service worker calling `chrome.tabs.discard(tabId)`
+- **"Suspend Tab" context menu item** — Right-clicking a tab shows "Suspend Tab" (hidden for already-discarded tabs)
+- **Suspended tab display** — Already shows with `opacity-50` and `italic` text from US-019 (uses `tab.discarded` property)
+- **Click to restore** — Clicking a suspended tab in sidebar already works via `SWITCH_TAB` → `chrome.tabs.update(tabId, { active: true })` which Chrome automatically restores
+- **Auto-suspension** — New `runAutoSuspend()` function runs on the same `arcflow-auto-archive` alarm (every 5 minutes), checking all tabs against `suspendAfterMinutes` setting; skips active tabs, already-discarded tabs, pinned app origins, and tabs without tracking data
+- **Suspension stats** — Footer shows `"X tabs suspended | ~Y MB saved"` (Y = X × 50) when there are suspended tabs, updating in real-time as tabs are suspended/restored
+
+All quality checks pass (typecheck, lint, build). Committed as `f4807e5`.
+
+There are still stories with `passes: false` (US-030 through US-041), so the next iteration will pick up US-030.
+---
+
+## 2026-02-15 - US-030
+- Implemented settings panel UI as overlay within the side panel
+- Files created:
+  - src/shared/constants.ts (DEFAULT_SETTINGS, AUTO_ARCHIVE_OPTIONS, SUSPEND_THRESHOLD_OPTIONS, THEME_OPTIONS, WORKSPACE_ISOLATION_OPTIONS)
+  - src/sidepanel/SettingsPanel.tsx (settings overlay with select fields for all configurable options)
+- Files changed:
+  - src/shared/settingsStorage.ts (imports DEFAULT_SETTINGS from constants.ts, added resetSettings function)
+  - src/sidepanel/App.tsx (added gear icon in footer, showSettings state, imported and rendered SettingsPanel)
+  - scripts/ralph/prd.json (marked US-030 passes: true)
+- **Learnings for future iterations:**
+  - Settings panel renders as `absolute inset-0 z-50` overlay within the side panel container, covering the entire sidebar
+  - Default values centralized in `src/shared/constants.ts` — both settingsStorage and SettingsPanel import from there
+  - `resetSettings()` function added to settingsStorage for Reset to Defaults functionality
+  - Settings changes save immediately via `updateSettings()` on every select change (no Save button)
+  - Settings panel listens to `chrome.storage.onChanged` for the `settings` key to stay in sync with external changes
+  - Escape key closes the settings panel
+  - Gear icon placed in footer (Zone 5) next to theme toggle, wrapped in a flex container
+---
+
+## Iteration 30 - Sun Feb 15 17:13:00 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-30.log
+---
+**US-030 is complete.** Here's what was implemented:
+
+- **`src/shared/constants.ts`** — New module centralizing default settings values and option lists:
+  - `DEFAULT_SETTINGS` — all default values for the Settings interface
+  - `AUTO_ARCHIVE_OPTIONS` — 1h, 4h, 12h (default), 24h, 48h, 1 week, Never
+  - `SUSPEND_THRESHOLD_OPTIONS` — 30m, 1h, 4h, 12h (default), 24h, Never
+  - `THEME_OPTIONS` — System, Light, Dark
+  - `WORKSPACE_ISOLATION_OPTIONS` — Sidebar only, Full isolation
+
+- **`src/sidepanel/SettingsPanel.tsx`** — New settings overlay component:
+  - Opens as a full-panel overlay (`absolute inset-0 z-50`)
+  - Configurable options: Theme, Auto-archive threshold, Suspend threshold, Workspace isolation mode
+  - Changes save immediately via `updateSettings()` (no Save button)
+  - "Reset to Defaults" button with `window.confirm()` confirmation
+  - Listens to `chrome.storage.onChanged` for real-time sync
+  - Escape key closes the panel
+
+- **`src/shared/settingsStorage.ts`** — Updated to import `DEFAULT_SETTINGS` from `constants.ts` and added `resetSettings()` function
+
+- **`src/sidepanel/App.tsx`** — Added gear icon button in the footer (Zone 5) next to the theme toggle, with `showSettings` state to toggle the overlay
+
+All quality checks pass (typecheck, lint, build). Committed as `d3f64f4`.
+
+There are still stories with `passes: false` (US-031 through US-041), so the next iteration will pick up US-031.
+---
+
+## 2026-02-15 - US-031
+- Implemented command palette with registry and keyboard shortcut
+- Files created:
+  - src/sidepanel/CommandPalette.tsx (modal overlay with search input, fuzzy matching, keyboard navigation, recent commands)
+  - src/sidepanel/commandRegistry.ts (buildCommands function for all available commands)
+- Files changed:
+  - public/manifest.json (added `open-command-palette` chrome.command without suggested_key since Chrome limits to 4)
+  - src/shared/types.ts (added OPEN_COMMAND_PALETTE to ServiceWorkerMessage union)
+  - src/background/service-worker.ts (added open-command-palette handler in chrome.commands.onCommand listener)
+  - src/sidepanel/App.tsx (added showCommandPalette state, Ctrl+Shift+K keydown listener, OPEN_COMMAND_PALETTE message listener, command builders, CommandPalette render)
+  - scripts/ralph/prd.json (marked US-031 passes: true)
+- **Learnings for future iterations:**
+  - Chrome limits to 4 `suggested_key` shortcuts; additional commands registered without `suggested_key` (users can configure via chrome://extensions/shortcuts)
+  - Ctrl+Shift+K handled directly in the side panel via `document.addEventListener("keydown")` for reliable activation when sidebar is focused
+  - `OPEN_COMMAND_PALETTE` message from service worker enables global shortcut activation when sidebar is open but not focused
+  - React compiler's `react-hooks/refs` rule disallows passing refs into functions called during render (e.g., inside `useMemo`); use stable callbacks created via `useCallback` instead
+  - React compiler's `react-hooks/set-state-in-effect` rule requires `setTimeout` wrapper for setState calls inside `useEffect` body
+  - `react-refresh/only-export-components` warns when a file exports both components and utility functions; split into separate files (e.g., `commandRegistry.ts`)
+  - Recent commands stored in `chrome.storage.local` under `commandPaletteRecent` key; top 5 shown first when no search query
+  - DOM query `document.querySelector('input[placeholder="Search tabs..."]')` used instead of ref-forwarding to avoid ref-during-render lint issues
 ---

@@ -42,6 +42,9 @@
         "mac": "Command+Shift+4"
       },
       "description": "Switch to workspace 4"
+    },
+    "open-command-palette": {
+      "description": "Open command palette"
     }
   },
   "icons": {}

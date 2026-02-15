@@ -291,6 +291,13 @@ async function applyWorkspaceIsolation(
 // --- Workspace keyboard shortcuts (Ctrl+Shift+1 through Ctrl+Shift+4) ---
 
 chrome.commands.onCommand.addListener(async (command) => {
+  if (command === "open-command-palette") {
+    chrome.runtime
+      .sendMessage({ type: "OPEN_COMMAND_PALETTE" })
+      .catch(() => {});
+    return;
+  }
+
   const match = command.match(/^switch-workspace-(\d+)$/);
   if (!match) return;
 
