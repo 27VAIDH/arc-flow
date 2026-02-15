@@ -13,9 +13,17 @@ function TabItem({ tab }: { tab: TabInfo }) {
     chrome.runtime.sendMessage({ type: "CLOSE_TAB", tabId: tab.id });
   };
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button === 1) {
+      e.preventDefault();
+      chrome.runtime.sendMessage({ type: "CLOSE_TAB", tabId: tab.id });
+    }
+  };
+
   return (
     <li
       onClick={handleClick}
+      onMouseDown={handleMouseDown}
       className={`flex items-center gap-2 px-2 h-8 text-sm rounded cursor-default hover:bg-gray-200 dark:hover:bg-gray-800 ${
         tab.active
           ? "border-l-[3px] border-l-[#2E75B6] font-bold"
