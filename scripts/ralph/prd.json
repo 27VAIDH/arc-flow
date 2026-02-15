@@ -251,7 +251,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "Depth validation via parentId chain count."
     },
     {

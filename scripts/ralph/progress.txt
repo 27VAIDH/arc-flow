@@ -540,3 +540,38 @@ There are still stories with `passes: false` (US-014 through US-041), so the nex
   - Delete confirmation only shows when folder has tabs (type==='tab'); empty folders delete silently
   - FolderTree renders "New Folder" button when no folders exist; shows "Folders" section header with + button when folders exist
 ---
+
+## Iteration 14 - Sun Feb 15 16:21:31 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-14.log
+---
+**US-014 is complete.** Here's what was implemented:
+
+- **`src/sidepanel/FolderTree.tsx`** — New component with:
+  - **FolderHeader** sub-component with chevron toggle, folder icon, inline editable name, and count badge
+  - **"New Folder" button** that creates a folder named "New Folder" via `createFolder()`
+  - **Double-click rename** — double-clicking folder name enters inline edit mode with blur/Enter to commit, Escape to cancel
+  - **Right-click context menu** — Rename and Delete options via the shared `ContextMenu` system
+  - **Delete confirmation** — prompts `"Close X tabs and delete folder?"` when folder contains tabs
+  - **Collapsible folders** — chevron toggle with collapse state persisted to `chrome.storage.local` via `updateFolder()`
+  - **Count badge** — displays `(X tabs, Y links)` next to folder name
+  - **Recursive tree rendering** — supports nested folders with 16px indentation per level
+
+- **`src/sidepanel/App.tsx`** — Integrated FolderTree in Zone 3, between Pinned Apps Row and tab list
+
+- All quality checks pass (typecheck, lint, build). Committed as `65a0c30`.
+
+There are still stories with `passes: false` (US-015 through US-041), so the next iteration will pick up US-015.
+---
+
+## 2026-02-15 - US-015
+- Implemented nested folders up to 3 levels deep
+- Files changed:
+  - src/sidepanel/FolderTree.tsx (added "New Subfolder" context menu option, error toast for depth limit, updated handleCreateFolder to accept parentId)
+  - scripts/ralph/prd.json (marked US-015 passes: true)
+- **Learnings for future iterations:**
+  - "New Subfolder" added to folder right-click context menu — calls `createFolder(name, parentId)` which validates depth via parentId chain in `folderStorage.ts`
+  - Error toast displayed inline below folder tree when nesting depth >= 3; auto-dismisses after 3 seconds
+  - 16px indentation per level and parent collapse hiding nested children were already implemented in US-014's recursive `renderFolder(folder, depth)`
+  - `handleCreateFolder` changed from no-args to optional `parentId` arg to support both top-level and subfolder creation
+---

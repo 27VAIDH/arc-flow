@@ -135,6 +135,15 @@ function FolderHeader({
 
 export default function FolderTree({ onContextMenu }: FolderTreeProps) {
   const [folders, setFolders] = useState<Folder[]>([]);
+  const [toast, setToast] = useState<string | null>(null);
+
+  // Auto-dismiss toast after 3 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   // Load folders and listen for storage changes
   useEffect(() => {
@@ -190,11 +199,18 @@ export default function FolderTree({ onContextMenu }: FolderTreeProps) {
     await deleteFolder(folder.id);
   }, []);
 
-  const handleCreateFolder = useCallback(async () => {
+  const handleCreateFolder = useCallback(async (parentId?: string) => {
     try {
-      await createFolder("New Folder");
-    } catch {
-      // Ignore errors (e.g., max depth)
+      await createFolder("New Folder", parentId ?? null);
+    } catch (err) {
+      if (
+        err instanceof Error &&
+        err.message.includes("Maximum nesting depth")
+      ) {
+        setToast(
+          "Cannot create subfolder: maximum nesting depth of 3 levels reached."
+        );
+      }
     }
   }, []);
 
@@ -203,10 +219,12 @@ export default function FolderTree({ onContextMenu }: FolderTreeProps) {
       e.preventDefault();
       const items: ContextMenuItem[] = [
         {
+          label: "New Subfolder",
+          onClick: () => handleCreateFolder(folder.id),
+        },
+        {
           label: "Rename",
           onClick: () => {
-            // Trigger rename by finding the FolderHeader and dispatching a double-click
-            // Instead, we use a simpler approach: prompt
             const newName = window.prompt("Rename folder:", folder.name);
             if (newName && newName.trim()) {
               handleRename(folder.id, newName.trim());
@@ -220,7 +238,7 @@ export default function FolderTree({ onContextMenu }: FolderTreeProps) {
       ];
       onContextMenu({ x: e.clientX, y: e.clientY, items });
     },
-    [onContextMenu, handleRename, handleDelete]
+    [onContextMenu, handleRename, handleDelete, handleCreateFolder]
   );
 
   // Build tree structure: top-level folders and their children
@@ -280,7 +298,7 @@ export default function FolderTree({ onContextMenu }: FolderTreeProps) {
     return (
       <div className="px-2 py-1">
         <button
-          onClick={handleCreateFolder}
+          onClick={() => handleCreateFolder()}
           className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-2 py-1 rounded hover:bg-gray-200 dark:hover:bg-gray-800"
         >
           <svg
@@ -304,7 +322,7 @@ export default function FolderTree({ onContextMenu }: FolderTreeProps) {
           Folders
         </span>
         <button
-          onClick={handleCreateFolder}
+          onClick={() => handleCreateFolder()}
           className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
           aria-label="New Folder"
           title="New Folder"
@@ -322,6 +340,13 @@ export default function FolderTree({ onContextMenu }: FolderTreeProps) {
       <div className="flex flex-col gap-0.5">
         {topLevelFolders.map((folder) => renderFolder(folder, 0))}
       </div>
+
+      {/* Error toast */}
+      {toast && (
+        <div className="mx-2 mt-2 px-3 py-2 text-xs text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/30 rounded border border-red-200 dark:border-red-800">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
