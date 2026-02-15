@@ -1372,3 +1372,34 @@ There are still stories with `passes: false` (US-034 through US-041), so the nex
   - True in-window splits aren't possible via extension API; side-by-side windows are the standard approach
   - `system.display` is a separate Chrome permission that must be added to manifest
 ---
+
+## Iteration 1 - Sun Feb 15 21:39:12 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-213536/iter-1.log
+---
+US-034 is complete. There are still stories with `passes: false` (US-035 through US-041), so the next iteration will pick up US-035: Air Traffic Control link routing rules.
+
+**Summary of US-034 implementation:**
+- Added `SPLIT_VIEW` message type for side panel → service worker communication
+- Implemented `openSplitView()` in the service worker that uses `chrome.system.display.getInfo()` to get screen work area dimensions, moves the current window to the left half, and creates a new window with the selected tab on the right half
+- Added "Split View" to the tab right-click context menu in the sidebar
+- Added "Split View Current Tab" command to the command palette (acts on the active tab)
+- Added a split-panel SVG icon to the command palette icon map
+- Added `system.display` permission to the manifest
+---
+
+## 2026-02-15 - US-035
+- US-035 was already fully implemented in prior iterations but not marked as passes: true
+- Verified all acceptance criteria are met:
+  - Settings panel has 'Air Traffic Control' section with add/edit/delete rules UI (SettingsPanel.tsx lines 271-349)
+  - Rules format: pattern (glob) -> workspace, stored as routingRules in settings (types.ts line 99)
+  - globToRegex() converts wildcards to regex (service-worker.ts lines 183-187)
+  - Rules evaluated on tabs.onCreated with first match wins (service-worker.ts lines 200-223)
+  - URL changes also re-evaluate routing rules (service-worker.ts lines 248-263)
+  - Falls back to active workspace for unmatched URLs
+- Files changed: scripts/ralph/prd.json (marked US-035 passes: true)
+- All quality checks pass (typecheck, lint, build)
+- **Learnings for future iterations:**
+  - Some stories may already be implemented as part of other story implementations; always check existing code first
+  - The routing rules were implemented alongside the settings panel and workspace features
+---
