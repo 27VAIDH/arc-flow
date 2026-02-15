@@ -28,6 +28,7 @@ import PinnedAppsRow from "./PinnedAppsRow";
 import FolderTree from "./FolderTree";
 import SearchBar from "./SearchBar";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
+import ArchiveSection from "./ArchiveSection";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
 import {
   DndContext,
@@ -894,6 +895,9 @@ export default function App() {
           {activeDragTab ? <TabDragOverlay tab={activeDragTab} /> : null}
         </DragOverlay>
       </DndContext>
+
+      {/* Archive Section (Zone 4) */}
+      <ArchiveSection />
 
       {/* Footer (Zone 5) */}
       <footer className="border-t border-gray-200 dark:border-gray-700">
