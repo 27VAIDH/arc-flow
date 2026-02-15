@@ -12,6 +12,7 @@ import {
 import {
   getTabWorkspaceMap,
   getWorkspaces,
+  setActiveWorkspace,
   assignTabToWorkspace,
   removeTabFromMap,
 } from "../shared/workspaceStorage";
@@ -280,6 +281,23 @@ async function applyWorkspaceIsolation(
     }
   }
 }
+
+// --- Workspace keyboard shortcuts (Ctrl+Shift+1 through Ctrl+Shift+4) ---
+
+chrome.commands.onCommand.addListener(async (command) => {
+  const match = command.match(/^switch-workspace-(\d+)$/);
+  if (!match) return;
+
+  const index = parseInt(match[1], 10) - 1; // 1-based to 0-based
+  const workspaces = await getWorkspaces();
+  if (index < 0 || index >= workspaces.length) return;
+
+  const targetWorkspace = workspaces[index];
+  await setActiveWorkspace(targetWorkspace.id);
+
+  // Apply workspace isolation if enabled
+  await applyWorkspaceIsolation(targetWorkspace.id).catch(() => {});
+});
 
 // Handle messages from side panel
 chrome.runtime.onMessage.addListener(

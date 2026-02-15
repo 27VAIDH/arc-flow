@@ -45,6 +45,7 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - Settings stored under `settings` key in `chrome.storage.local`; helpers in `src/shared/settingsStorage.ts`
 - `chrome.tabs.group({ tabIds })` requires `tabIds` as non-empty tuple `[number, ...number[]]`; cast from `number[]`
 - Workspace isolation toggle in sidebar footer; `applyWorkspaceIsolation()` in service worker creates/updates Chrome tab groups
+- Chrome limits extensions to 4 `chrome.commands`; `chrome.commands.onCommand` listener in service-worker.ts handles global shortcuts
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -965,4 +966,42 @@ There are still stories with `passes: false` (US-025 through US-041), so the nex
   - Settings stored in `chrome.storage.local` under `settings` key; `settingsStorage.ts` provides typed get/update with defaults
   - `applyWorkspaceIsolation()` is called on workspace switch, setting change to full-isolation, and new tab creation
   - Workspace isolation toggle button placed in sidebar footer alongside theme toggle
+---
+
+## Iteration 25 - Sun Feb 15 16:59:34 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-25.log
+---
+**US-025 is complete.** Here's what was implemented:
+
+- **`tabGroups` permission** added to `manifest.json`
+- **`src/shared/settingsStorage.ts`** — New module with `getSettings()`, `updateSettings()`, and `DEFAULT_SETTINGS` (including `workspaceIsolation: "sidebar-only"` default)
+- **`APPLY_WORKSPACE_ISOLATION` message type** added to `SidePanelMessage` in `types.ts`
+- **`applyWorkspaceIsolation()` function** in service worker that:
+  - Groups all tabs by workspace using `chrome.tabs.group()`
+  - Names each tab group after the workspace
+  - Collapses non-active workspace tab groups via `chrome.tabGroups.update(groupId, { collapsed: true })`
+  - Only runs when `workspaceIsolation === "full-isolation"`
+  - Auto-applies on new tab creation
+- **Workspace isolation toggle** in sidebar footer that switches between "Sidebar only" (default) and "Full isolation" modes, with visual indicator (blue when active)
+- **Settings persistence** via `chrome.storage.local` under `settings` key
+
+All quality checks pass (typecheck, lint, build). Committed as `608f1a7`.
+
+There are still stories with `passes: false` (US-026 through US-041), so the next iteration will pick up US-026.
+---
+
+## 2026-02-15 - US-026
+- Implemented workspace keyboard shortcuts via chrome.commands
+- Files changed:
+  - public/manifest.json (added `commands` section with switch-workspace-1 through switch-workspace-4)
+  - src/background/service-worker.ts (added `chrome.commands.onCommand` listener, imported `setActiveWorkspace`)
+  - scripts/ralph/prd.json (marked US-026 passes: true)
+- **Learnings for future iterations:**
+  - Chrome limits extensions to 4 `chrome.commands` entries (not counting `_execute_action`)
+  - `chrome.commands.onCommand` works globally, even when sidebar is not focused — ideal for workspace switching
+  - Workspace index is 0-based from sorted `getWorkspaces()` array; shortcuts are 1-based (Ctrl+Shift+1 = workspace[0])
+  - Mac uses `Command+Shift+N` while Windows/Linux uses `Ctrl+Shift+N` — set via `suggested_key.mac` and `suggested_key.default`
+  - After switching workspace, `applyWorkspaceIsolation()` is called to update Chrome tab groups if full isolation is enabled
+  - The side panel auto-detects workspace change via `chrome.storage.onChanged` listener for `activeWorkspaceId` key (already in App.tsx from US-023)
 ---

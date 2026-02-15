@@ -14,5 +14,35 @@
   "action": {
     "default_title": "ArcFlow"
   },
+  "commands": {
+    "switch-workspace-1": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+1",
+        "mac": "Command+Shift+1"
+      },
+      "description": "Switch to workspace 1"
+    },
+    "switch-workspace-2": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+2",
+        "mac": "Command+Shift+2"
+      },
+      "description": "Switch to workspace 2"
+    },
+    "switch-workspace-3": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+3",
+        "mac": "Command+Shift+3"
+      },
+      "description": "Switch to workspace 3"
+    },
+    "switch-workspace-4": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+4",
+        "mac": "Command+Shift+4"
+      },
+      "description": "Switch to workspace 4"
+    }
+  },
   "icons": {}
 }
