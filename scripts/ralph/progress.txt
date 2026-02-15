@@ -29,6 +29,8 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - DnD across components (tabs → folders): use a single `DndContext` at App level wrapping both FolderTree and tab list; use ID prefixes (`tab:`, `folder:`, `folder-item:`, `folder-drop:`) to distinguish drag/drop types in `onDragEnd`
 - Folder state (folders, setFolders) lifted to App level for cross-component DnD; FolderTree receives folders/setFolders as props
 - Custom collision detection: `pointerWithin` for folder drop targets, `rectIntersection` fallback for sortable items
+- Fuzzy search uses `fuse.js` with keys `title` (weight 0.6), `url` (weight 0.3), `folderName` (weight 0.1); threshold 0.4
+- React hooks lint rule `react-hooks/set-state-in-effect` disallows calling setState directly inside useEffect body; instead call it inside a setTimeout/callback
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -649,4 +651,41 @@ There are still stories with `passes: false` (US-017 through US-041), so the nex
   - FolderPickerDropdown renders as a fixed-position overlay with click-outside and Escape dismissal
   - Folder item interactions (click, context menu) are passed from App → FolderTree → SortableFolder → DraggableFolderItem as callback props
   - `OPEN_URL` message type opens a new tab via `chrome.tabs.create({ url })` — distinct from `OPEN_PINNED_APP` which does origin matching
+---
+
+## Iteration 17 - Sun Feb 15 16:33:21 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-17.log
+---
+**US-017 is complete.** Here's what was implemented:
+
+- **"Save Link to Folder..."** context menu option on tab right-click, which opens a `FolderPickerDropdown` showing all folders (with nested indentation) to choose a destination
+- **Saved links** stored as `FolderItem` with `type: 'link'` and `tabId: null`
+- **Dimmed style** for saved links already existed from US-016 (gray text + italic in `DraggableFolderItem`)
+- **Click to open**: Clicking a saved link sends `OPEN_URL` message to service worker, which opens it as a new tab via `chrome.tabs.create`
+- **Right-click to remove**: Right-clicking a saved link shows "Open Link" and "Remove" options
+- **Persistence**: Saved links persist in `chrome.storage.local` as part of folder items
+- **`OPEN_URL`** message type added to `SidePanelMessage` and handled in service worker
+
+All quality checks pass (typecheck, lint, build). Committed as `e132c2b`.
+
+There are still stories with `passes: false` (US-018 through US-041), so the next iteration will pick up US-018.
+---
+
+## 2026-02-15 - US-018
+- Implemented tab search with fuzzy matching using fuse.js
+- Files created:
+  - src/sidepanel/SearchBar.tsx (search bar component with fuzzy search, keyboard navigation, results dropdown)
+- Files changed:
+  - src/sidepanel/App.tsx (replaced placeholder search bar with SearchBar component, imported SearchBar)
+  - package.json (added fuse.js dependency)
+  - scripts/ralph/prd.json (marked US-018 passes: true)
+- **Learnings for future iterations:**
+  - `fuse.js` provides fuzzy matching out of the box; configure `keys` with weights and `threshold` for sensitivity
+  - Custom ranking applied on top of fuse results: exact match (score 0) > starts-with (0.1) > URL contains (0.3) > fuzzy (fuse score)
+  - 150ms debounce implemented via setTimeout in useEffect; selectedIndex reset happens inside the same setTimeout callback to avoid `react-hooks/set-state-in-effect` lint error
+  - Search results dropdown uses `onMouseDown` with `e.preventDefault()` instead of `onClick` to prevent input blur before the click registers
+  - Input `onBlur` has a 150ms delay via setTimeout to allow result click to register before dropdown hides
+  - Arrow keys navigate results, Enter activates selected result, Escape clears search and blurs input
+  - Results capped at 20 items; scroll into view for keyboard navigation
 ---

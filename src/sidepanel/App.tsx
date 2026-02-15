@@ -22,6 +22,7 @@ import {
 } from "../shared/folderStorage";
 import PinnedAppsRow from "./PinnedAppsRow";
 import FolderTree from "./FolderTree";
+import SearchBar from "./SearchBar";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
 import {
   DndContext,
@@ -687,12 +688,17 @@ export default function App() {
         <h1 className="text-lg font-semibold">ArcFlow</h1>
       </header>
 
-      {/* Placeholder search bar area */}
-      <div className="px-2 py-2">
-        <div className="flex items-center h-8 px-2 rounded bg-gray-200 dark:bg-gray-800 text-gray-400 dark:text-gray-500 text-sm">
-          Search tabs...
-        </div>
-      </div>
+      {/* Search bar (Zone 1) */}
+      <SearchBar
+        tabs={tabs}
+        folders={folders}
+        onSwitchTab={(tabId) => {
+          chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId });
+        }}
+        onOpenUrl={(url) => {
+          chrome.runtime.sendMessage({ type: "OPEN_URL", url });
+        }}
+      />
 
       {/* Pinned Apps Row (Zone 2) */}
       <PinnedAppsRow tabs={tabs} onContextMenu={setContextMenu} />
