@@ -1,23 +1,9 @@
 import type { Settings } from "./types";
+import { DEFAULT_SETTINGS } from "./constants";
 
 const SETTINGS_KEY = "settings";
 
-export const DEFAULT_SETTINGS: Settings = {
-  theme: "system",
-  autoArchiveMinutes: 720, // 12 hours
-  suspendAfterMinutes: 720,
-  workspaceIsolation: "sidebar-only",
-  focusMode: {
-    enabled: false,
-    redirectRules: [],
-  },
-  aiGrouping: {
-    enabled: false,
-    provider: null,
-    apiKey: "",
-  },
-  routingRules: [],
-};
+export { DEFAULT_SETTINGS };
 
 export async function getSettings(): Promise<Settings> {
   const result = await chrome.storage.local.get(SETTINGS_KEY);
@@ -32,4 +18,9 @@ export async function updateSettings(
   const updated = { ...current, ...data };
   await chrome.storage.local.set({ [SETTINGS_KEY]: updated });
   return updated;
+}
+
+export async function resetSettings(): Promise<Settings> {
+  await chrome.storage.local.set({ [SETTINGS_KEY]: DEFAULT_SETTINGS });
+  return DEFAULT_SETTINGS;
 }
