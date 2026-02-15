@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { TabInfo, ServiceWorkerMessage } from "../shared/types";
 import { useTheme, type ThemePreference } from "./useTheme";
+import PinnedAppsRow from "./PinnedAppsRow";
 
 function TabItem({ tab }: { tab: TabInfo }) {
   const [hovered, setHovered] = useState(false);
@@ -183,6 +184,9 @@ export default function App() {
           Search tabs...
         </div>
       </div>
+
+      {/* Pinned Apps Row (Zone 2) */}
+      <PinnedAppsRow tabs={tabs} />
 
       {/* Tab list */}
       <div className="flex-1 px-1">

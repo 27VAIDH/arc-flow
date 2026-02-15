@@ -15,6 +15,11 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - Service worker broadcasts tab changes via `chrome.runtime.sendMessage`; side panel listens via `chrome.runtime.onMessage`
 - `chrome.runtime.sendMessage` throws if no listener exists (e.g., side panel closed); always `.catch()` the promise
 - Side panel communicates tab actions (close, etc.) via message passing to service worker which has `chrome.tabs` access
+- Theme managed via `useTheme` hook in `src/sidepanel/useTheme.ts`; applies `dark` class to `<html>` element
+- Theme preference stored in `chrome.storage.local` under `settings.theme` key
+- Sidebar footer (Zone 5) pushed to bottom via `flex-1` on the content area
+- `chrome.storage.onChanged` listener pattern for real-time UI updates when storage changes
+- Origin matching for URL comparison: `new URL(url).origin` (wrap in try/catch for invalid URLs)
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -206,4 +211,145 @@ There are still stories with `passes: false` (US-005 through US-041), so the nex
   - Active tab styling uses `border-l-[3px] border-l-[#2E75B6]` with a matching transparent border on inactive tabs to prevent layout shift
   - Tab switching follows same message-passing pattern as tab close: side panel -> SWITCH_TAB message -> service worker -> chrome.tabs.update
   - Active state already tracked in TabInfo from US-003 (TAB_ACTIVATED message), so no additional state management was needed
+---
+
+## Iteration 5 - Sun Feb 15 16:00:09 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-5.log
+---
+**US-005 is complete.** Here's what was implemented:
+
+- **Tab switching**: Clicking a tab in the sidebar sends a `SWITCH_TAB` message to the service worker, which calls `chrome.tabs.update(tabId, { active: true })`
+- **Active tab indicator**: Active tab displays with a 3px `#2E75B6` left border and bold text; inactive tabs have a transparent border to prevent layout shift
+- **Bidirectional sync**: Already handled via `TAB_ACTIVATED` messages from US-003 — switching tabs via Chrome's native tab bar updates the sidebar highlight
+
+All quality checks pass (typecheck, lint, build). Committed as `10c7ace`.
+
+There are still stories with `passes: false` (US-006 through US-041), so the next iteration will pick up US-006.
+---
+
+## 2026-02-15 - US-006
+- Implemented middle-click to close tabs from the sidebar
+- Files changed:
+  - src/sidepanel/App.tsx (added onMouseDown handler for middle-click close)
+- **Learnings for future iterations:**
+  - Most of US-006 was already implemented in US-004 (hover close button, CLOSE_TAB message, chrome.tabs.remove)
+  - Middle-click is `e.button === 1` in React's MouseEvent; use `onMouseDown` not `onClick` since middle-click doesn't fire click events
+  - `e.preventDefault()` on middle-click prevents the browser's default paste/scroll behavior
+---
+
+## Iteration 6 - Sun Feb 15 16:01:16 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-6.log
+---
+**US-006 is complete.** Here's what was implemented:
+
+- **Middle-click to close**: Added `onMouseDown` handler on tab entries that detects middle-click (`e.button === 1`) and sends the `CLOSE_TAB` message to the service worker
+- The hover close button (X icon, 16x16) and `chrome.tabs.remove` via message passing were already implemented in US-004/US-005
+- All quality checks pass (typecheck, lint, build)
+- Committed as `4e9a0de`
+
+There are still stories with `passes: false` (US-007 through US-041), so the next iteration will pick up US-007.
+---
+
+## 2026-02-15 - US-007
+- Implemented light/dark theme support with system preference detection
+- Files changed:
+  - src/sidepanel/useTheme.ts (new - theme hook with system detection, persistence, cycling)
+  - src/sidepanel/App.tsx (added footer with theme toggle button, integrated useTheme hook)
+- **Learnings for future iterations:**
+  - Theme is applied by toggling `dark` class on `document.documentElement` (Tailwind class strategy)
+  - Theme preference stored in `chrome.storage.local` under key `settings.theme` with values `system | light | dark`
+  - `useTheme` hook in `src/sidepanel/useTheme.ts` provides `theme`, `setTheme`, and `cycleTheme`
+  - System theme changes detected via `window.matchMedia("(prefers-color-scheme: dark)")` change event listener
+  - Footer is in Zone 5 of the sidebar layout; uses `flex-1` on the content area to push footer to bottom
+  - Theme toggle cycles: system -> light -> dark -> system
+---
+
+## Iteration 7 - Sun Feb 15 16:04:05 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-7.log
+---
+**US-007 is complete.** Here's what was implemented:
+
+- **`src/sidepanel/useTheme.ts`** - New hook that:
+  - Defaults to system preference via `prefers-color-scheme` media query
+  - Listens for system theme changes in real-time
+  - Persists theme preference to `chrome.storage.local` under `settings.theme`
+  - Applies theme by toggling `dark` class on `<html>` (Tailwind class strategy)
+  - Cycles through system -> light -> dark
+
+- **`src/sidepanel/App.tsx`** - Updated with:
+  - `ThemeToggle` component with sun/moon/monitor icons for each mode
+  - Footer section (Zone 5) with theme toggle button
+  - Layout restructured with `flex-1` on content to push footer to bottom
+  - All existing `dark:` variants now functional
+
+- **Acceptance criteria met:**
+  - System preference detection via `prefers-color-scheme`
+  - Light: gray-50 background, gray-900 text / Dark: gray-900 background, gray-100 text
+  - Theme stored in `chrome.storage.local` under `settings.theme`
+  - Manual toggle in sidebar footer cycles system/light/dark
+  - Instant theme changes without reload
+  - Persists across browser restarts
+  - All UI elements adapt (already had `dark:` variants)
+  - Tailwind `dark:` variant with class strategy
+  - Typecheck, lint, and build all pass
+
+There are still stories with `passes: false` (US-008 through US-041), so the next iteration will pick up US-008.
+---
+
+## 2026-02-15 - US-008
+- Implemented Chrome storage helpers for pinned apps CRUD
+- Files created:
+  - src/shared/storage.ts (getPinnedApps, addPinnedApp, removePinnedApp, updatePinnedApp, reorderPinnedApps)
+- **Learnings for future iterations:**
+  - `chrome.storage.local.get()` returns `Record<string, unknown>` so cast result with `as PinnedApp[] | undefined` for type safety
+  - Storage key is `pinnedApps` in `chrome.storage.local`
+  - Maximum 12 pinned apps enforced in `addPinnedApp` — throws Error if limit reached
+  - `getPinnedApps()` sorts by `sortOrder` before returning
+  - `reorderPinnedApps(ids)` takes an array of IDs in desired order and assigns sequential sortOrder values
+---
+
+## Iteration 8 - Sun Feb 15 16:05:57 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-8.log
+---
+**US-008 is complete.** Here's what was implemented:
+
+- **`src/shared/storage.ts`** — New module with 5 exported functions:
+  - `getPinnedApps()` — Retrieves pinned apps sorted by sortOrder
+  - `addPinnedApp(app)` — Adds a pinned app, rejects if 12-app limit reached
+  - `removePinnedApp(id)` — Removes a pinned app by ID
+  - `updatePinnedApp(id, data)` — Partially updates a pinned app
+  - `reorderPinnedApps(ids)` — Reorders apps by an array of IDs
+
+- All acceptance criteria met:
+  - Stored in `chrome.storage.local` under key `pinnedApps`
+  - PinnedApp shape: `{ id, url, title, favicon, sortOrder }`
+  - All functions return Promises
+  - Maximum 12 pinned apps enforced
+  - Typecheck and lint pass
+
+- Committed as `233053f`
+
+There are still stories with `passes: false` (US-009 through US-041), so the next iteration will pick up US-009.
+---
+
+## 2026-02-15 - US-009
+- Implemented pinned apps row UI with display and click-to-switch
+- Files created:
+  - src/sidepanel/PinnedAppsRow.tsx (new component for pinned apps horizontal row)
+- Files changed:
+  - src/shared/types.ts (added OPEN_PINNED_APP to SidePanelMessage union)
+  - src/background/service-worker.ts (added OPEN_PINNED_APP handler with origin matching)
+  - src/sidepanel/App.tsx (imported and placed PinnedAppsRow in Zone 2)
+  - src/sidepanel/index.css (added scrollbar-none utility class)
+- **Learnings for future iterations:**
+  - PinnedAppsRow listens to `chrome.storage.onChanged` for real-time updates when pinned apps are added/removed
+  - Origin matching uses `new URL(url).origin` to find existing tabs before opening new ones
+  - Active indicator is a 6px (w-1.5 h-1.5) colored dot below favicon using `#2E75B6` accent color
+  - Horizontal scroll uses `overflow-x-auto` with custom `scrollbar-none` CSS class to hide scrollbar
+  - Favicon fallback shows first letter of app title in a circle when no favicon URL
+  - The component returns null when there are no pinned apps (clean empty state)
 ---

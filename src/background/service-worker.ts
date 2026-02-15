@@ -122,5 +122,22 @@ chrome.runtime.onMessage.addListener(
         // Tab may already be closed
       });
     }
+    if (message.type === "OPEN_PINNED_APP") {
+      // Find existing tab with matching origin, or open a new one
+      chrome.tabs.query({ currentWindow: true }).then((tabs) => {
+        const match = tabs.find((t) => {
+          try {
+            return t.url && new URL(t.url).origin === message.origin;
+          } catch {
+            return false;
+          }
+        });
+        if (match && match.id != null) {
+          chrome.tabs.update(match.id, { active: true }).catch(() => {});
+        } else {
+          chrome.tabs.create({ url: message.url }).catch(() => {});
+        }
+      });
+    }
   }
 );
