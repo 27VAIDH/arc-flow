@@ -196,3 +196,42 @@ export async function removeItemFromFolder(
   folder.items = folder.items.filter((i) => i.id !== itemId);
   await saveFolders(folders);
 }
+
+export async function reorderFolders(
+  orderedIds: string[],
+  parentId: string | null
+): Promise<void> {
+  const folders = await getFolders();
+  orderedIds.forEach((id, index) => {
+    const folder = folders.find((f) => f.id === id);
+    if (folder && folder.parentId === parentId) {
+      folder.sortOrder = index;
+    }
+  });
+  await saveFolders(folders);
+}
+
+export async function reorderItemsInFolder(
+  folderId: string,
+  orderedItemIds: string[]
+): Promise<void> {
+  const folders = await getFolders();
+  const folder = folders.find((f) => f.id === folderId);
+  if (!folder) {
+    throw new Error(`Folder with id "${folderId}" not found.`);
+  }
+
+  const reordered: FolderItem[] = [];
+  for (const id of orderedItemIds) {
+    const item = folder.items.find((i) => i.id === id);
+    if (item) reordered.push(item);
+  }
+  // Append any items not in the ordered list (shouldn't happen but safety)
+  for (const item of folder.items) {
+    if (!orderedItemIds.includes(item.id)) {
+      reordered.push(item);
+    }
+  }
+  folder.items = reordered;
+  await saveFolders(folders);
+}

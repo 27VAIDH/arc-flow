@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useState, useRef } from "react";
-import type { Folder } from "../shared/types";
+import type { Folder, FolderItem } from "../shared/types";
 import {
-  getFolders,
   createFolder,
   renameFolder,
   deleteFolder,
   updateFolder,
 } from "../shared/folderStorage";
 import type { ContextMenuItem } from "./ContextMenu";
+import { useDroppable } from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface ContextMenuState {
   x: number;
@@ -17,6 +23,8 @@ interface ContextMenuState {
 
 interface FolderTreeProps {
   onContextMenu: (state: ContextMenuState) => void;
+  folders: Folder[];
+  setFolders: React.Dispatch<React.SetStateAction<Folder[]>>;
 }
 
 function FolderHeader({
@@ -133,8 +141,143 @@ function FolderHeader({
   );
 }
 
-export default function FolderTree({ onContextMenu }: FolderTreeProps) {
-  const [folders, setFolders] = useState<Folder[]>([]);
+function DraggableFolderItem({
+  item,
+  depth,
+}: {
+  item: FolderItem;
+  depth: number;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `folder-item:${item.id}` });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    paddingLeft: (depth + 1) * 16 + 8,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="flex items-center gap-2 px-2 h-7 text-sm rounded cursor-default hover:bg-gray-200 dark:hover:bg-gray-800 touch-none"
+    >
+      {item.favicon ? (
+        <img
+          src={item.favicon}
+          alt=""
+          className="w-4 h-4 shrink-0"
+          draggable={false}
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = "none";
+          }}
+        />
+      ) : (
+        <span className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600" />
+      )}
+      <span
+        className={`truncate flex-1 select-none ${item.type === "link" ? "text-gray-400 dark:text-gray-500 italic" : ""}`}
+      >
+        {item.title || item.url}
+      </span>
+    </div>
+  );
+}
+
+function SortableFolder({
+  folder,
+  depth,
+  onToggleCollapse,
+  onRename,
+  onContextMenu,
+  getChildren,
+  renderFolder,
+}: {
+  folder: Folder;
+  depth: number;
+  onToggleCollapse: (id: string) => void;
+  onRename: (id: string, name: string) => void;
+  onContextMenu: (e: React.MouseEvent, folder: Folder) => void;
+  getChildren: (parentId: string) => Folder[];
+  renderFolder: (folder: Folder, depth: number) => React.ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setSortableRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `folder:${folder.id}` });
+
+  const { isOver, setNodeRef: setDroppableRef } = useDroppable({
+    id: `folder-drop:${folder.id}`,
+  });
+
+  const sortableStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const itemIds = folder.items.map((item) => `folder-item:${item.id}`);
+
+  return (
+    <div
+      ref={(node) => {
+        setSortableRef(node);
+        setDroppableRef(node);
+      }}
+      style={{ ...sortableStyle, paddingLeft: depth * 16 }}
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className={`touch-none rounded transition-colors ${
+          isOver ? "bg-blue-100 dark:bg-blue-900/40 ring-1 ring-blue-400" : ""
+        }`}
+      >
+        <FolderHeader
+          folder={folder}
+          onToggleCollapse={onToggleCollapse}
+          onRename={onRename}
+          onContextMenu={onContextMenu}
+        />
+      </div>
+      {!folder.isCollapsed && (
+        <div>
+          <SortableContext
+            items={itemIds}
+            strategy={verticalListSortingStrategy}
+          >
+            {folder.items.map((item) => (
+              <DraggableFolderItem key={item.id} item={item} depth={depth} />
+            ))}
+          </SortableContext>
+          {getChildren(folder.id).map((child) =>
+            renderFolder(child, depth + 1)
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function FolderTree({
+  onContextMenu,
+  folders,
+  setFolders,
+}: FolderTreeProps) {
   const [toast, setToast] = useState<string | null>(null);
 
   // Auto-dismiss toast after 3 seconds
@@ -144,26 +287,6 @@ export default function FolderTree({ onContextMenu }: FolderTreeProps) {
       return () => clearTimeout(timer);
     }
   }, [toast]);
-
-  // Load folders and listen for storage changes
-  useEffect(() => {
-    getFolders().then(setFolders);
-
-    const handleStorageChange = (
-      changes: { [key: string]: chrome.storage.StorageChange },
-      area: string
-    ) => {
-      if (area === "local" && changes.folders) {
-        const updated = (changes.folders.newValue as Folder[]) ?? [];
-        setFolders(updated.sort((a, b) => a.sortOrder - b.sortOrder));
-      }
-    };
-
-    chrome.storage.onChanged.addListener(handleStorageChange);
-    return () => {
-      chrome.storage.onChanged.removeListener(handleStorageChange);
-    };
-  }, []);
 
   const handleToggleCollapse = useCallback(
     async (id: string) => {
@@ -177,7 +300,7 @@ export default function FolderTree({ onContextMenu }: FolderTreeProps) {
         await updateFolder(id, { isCollapsed: !folder.isCollapsed });
       }
     },
-    [folders]
+    [folders, setFolders]
   );
 
   const handleRename = useCallback(async (id: string, name: string) => {
@@ -250,49 +373,19 @@ export default function FolderTree({ onContextMenu }: FolderTreeProps) {
       .sort((a, b) => a.sortOrder - b.sortOrder);
 
   const renderFolder = (folder: Folder, depth: number) => (
-    <div key={folder.id} style={{ paddingLeft: depth * 16 }}>
-      <FolderHeader
-        folder={folder}
-        onToggleCollapse={handleToggleCollapse}
-        onRename={handleRename}
-        onContextMenu={handleFolderContextMenu}
-      />
-      {!folder.isCollapsed && (
-        <div>
-          {/* Render folder items */}
-          {folder.items.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center gap-2 px-2 h-7 text-sm rounded cursor-default hover:bg-gray-200 dark:hover:bg-gray-800"
-              style={{ paddingLeft: (depth + 1) * 16 + 8 }}
-            >
-              {item.favicon ? (
-                <img
-                  src={item.favicon}
-                  alt=""
-                  className="w-4 h-4 shrink-0"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = "none";
-                  }}
-                />
-              ) : (
-                <span className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600" />
-              )}
-              <span
-                className={`truncate flex-1 select-none ${item.type === "link" ? "text-gray-400 dark:text-gray-500 italic" : ""}`}
-              >
-                {item.title || item.url}
-              </span>
-            </div>
-          ))}
-          {/* Render child folders */}
-          {getChildren(folder.id).map((child) =>
-            renderFolder(child, depth + 1)
-          )}
-        </div>
-      )}
-    </div>
+    <SortableFolder
+      key={folder.id}
+      folder={folder}
+      depth={depth}
+      onToggleCollapse={handleToggleCollapse}
+      onRename={handleRename}
+      onContextMenu={handleFolderContextMenu}
+      getChildren={getChildren}
+      renderFolder={renderFolder}
+    />
   );
+
+  const topLevelFolderIds = topLevelFolders.map((f) => `folder:${f.id}`);
 
   if (topLevelFolders.length === 0 && folders.length === 0) {
     return (
@@ -337,9 +430,14 @@ export default function FolderTree({ onContextMenu }: FolderTreeProps) {
           </svg>
         </button>
       </div>
-      <div className="flex flex-col gap-0.5">
-        {topLevelFolders.map((folder) => renderFolder(folder, 0))}
-      </div>
+      <SortableContext
+        items={topLevelFolderIds}
+        strategy={verticalListSortingStrategy}
+      >
+        <div className="flex flex-col gap-0.5">
+          {topLevelFolders.map((folder) => renderFolder(folder, 0))}
+        </div>
+      </SortableContext>
 
       {/* Error toast */}
       {toast && (

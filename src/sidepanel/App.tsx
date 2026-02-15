@@ -1,14 +1,41 @@
 import { useCallback, useEffect, useState } from "react";
-import type { TabInfo, PinnedApp, ServiceWorkerMessage } from "../shared/types";
+import type {
+  TabInfo,
+  PinnedApp,
+  ServiceWorkerMessage,
+  Folder,
+  FolderItem,
+} from "../shared/types";
 import { useTheme, type ThemePreference } from "./useTheme";
 import {
   getPinnedApps,
   addPinnedApp,
   removePinnedApp,
 } from "../shared/storage";
+import {
+  getFolders,
+  addItemToFolder,
+  moveItemToFolder,
+  reorderFolders,
+  reorderItemsInFolder,
+} from "../shared/folderStorage";
 import PinnedAppsRow from "./PinnedAppsRow";
 import FolderTree from "./FolderTree";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+  DragOverlay,
+  pointerWithin,
+  rectIntersection,
+  type CollisionDetection,
+  useDraggable,
+} from "@dnd-kit/core";
+import { arrayMove } from "@dnd-kit/sortable";
 
 function getOrigin(url: string): string {
   try {
@@ -18,7 +45,7 @@ function getOrigin(url: string): string {
   }
 }
 
-function TabItem({
+function DraggableTabItem({
   tab,
   onContextMenu,
 }: {
@@ -26,6 +53,15 @@ function TabItem({
   onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({ id: `tab:${tab.id}` });
+
+  const style = {
+    transform: transform
+      ? `translate(${transform.x}px, ${transform.y}px)`
+      : undefined,
+    opacity: isDragging ? 0.5 : 1,
+  };
 
   const handleClick = () => {
     chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: tab.id });
@@ -45,10 +81,14 @@ function TabItem({
 
   return (
     <li
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
       onClick={handleClick}
       onMouseDown={handleMouseDown}
       onContextMenu={(e) => onContextMenu(e, tab)}
-      className={`flex items-center gap-2 px-2 h-8 text-sm rounded cursor-default hover:bg-gray-200 dark:hover:bg-gray-800 ${
+      className={`flex items-center gap-2 px-2 h-8 text-sm rounded cursor-default hover:bg-gray-200 dark:hover:bg-gray-800 touch-none ${
         tab.active
           ? "border-l-[3px] border-l-[#2E75B6] font-bold"
           : "border-l-[3px] border-l-transparent"
@@ -61,6 +101,7 @@ function TabItem({
           src={tab.favIconUrl}
           alt=""
           className="w-4 h-4 shrink-0"
+          draggable={false}
           onError={(e) => {
             (e.target as HTMLImageElement).style.display = "none";
           }}
@@ -88,6 +129,21 @@ function TabItem({
         </button>
       )}
     </li>
+  );
+}
+
+function TabDragOverlay({ tab }: { tab: TabInfo }) {
+  return (
+    <div className="flex items-center gap-2 px-2 h-8 text-sm rounded bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-600 opacity-90">
+      {tab.favIconUrl ? (
+        <img src={tab.favIconUrl} alt="" className="w-4 h-4 shrink-0" />
+      ) : (
+        <span className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600" />
+      )}
+      <span className="truncate flex-1 select-none">
+        {tab.title || tab.url}
+      </span>
+    </div>
   );
 }
 
@@ -158,10 +214,56 @@ interface ContextMenuState {
   items: ContextMenuItem[];
 }
 
+// Custom collision detection: prefer droppable folder targets, then fall back to closest center
+const customCollisionDetection: CollisionDetection = (args) => {
+  // First check for pointer-within collisions (good for drop targets like folders)
+  const pointerCollisions = pointerWithin(args);
+  if (pointerCollisions.length > 0) {
+    // Prefer folder drop targets
+    const folderDrops = pointerCollisions.filter((c) =>
+      String(c.id).startsWith("folder-drop:")
+    );
+    if (folderDrops.length > 0) return folderDrops;
+    return pointerCollisions;
+  }
+  // Fall back to rect intersection for sortable items
+  return rectIntersection(args);
+};
+
 export default function App() {
   const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [pinnedApps, setPinnedApps] = useState<PinnedApp[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [activeDragTab, setActiveDragTab] = useState<TabInfo | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    })
+  );
+
+  // Load folders and listen for storage changes
+  useEffect(() => {
+    getFolders().then(setFolders);
+
+    const handleStorageChange = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      area: string
+    ) => {
+      if (area === "local" && changes.folders) {
+        const updated = (changes.folders.newValue as Folder[]) ?? [];
+        setFolders(updated.sort((a, b) => a.sortOrder - b.sortOrder));
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
+  }, []);
 
   // Load pinned apps and listen for changes
   useEffect(() => {
@@ -265,6 +367,165 @@ export default function App() {
     setContextMenu(null);
   }, []);
 
+  const handleDragStart = useCallback(
+    (event: DragStartEvent) => {
+      const id = String(event.active.id);
+      if (id.startsWith("tab:")) {
+        const tabId = parseInt(id.replace("tab:", ""), 10);
+        const tab = tabs.find((t) => t.id === tabId);
+        if (tab) setActiveDragTab(tab);
+      }
+    },
+    [tabs]
+  );
+
+  const handleDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      setActiveDragTab(null);
+      const { active, over } = event;
+      if (!over) return;
+
+      const activeId = String(active.id);
+      const overId = String(over.id);
+
+      // Case 1: Tab dropped onto a folder
+      if (activeId.startsWith("tab:") && overId.startsWith("folder-drop:")) {
+        const tabId = parseInt(activeId.replace("tab:", ""), 10);
+        const folderId = overId.replace("folder-drop:", "");
+        const tab = tabs.find((t) => t.id === tabId);
+        if (!tab) return;
+
+        const newItem: FolderItem = {
+          id: crypto.randomUUID(),
+          type: "tab",
+          tabId: tab.id,
+          url: tab.url,
+          title: tab.title || tab.url,
+          favicon: tab.favIconUrl || "",
+          isArchived: false,
+          lastActiveAt: Date.now(),
+        };
+
+        await addItemToFolder(folderId, newItem);
+        return;
+      }
+
+      // Case 2: Folder item dropped onto a different folder
+      if (
+        activeId.startsWith("folder-item:") &&
+        overId.startsWith("folder-drop:")
+      ) {
+        const itemId = activeId.replace("folder-item:", "");
+        const targetFolderId = overId.replace("folder-drop:", "");
+        try {
+          await moveItemToFolder(itemId, targetFolderId);
+        } catch {
+          // Item not found or target not found
+        }
+        return;
+      }
+
+      // Case 3: Reorder folder items within same folder
+      if (
+        activeId.startsWith("folder-item:") &&
+        overId.startsWith("folder-item:")
+      ) {
+        const activeItemId = activeId.replace("folder-item:", "");
+        const overItemId = overId.replace("folder-item:", "");
+
+        // Find which folder contains the active item
+        const sourceFolder = folders.find((f) =>
+          f.items.some((i) => i.id === activeItemId)
+        );
+        const targetFolder = folders.find((f) =>
+          f.items.some((i) => i.id === overItemId)
+        );
+
+        if (
+          sourceFolder &&
+          targetFolder &&
+          sourceFolder.id === targetFolder.id
+        ) {
+          // Reorder within same folder
+          const oldIndex = sourceFolder.items.findIndex(
+            (i) => i.id === activeItemId
+          );
+          const newIndex = sourceFolder.items.findIndex(
+            (i) => i.id === overItemId
+          );
+          if (oldIndex !== -1 && newIndex !== -1) {
+            const reorderedItems = arrayMove(
+              sourceFolder.items,
+              oldIndex,
+              newIndex
+            );
+
+            // Optimistic update
+            setFolders((prev) =>
+              prev.map((f) =>
+                f.id === sourceFolder.id ? { ...f, items: reorderedItems } : f
+              )
+            );
+
+            await reorderItemsInFolder(
+              sourceFolder.id,
+              reorderedItems.map((i) => i.id)
+            );
+          }
+        } else if (sourceFolder && targetFolder) {
+          // Move between folders
+          await moveItemToFolder(activeItemId, targetFolder.id);
+        }
+        return;
+      }
+
+      // Case 4: Reorder folders among siblings
+      if (activeId.startsWith("folder:") && overId.startsWith("folder:")) {
+        const activeFolderId = activeId.replace("folder:", "");
+        const overFolderId = overId.replace("folder:", "");
+
+        const activeFolder = folders.find((f) => f.id === activeFolderId);
+        const overFolder = folders.find((f) => f.id === overFolderId);
+
+        if (
+          activeFolder &&
+          overFolder &&
+          activeFolder.parentId === overFolder.parentId
+        ) {
+          const siblings = folders
+            .filter((f) => f.parentId === activeFolder.parentId)
+            .sort((a, b) => a.sortOrder - b.sortOrder);
+
+          const oldIndex = siblings.findIndex((f) => f.id === activeFolderId);
+          const newIndex = siblings.findIndex((f) => f.id === overFolderId);
+
+          if (oldIndex !== -1 && newIndex !== -1) {
+            const reordered = arrayMove(siblings, oldIndex, newIndex);
+
+            // Optimistic update
+            setFolders((prev) => {
+              const updated = [...prev];
+              reordered.forEach((f, i) => {
+                const idx = updated.findIndex((u) => u.id === f.id);
+                if (idx !== -1) {
+                  updated[idx] = { ...updated[idx], sortOrder: i };
+                }
+              });
+              return updated;
+            });
+
+            await reorderFolders(
+              reordered.map((f) => f.id),
+              activeFolder.parentId
+            );
+          }
+        }
+        return;
+      }
+    },
+    [tabs, folders, setFolders]
+  );
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
       <header className="p-4 border-b border-gray-200 dark:border-gray-700">
@@ -281,24 +542,39 @@ export default function App() {
       {/* Pinned Apps Row (Zone 2) */}
       <PinnedAppsRow tabs={tabs} onContextMenu={setContextMenu} />
 
-      {/* Folder Tree (Zone 3) */}
-      <FolderTree onContextMenu={setContextMenu} />
+      <DndContext
+        sensors={sensors}
+        collisionDetection={customCollisionDetection}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        {/* Folder Tree (Zone 3) */}
+        <FolderTree
+          onContextMenu={setContextMenu}
+          folders={folders}
+          setFolders={setFolders}
+        />
 
-      {/* Tab list */}
-      <div className="flex-1 px-1">
-        <p className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1">
-          {tabs.length} tab{tabs.length !== 1 ? "s" : ""} open
-        </p>
-        <ul className="flex flex-col gap-1">
-          {tabs.map((tab) => (
-            <TabItem
-              key={tab.id}
-              tab={tab}
-              onContextMenu={handleTabContextMenu}
-            />
-          ))}
-        </ul>
-      </div>
+        {/* Tab list */}
+        <div className="flex-1 px-1">
+          <p className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1">
+            {tabs.length} tab{tabs.length !== 1 ? "s" : ""} open
+          </p>
+          <ul className="flex flex-col gap-1">
+            {tabs.map((tab) => (
+              <DraggableTabItem
+                key={tab.id}
+                tab={tab}
+                onContextMenu={handleTabContextMenu}
+              />
+            ))}
+          </ul>
+        </div>
+
+        <DragOverlay>
+          {activeDragTab ? <TabDragOverlay tab={activeDragTab} /> : null}
+        </DragOverlay>
+      </DndContext>
 
       {/* Footer */}
       <footer className="flex items-center justify-end px-3 py-2 border-t border-gray-200 dark:border-gray-700">

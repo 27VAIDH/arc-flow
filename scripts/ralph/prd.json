@@ -269,7 +269,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": "Use @dnd-kit/core with @dnd-kit/sortable. Drop zones: between items, on folder, on root area."
     },
     {
