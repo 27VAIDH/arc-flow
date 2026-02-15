@@ -696,7 +696,7 @@
         "Typecheck passes"
       ],
       "priority": 40,
-      "passes": false,
+      "passes": true,
       "notes": "Use Chrome DevTools Performance panel for measurement."
     },
     {

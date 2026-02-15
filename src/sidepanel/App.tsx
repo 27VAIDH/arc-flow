@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import type {
   TabInfo,
   PinnedApp,
@@ -59,6 +59,8 @@ import {
   useDraggable,
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
+import { List } from "react-window";
+import type { CSSProperties } from "react";
 
 function getOrigin(url: string): string {
   try {
@@ -68,18 +70,102 @@ function getOrigin(url: string): string {
   }
 }
 
-function DraggableTabItem({
+// Lazy-loading favicon with IntersectionObserver
+const LazyFavicon = memo(function LazyFavicon({
+  src,
+  alt,
+}: {
+  src: string;
+  alt: string;
+}) {
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const img = imgRef.current;
+    if (!img) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setLoaded(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "50px" }
+    );
+
+    observer.observe(img);
+    return () => observer.disconnect();
+  }, []);
+
+  return loaded ? (
+    <img
+      ref={imgRef}
+      src={src}
+      alt={alt}
+      className="w-4 h-4 shrink-0"
+      draggable={false}
+      onError={(e) => {
+        (e.target as HTMLImageElement).style.display = "none";
+      }}
+    />
+  ) : (
+    <span
+      ref={imgRef}
+      className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600"
+    />
+  );
+});
+
+const VIRTUAL_LIST_THRESHOLD = 50;
+const TAB_ITEM_HEIGHT = 36; // 32px height + 4px gap
+
+// Row component for react-window virtual list
+interface VirtualTabRowProps {
+  tabs: TabInfo[];
+  onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
+}
+
+function VirtualTabRow({
+  index,
+  style,
+  tabs,
+  onContextMenu,
+}: {
+  index: number;
+  style: CSSProperties;
+  ariaAttributes: Record<string, unknown>;
+  tabs: TabInfo[];
+  onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
+}) {
+  const tab = tabs[index];
+  if (!tab) return null;
+  return (
+    <DraggableTabItem
+      key={tab.id}
+      tab={tab}
+      onContextMenu={onContextMenu}
+      style={style}
+    />
+  );
+}
+
+const DraggableTabItem = memo(function DraggableTabItem({
   tab,
   onContextMenu,
+  style: outerStyle,
 }: {
   tab: TabInfo;
   onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
+  style?: React.CSSProperties;
 }) {
   const [hovered, setHovered] = useState(false);
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: `tab:${tab.id}` });
 
   const style = {
+    ...outerStyle,
     transform: transform
       ? `translate(${transform.x}px, ${transform.y}px)`
       : undefined,
@@ -120,15 +206,7 @@ function DraggableTabItem({
       onMouseLeave={() => setHovered(false)}
     >
       {tab.favIconUrl ? (
-        <img
-          src={tab.favIconUrl}
-          alt=""
-          className="w-4 h-4 shrink-0"
-          draggable={false}
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = "none";
-          }}
-        />
+        <LazyFavicon src={tab.favIconUrl} alt="" />
       ) : (
         <span className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600" />
       )}
@@ -170,7 +248,7 @@ function DraggableTabItem({
       )}
     </li>
   );
-}
+});
 
 function TabDragOverlay({ tab }: { tab: TabInfo }) {
   return (
@@ -1095,15 +1173,31 @@ export default function App() {
           <p className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1">
             {filteredTabs.length} tab{filteredTabs.length !== 1 ? "s" : ""} open
           </p>
-          <ul className="flex flex-col gap-1">
-            {filteredTabs.map((tab) => (
-              <DraggableTabItem
-                key={tab.id}
-                tab={tab}
-                onContextMenu={handleTabContextMenu}
-              />
-            ))}
-          </ul>
+          {filteredTabs.length >= VIRTUAL_LIST_THRESHOLD ? (
+            <List<VirtualTabRowProps>
+              style={{
+                height: Math.min(filteredTabs.length * TAB_ITEM_HEIGHT, 400),
+              }}
+              rowComponent={VirtualTabRow}
+              rowCount={filteredTabs.length}
+              rowHeight={TAB_ITEM_HEIGHT}
+              rowProps={{
+                tabs: filteredTabs,
+                onContextMenu: handleTabContextMenu,
+              }}
+              overscanCount={5}
+            />
+          ) : (
+            <ul className="flex flex-col gap-1">
+              {filteredTabs.map((tab) => (
+                <DraggableTabItem
+                  key={tab.id}
+                  tab={tab}
+                  onContextMenu={handleTabContextMenu}
+                />
+              ))}
+            </ul>
+          )}
         </div>
 
         <DragOverlay>
