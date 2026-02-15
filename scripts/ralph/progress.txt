@@ -689,3 +689,40 @@ There are still stories with `passes: false` (US-018 through US-041), so the nex
   - Arrow keys navigate results, Enter activates selected result, Escape clears search and blurs input
   - Results capped at 20 items; scroll into view for keyboard navigation
 ---
+
+## Iteration 18 - Sun Feb 15 16:36:37 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-18.log
+---
+**US-018 is complete.** Here's what was implemented:
+
+- **`src/sidepanel/SearchBar.tsx`** — New component that:
+  - Replaces the placeholder search bar with a functional input at the top of the sidebar (Zone 1, ~40px)
+  - Uses **fuse.js** for fuzzy matching across tab titles, URLs, folder names, and saved link titles
+  - **Custom ranking**: exact > starts-with > fuzzy > URL match
+  - **150ms debounce** on search input
+  - **Keyboard navigation**: Arrow keys to navigate results, Enter to activate (switches to tab or opens saved link), Escape to clear and restore full tree view
+  - Results dropdown shows up to 20 items with type badges (Tab/Link/Folder), favicons, and URLs
+  - Clear button (X) to reset search
+
+- **`src/sidepanel/App.tsx`** — Replaced placeholder search div with `SearchBar` component, passing tabs, folders, and callback handlers
+
+- **`package.json`** — Added `fuse.js` dependency
+
+All quality checks pass (typecheck, lint, build). Committed as `7024a07`.
+
+There are still stories with `passes: false` (US-019 through US-041), so the next iteration will pick up US-019.
+---
+
+## 2026-02-15 - US-019
+- Implemented visual indicators for active, audio, and discarded tabs
+- Files changed:
+  - src/sidepanel/App.tsx (added speaker icon for audible tabs, dimmed opacity + italic for discarded tabs)
+- **Learnings for future iterations:**
+  - `TabInfo` already had `audible` and `discarded` fields from US-003; `mapTab` in service-worker.ts already maps `tab.audible` and `tab.discarded`
+  - Audio indicator uses Lucide Volume2 SVG icon (inline) with `text-blue-500` color, placed between title and close button
+  - Discarded tab styling uses `opacity-50 italic` Tailwind classes on the entire `<li>` element
+  - Active tab styling (3px #2E75B6 left border + bold) was already implemented in US-005
+  - Real-time updates already work because `tabs.onUpdated` triggers `debouncedRefresh()` which broadcasts full tab list with audible/discarded props
+  - This was a minimal change — only the DraggableTabItem component needed updates
+---
