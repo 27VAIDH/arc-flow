@@ -11,6 +11,9 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - All data model types in `src/shared/types.ts`
 - Chrome types via `@types/chrome` devDependency
 - Prettier checks only `src/**/*.{ts,tsx,css,html}` to avoid .gitkeep issues
+- Message types (ServiceWorkerMessage, SidePanelMessage, TabInfo) defined in `src/shared/types.ts`
+- Service worker broadcasts tab changes via `chrome.runtime.sendMessage`; side panel listens via `chrome.runtime.onMessage`
+- `chrome.runtime.sendMessage` throws if no listener exists (e.g., side panel closed); always `.catch()` the promise
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -105,4 +108,36 @@ US-001 is complete. There are still stories with `passes: false` (US-002 through
   - `chrome.sidePanel.setOptions()` called inside `onInstalled` to set the panel path
   - The side panel HTML, main.tsx, and App.tsx were already created in US-001 scaffolding
   - Service worker just needed the chrome.sidePanel API calls to complete this story
+---
+
+## Iteration 2 - Sun Feb 15 15:53:05 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-2.log
+---
+US-002 is complete. There are still stories with `passes: false` (US-003 through US-041), so the next iteration will pick up US-003.
+
+**Summary of US-002 completion:**
+- Updated `src/background/service-worker.ts` to register the side panel via `chrome.sidePanel.setOptions()` on install and set `openPanelOnActionClick: true` for toolbar icon toggle
+- All acceptance criteria met:
+  - `src/sidepanel/index.html` exists as side panel entry point (from US-001)
+  - `src/sidepanel/main.tsx` renders React root (from US-001)
+  - `src/sidepanel/App.tsx` renders basic layout with ArcFlow header (from US-001)
+  - Service worker registers side panel via `chrome.sidePanel.setOptions()`
+  - Service worker calls `chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })`
+  - Clicking toolbar icon toggles side panel
+  - Typecheck passes
+- Committed as `cfb8ee6`
+---
+
+## 2026-02-15 - US-003
+- Implemented service worker tab event listeners and state broadcasting
+- Files changed:
+  - src/background/service-worker.ts (added tab lifecycle listeners, debouncing, persistence, broadcasting)
+  - src/shared/types.ts (added TabInfo, ServiceWorkerMessage, SidePanelMessage types)
+  - src/sidepanel/App.tsx (added message listener and React state for tab list)
+- **Learnings for future iterations:**
+  - `chrome.runtime.sendMessage()` returns a promise that rejects if no listener is registered (e.g., side panel not open). Always `.catch()` it.
+  - Debouncing with `setTimeout` in service workers works but the timer may be cleared if the worker is terminated. State persistence to `chrome.storage.local` provides the safety net.
+  - Side panel can request initial tabs via `GET_TABS` message with `sendResponse` pattern (return `true` from listener for async response).
+  - `chrome.tabs.query({ currentWindow: true })` returns tabs for the window context the service worker is associated with.
 ---

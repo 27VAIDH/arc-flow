@@ -45,6 +45,26 @@ export interface ArchiveEntry {
   workspaceId: string;
 }
 
+// Tab info broadcast from service worker to side panel
+export interface TabInfo {
+  id: number;
+  url: string;
+  title: string;
+  favIconUrl: string;
+  active: boolean;
+  audible: boolean;
+  discarded: boolean;
+  windowId: number;
+}
+
+// Messages sent from service worker to side panel
+export type ServiceWorkerMessage =
+  | { type: "TABS_UPDATED"; tabs: TabInfo[] }
+  | { type: "TAB_ACTIVATED"; tabId: number; windowId: number };
+
+// Messages sent from side panel to service worker
+export type SidePanelMessage = { type: "GET_TABS" };
+
 export interface Settings {
   theme: "system" | "light" | "dark";
   autoArchiveMinutes: number;

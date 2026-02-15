@@ -55,7 +55,7 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "MV3 service workers can be terminated at any time. Critical state must be persisted to storage."
     },
     {
