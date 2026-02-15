@@ -22,6 +22,7 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - Origin matching for URL comparison: `new URL(url).origin` (wrap in try/catch for invalid URLs)
 - Context menus use a shared `ContextMenu` component in `src/sidepanel/ContextMenu.tsx` — rendered at App level, state lifted via `setContextMenu`
 - In-sidebar context menus use `onContextMenu` React handler (not `chrome.contextMenus` API which is for page-level context menus)
+- Drag-and-drop uses `@dnd-kit/core` + `@dnd-kit/sortable` + `@dnd-kit/utilities`; PointerSensor with `distance: 5` prevents accidental drags from clicks
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -396,4 +397,40 @@ There are still stories with `passes: false` (US-010 through US-041), so the nex
   - Inline editing for pinned app rename/URL edit uses a controlled input with blur-to-save and Escape-to-cancel
   - Pin/unpin detection uses origin matching (`getOrigin(tab.url) === getOrigin(app.url)`) for consistency with US-009
   - `OPEN_PINNED_APP_NEW_TAB` is a separate message type from `OPEN_PINNED_APP` — always opens a new tab without origin matching
+---
+
+## Iteration 10 - Sun Feb 15 16:12:27 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-10.log
+---
+**US-010 is complete.** Here's what was implemented:
+
+- **`src/sidepanel/ContextMenu.tsx`** — New reusable context menu component with click-outside dismissal, Escape key handling, and viewport overflow correction
+
+- **Tab right-click context menu** — Right-clicking a tab shows "Pin to ArcFlow" (or "Unpin from ArcFlow" if already pinned based on origin matching)
+
+- **Pinned app right-click context menu** — Right-clicking a pinned app icon shows: Rename, Edit URL, Open in New Tab, Remove
+
+- **Inline editing** — Rename and Edit URL trigger an inline text input above the pinned apps row with blur-to-save and Escape-to-cancel
+
+- **`OPEN_PINNED_APP_NEW_TAB`** message type added to always open a new tab (unlike `OPEN_PINNED_APP` which does origin matching first)
+
+All quality checks pass (typecheck, lint, build). Committed as `b75e3b6`.
+
+There are still stories with `passes: false` (US-011 through US-041), so the next iteration will pick up US-011.
+---
+
+## 2026-02-15 - US-011
+- Implemented pinned apps drag-and-drop reorder
+- Files changed:
+  - package.json (added @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities)
+  - src/sidepanel/PinnedAppsRow.tsx (wrapped pinned apps in DndContext + SortableContext, extracted SortablePinnedApp component)
+- **Learnings for future iterations:**
+  - `@dnd-kit/core` PointerSensor with `activationConstraint: { distance: 5 }` prevents accidental drags when user just wants to click
+  - `useSortable` hook provides `setNodeRef`, `attributes`, `listeners`, `transform`, `transition` for each draggable item
+  - `CSS.Transform.toString(transform)` from `@dnd-kit/utilities` converts transform to CSS string
+  - `arrayMove` from `@dnd-kit/sortable` reorders arrays and is used for optimistic UI update before persisting
+  - `touch-none` Tailwind class needed on draggable items to prevent browser touch scroll interference
+  - `draggable={false}` on `<img>` elements inside draggable items prevents browser native image drag behavior
+  - `horizontalListSortingStrategy` from `@dnd-kit/sortable` is ideal for horizontal reorder rows
 ---
