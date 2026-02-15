@@ -585,7 +585,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 34,
-      "passes": false,
+      "passes": true,
       "notes": "True in-window splits not possible via extension API; use side-by-side windows."
     },
     {

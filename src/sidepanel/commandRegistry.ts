@@ -11,6 +11,7 @@ export function buildCommands({
   onSearchTabs,
   onNewWorkspace,
   onToggleFocusMode,
+  onSplitView,
 }: {
   workspaces: Workspace[];
   onSwitchWorkspace: (workspaceId: string) => void;
@@ -21,6 +22,7 @@ export function buildCommands({
   onSearchTabs: () => void;
   onNewWorkspace: () => void;
   onToggleFocusMode: () => void;
+  onSplitView: () => void;
 }): Command[] {
   const commands: Command[] = [];
 
@@ -81,6 +83,13 @@ export function buildCommands({
     name: "Toggle Focus Mode",
     icon: "focus",
     action: onToggleFocusMode,
+  });
+
+  commands.push({
+    id: "split-view",
+    name: "Split View Current Tab",
+    icon: "split",
+    action: onSplitView,
   });
 
   return commands;

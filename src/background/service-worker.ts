@@ -464,6 +464,51 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
+// --- Split view: side-by-side windows ---
+
+async function openSplitView(tabId: number): Promise<void> {
+  const tab = await chrome.tabs.get(tabId);
+  if (!tab.windowId) return;
+
+  // Get screen/display dimensions from the current window
+  const currentWindow = await chrome.windows.get(tab.windowId);
+  // Use current window position as reference for screen bounds
+  const screenLeft = currentWindow.left ?? 0;
+  const screenTop = currentWindow.top ?? 0;
+
+  // Get available screen size via the current window's display
+  // Use a generous default if we can't determine the screen size
+  const displays = await chrome.system.display.getInfo();
+  const primaryDisplay = displays[0];
+  const screenWidth = primaryDisplay?.bounds?.width ?? 1920;
+  const screenHeight = primaryDisplay?.bounds?.height ?? 1080;
+  const workAreaLeft = primaryDisplay?.workArea?.left ?? screenLeft;
+  const workAreaTop = primaryDisplay?.workArea?.top ?? screenTop;
+  const workAreaWidth = primaryDisplay?.workArea?.width ?? screenWidth;
+  const workAreaHeight = primaryDisplay?.workArea?.height ?? screenHeight;
+
+  const halfWidth = Math.floor(workAreaWidth / 2);
+
+  // Move the current window to the left half
+  await chrome.windows.update(tab.windowId, {
+    left: workAreaLeft,
+    top: workAreaTop,
+    width: halfWidth,
+    height: workAreaHeight,
+    state: "normal",
+  });
+
+  // Create a new window on the right half with the tab moved into it
+  await chrome.windows.create({
+    tabId: tab.id!,
+    left: workAreaLeft + halfWidth,
+    top: workAreaTop,
+    width: halfWidth,
+    height: workAreaHeight,
+    state: "normal",
+  });
+}
+
 // Handle messages from side panel
 chrome.runtime.onMessage.addListener(
   (message: SidePanelMessage, _sender, sendResponse) => {
@@ -513,6 +558,11 @@ chrome.runtime.onMessage.addListener(
     if (message.type === "SUSPEND_TAB") {
       chrome.tabs.discard(message.tabId).catch(() => {
         // Tab may not exist or cannot be discarded
+      });
+    }
+    if (message.type === "SPLIT_VIEW") {
+      openSplitView(message.tabId).catch(() => {
+        // Split view setup failed
       });
     }
     if (message.type === "OPEN_PINNED_APP") {

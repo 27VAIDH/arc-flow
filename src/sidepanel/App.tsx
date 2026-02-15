@@ -597,6 +597,13 @@ export default function App() {
   }, []);
 
   const openSettings = useCallback(() => setShowSettings(true), []);
+
+  const splitViewActiveTab = useCallback(() => {
+    const activeTab = filteredTabs.find((t) => t.active);
+    if (activeTab) {
+      chrome.runtime.sendMessage({ type: "SPLIT_VIEW", tabId: activeTab.id });
+    }
+  }, [filteredTabs]);
   const createNewFolder = useCallback(() => {
     createFolder("New Folder");
   }, []);
@@ -614,6 +621,7 @@ export default function App() {
         onSearchTabs: focusSearchInput,
         onNewWorkspace: createNewWorkspace,
         onToggleFocusMode: toggleFocusMode,
+        onSplitView: splitViewActiveTab,
       }),
     [
       workspaces,
@@ -625,6 +633,7 @@ export default function App() {
       focusSearchInput,
       createNewWorkspace,
       toggleFocusMode,
+      splitViewActiveTab,
     ]
   );
 
@@ -684,6 +693,17 @@ export default function App() {
           },
         });
       }
+
+      // Add "Split View" to open tab in a side-by-side window
+      items.push({
+        label: "Split View",
+        onClick: () => {
+          chrome.runtime.sendMessage({
+            type: "SPLIT_VIEW",
+            tabId: tab.id,
+          });
+        },
+      });
 
       // Add "Move to Workspace..." if there are multiple workspaces
       if (workspaces.length > 1) {

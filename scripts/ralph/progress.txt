@@ -57,6 +57,8 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - `react-hooks/set-state-in-effect` requires `setTimeout(() => setState(...), 0)` wrapper pattern
 - Command palette commands defined in `src/sidepanel/commandRegistry.ts`; component in `src/sidepanel/CommandPalette.tsx`
 - Recent commands stored in `commandPaletteRecent` key in `chrome.storage.local`
+- `chrome.system.display.getInfo()` requires `system.display` permission in manifest; used for screen dimensions in split view
+- Split view uses `chrome.windows.create({ tabId })` to move a tab into a new window; positions windows at left/right halves using `workArea` bounds
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -1323,4 +1325,50 @@ There are still stories with `passes: false` (US-033 through US-041), so the nex
   - Privacy notice displayed as amber warning box when AI grouping is enabled
   - API key stored in chrome.storage.local as part of settings.aiGrouping object
   - Anthropic API requires `anthropic-dangerous-direct-browser-access: true` header for browser-based calls
+---
+
+## Iteration 33 - Sun Feb 15 17:28:07 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-33.log
+---
+**US-033 is complete.** Here's what was implemented:
+
+- **`src/shared/aiGroupingService.ts`** — New module with:
+  - `callAnthropicAPI()` — Sends tab titles/URLs to Anthropic Claude API with 10s timeout
+  - `callOpenAIAPI()` — Sends tab titles/URLs to OpenAI API with 10s timeout
+  - `parseAIResponse()` — Extracts and validates JSON array from AI response text
+  - `getAIGroupingSuggestions()` — Main entry point returning `{ groups, source: "ai" | "fallback" }`
+
+- **`src/sidepanel/SettingsPanel.tsx`** — Added "AI-Enhanced Grouping" settings section:
+  - Toggle to enable/disable AI grouping (disabled by default)
+  - Privacy notice explaining only tab titles + URLs are sent
+  - Provider selector (Anthropic Claude or OpenAI GPT)
+  - API key input field (password type)
+
+- **`src/sidepanel/OrganizeTabsModal.tsx`** — Enhanced with AI integration:
+  - Attempts AI grouping on mount when enabled; shows loading spinner
+  - Falls back to domain heuristics (US-032) on API failure or empty results
+  - Header shows whether suggestions are "by AI" or "based on domains"
+
+- **`src/shared/constants.ts`** — Added `AI_PROVIDER_OPTIONS`
+
+All quality checks pass (typecheck, lint, build). Committed as `8aa8883`.
+
+There are still stories with `passes: false` (US-034 through US-041), so the next iteration will pick up US-034.
+---
+
+## 2026-02-15 - US-034
+- **What was implemented:** Split view feature that opens two Chrome windows side-by-side
+- **Files changed:**
+  - `src/shared/types.ts` — Added `SPLIT_VIEW` message type to `SidePanelMessage` union
+  - `src/background/service-worker.ts` — Added `openSplitView()` function using `chrome.system.display.getInfo()` for screen bounds, `chrome.windows.update()` for left half, `chrome.windows.create({ tabId })` for right half; added `SPLIT_VIEW` message handler
+  - `public/manifest.json` — Added `system.display` permission
+  - `src/sidepanel/App.tsx` — Added "Split View" context menu item on tab right-click; added `splitViewActiveTab` callback for command palette
+  - `src/sidepanel/commandRegistry.ts` — Added `onSplitView` callback and "Split View Current Tab" command
+  - `src/sidepanel/CommandPalette.tsx` — Added "split" icon (vertical split panel SVG) to icon map
+- **Learnings for future iterations:**
+  - `chrome.system.display.getInfo()` returns display info with `bounds` and `workArea`; `workArea` excludes taskbar/dock area
+  - `chrome.windows.create({ tabId })` moves an existing tab into a new window (removes it from the source window)
+  - True in-window splits aren't possible via extension API; side-by-side windows are the standard approach
+  - `system.display` is a separate Chrome permission that must be added to manifest
 ---

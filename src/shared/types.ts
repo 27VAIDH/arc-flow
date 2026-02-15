@@ -79,7 +79,8 @@ export type SidePanelMessage =
   | { type: "GET_TAB_WORKSPACE_MAP" }
   | { type: "MOVE_TAB_TO_WORKSPACE"; tabId: number; workspaceId: string }
   | { type: "APPLY_WORKSPACE_ISOLATION"; activeWorkspaceId: string }
-  | { type: "SUSPEND_TAB"; tabId: number };
+  | { type: "SUSPEND_TAB"; tabId: number }
+  | { type: "SPLIT_VIEW"; tabId: number };
 
 export interface Settings {
   theme: "system" | "light" | "dark";

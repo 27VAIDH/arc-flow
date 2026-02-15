@@ -225,6 +225,20 @@ export default function CommandPalette({
         />
       </svg>
     ),
+    split: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 20 20"
+        fill="currentColor"
+        className="w-4 h-4"
+      >
+        <path
+          fillRule="evenodd"
+          d="M2 4.25A2.25 2.25 0 0 1 4.25 2h11.5A2.25 2.25 0 0 1 18 4.25v11.5A2.25 2.25 0 0 1 15.75 18H4.25A2.25 2.25 0 0 1 2 15.75V4.25ZM9.25 3.5H4.25a.75.75 0 0 0-.75.75v11.5c0 .414.336.75.75.75h5V3.5Zm1.5 13h5a.75.75 0 0 0 .75-.75V4.25a.75.75 0 0 0-.75-.75h-5v13Z"
+          clipRule="evenodd"
+        />
+      </svg>
+    ),
   };
 
   const getIcon = (iconName: string): React.ReactNode => {
