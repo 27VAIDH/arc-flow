@@ -122,6 +122,9 @@ chrome.runtime.onMessage.addListener(
         // Tab may already be closed
       });
     }
+    if (message.type === "OPEN_PINNED_APP_NEW_TAB") {
+      chrome.tabs.create({ url: message.url }).catch(() => {});
+    }
     if (message.type === "OPEN_PINNED_APP") {
       // Find existing tab with matching origin, or open a new one
       chrome.tabs.query({ currentWindow: true }).then((tabs) => {

@@ -1,9 +1,29 @@
-import { useEffect, useState } from "react";
-import type { TabInfo, ServiceWorkerMessage } from "../shared/types";
+import { useCallback, useEffect, useState } from "react";
+import type { TabInfo, PinnedApp, ServiceWorkerMessage } from "../shared/types";
 import { useTheme, type ThemePreference } from "./useTheme";
+import {
+  getPinnedApps,
+  addPinnedApp,
+  removePinnedApp,
+} from "../shared/storage";
 import PinnedAppsRow from "./PinnedAppsRow";
+import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
 
-function TabItem({ tab }: { tab: TabInfo }) {
+function getOrigin(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return "";
+  }
+}
+
+function TabItem({
+  tab,
+  onContextMenu,
+}: {
+  tab: TabInfo;
+  onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
+}) {
   const [hovered, setHovered] = useState(false);
 
   const handleClick = () => {
@@ -26,6 +46,7 @@ function TabItem({ tab }: { tab: TabInfo }) {
     <li
       onClick={handleClick}
       onMouseDown={handleMouseDown}
+      onContextMenu={(e) => onContextMenu(e, tab)}
       className={`flex items-center gap-2 px-2 h-8 text-sm rounded cursor-default hover:bg-gray-200 dark:hover:bg-gray-800 ${
         tab.active
           ? "border-l-[3px] border-l-[#2E75B6] font-bold"
@@ -130,8 +151,36 @@ function ThemeToggle({
   );
 }
 
+interface ContextMenuState {
+  x: number;
+  y: number;
+  items: ContextMenuItem[];
+}
+
 export default function App() {
   const [tabs, setTabs] = useState<TabInfo[]>([]);
+  const [pinnedApps, setPinnedApps] = useState<PinnedApp[]>([]);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+
+  // Load pinned apps and listen for changes
+  useEffect(() => {
+    getPinnedApps().then(setPinnedApps);
+
+    const handleStorageChange = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      area: string
+    ) => {
+      if (area === "local" && changes.pinnedApps) {
+        const apps = (changes.pinnedApps.newValue as PinnedApp[]) ?? [];
+        setPinnedApps(apps.sort((a, b) => a.sortOrder - b.sortOrder));
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
+  }, []);
 
   useEffect(() => {
     // Request initial tab list from service worker
@@ -172,6 +221,49 @@ export default function App() {
 
   const { theme, cycleTheme } = useTheme();
 
+  const handleTabContextMenu = useCallback(
+    (e: React.MouseEvent, tab: TabInfo) => {
+      e.preventDefault();
+      const origin = getOrigin(tab.url);
+      const isPinned = pinnedApps.some((app) => getOrigin(app.url) === origin);
+
+      const items: ContextMenuItem[] = [];
+
+      if (isPinned) {
+        items.push({
+          label: "Unpin from ArcFlow",
+          onClick: () => {
+            const app = pinnedApps.find((a) => getOrigin(a.url) === origin);
+            if (app) {
+              removePinnedApp(app.id);
+            }
+          },
+        });
+      } else {
+        items.push({
+          label: "Pin to ArcFlow",
+          onClick: () => {
+            addPinnedApp({
+              id: crypto.randomUUID(),
+              url: tab.url,
+              title: tab.title || tab.url,
+              favicon: tab.favIconUrl || "",
+            }).catch(() => {
+              // Max pinned apps reached — silently ignore
+            });
+          },
+        });
+      }
+
+      setContextMenu({ x: e.clientX, y: e.clientY, items });
+    },
+    [pinnedApps]
+  );
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
       <header className="p-4 border-b border-gray-200 dark:border-gray-700">
@@ -186,7 +278,7 @@ export default function App() {
       </div>
 
       {/* Pinned Apps Row (Zone 2) */}
-      <PinnedAppsRow tabs={tabs} />
+      <PinnedAppsRow tabs={tabs} onContextMenu={setContextMenu} />
 
       {/* Tab list */}
       <div className="flex-1 px-1">
@@ -195,7 +287,11 @@ export default function App() {
         </p>
         <ul className="flex flex-col gap-1">
           {tabs.map((tab) => (
-            <TabItem key={tab.id} tab={tab} />
+            <TabItem
+              key={tab.id}
+              tab={tab}
+              onContextMenu={handleTabContextMenu}
+            />
           ))}
         </ul>
       </div>
@@ -204,6 +300,16 @@ export default function App() {
       <footer className="flex items-center justify-end px-3 py-2 border-t border-gray-200 dark:border-gray-700">
         <ThemeToggle theme={theme} onCycle={cycleTheme} />
       </footer>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.items}
+          onClose={closeContextMenu}
+        />
+      )}
     </div>
   );
 }

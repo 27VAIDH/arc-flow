@@ -67,7 +67,8 @@ export type SidePanelMessage =
   | { type: "GET_TABS" }
   | { type: "CLOSE_TAB"; tabId: number }
   | { type: "SWITCH_TAB"; tabId: number }
-  | { type: "OPEN_PINNED_APP"; url: string; origin: string };
+  | { type: "OPEN_PINNED_APP"; url: string; origin: string }
+  | { type: "OPEN_PINNED_APP_NEW_TAB"; url: string };
 
 export interface Settings {
   theme: "system" | "light" | "dark";

@@ -172,7 +172,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "This is the in-sidebar context menu. Chrome-level context menu is a separate story."
     },
     {

@@ -20,6 +20,8 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - Sidebar footer (Zone 5) pushed to bottom via `flex-1` on the content area
 - `chrome.storage.onChanged` listener pattern for real-time UI updates when storage changes
 - Origin matching for URL comparison: `new URL(url).origin` (wrap in try/catch for invalid URLs)
+- Context menus use a shared `ContextMenu` component in `src/sidepanel/ContextMenu.tsx` — rendered at App level, state lifted via `setContextMenu`
+- In-sidebar context menus use `onContextMenu` React handler (not `chrome.contextMenus` API which is for page-level context menus)
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -352,4 +354,46 @@ There are still stories with `passes: false` (US-009 through US-041), so the nex
   - Horizontal scroll uses `overflow-x-auto` with custom `scrollbar-none` CSS class to hide scrollbar
   - Favicon fallback shows first letter of app title in a circle when no favicon URL
   - The component returns null when there are no pinned apps (clean empty state)
+---
+
+## Iteration 9 - Sun Feb 15 16:09:22 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-9.log
+---
+**US-009 is complete.** Here's what was implemented:
+
+- **`src/sidepanel/PinnedAppsRow.tsx`** — New component that:
+  - Displays pinned apps as a horizontal row of 32x32 favicon circles (Zone 2, below search bar)
+  - Scrolls horizontally when more than ~8 items, with hidden scrollbar
+  - Shows a 6px `#2E75B6` active indicator dot below apps that have a matching open tab (origin matching)
+  - Listens to `chrome.storage.onChanged` for real-time updates when pinned apps change
+  - Falls back to showing first letter of title when no favicon is available
+
+- **`src/shared/types.ts`** — Added `OPEN_PINNED_APP` message type with `url` and `origin` fields
+
+- **`src/background/service-worker.ts`** — Added handler that finds an existing tab with matching origin (switches to it) or opens a new tab
+
+- **`src/sidepanel/App.tsx`** — Integrated `PinnedAppsRow` between search bar and tab list
+
+- All quality checks pass (typecheck, lint, build). Committed as `45f7fd3`.
+
+There are still stories with `passes: false` (US-010 through US-041), so the next iteration will pick up US-010.
+---
+
+## 2026-02-15 - US-010
+- Implemented pinned apps add/remove via sidebar context menu
+- Files created:
+  - src/sidepanel/ContextMenu.tsx (reusable context menu component with click-outside and Escape to close)
+- Files changed:
+  - src/sidepanel/App.tsx (added tab right-click with Pin/Unpin, lifted context menu state, pinned apps tracking)
+  - src/sidepanel/PinnedAppsRow.tsx (added right-click on pinned app icons with Rename, Remove, Open in New Tab, Edit URL; inline editing support)
+  - src/shared/types.ts (added OPEN_PINNED_APP_NEW_TAB message type)
+  - src/background/service-worker.ts (added OPEN_PINNED_APP_NEW_TAB handler)
+  - scripts/ralph/prd.json (marked US-010 passes: true)
+- **Learnings for future iterations:**
+  - Context menus are rendered at App level with state `{ x, y, items }` — child components call `onContextMenu(state)` to show them
+  - ContextMenu component handles click-outside dismissal and Escape key; viewport overflow is auto-corrected
+  - Inline editing for pinned app rename/URL edit uses a controlled input with blur-to-save and Escape-to-cancel
+  - Pin/unpin detection uses origin matching (`getOrigin(tab.url) === getOrigin(app.url)`) for consistency with US-009
+  - `OPEN_PINNED_APP_NEW_TAB` is a separate message type from `OPEN_PINNED_APP` — always opens a new tab without origin matching
 ---
