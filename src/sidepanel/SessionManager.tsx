@@ -1,6 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "../shared/types";
-import { getSessions, deleteSession } from "../shared/sessionStorage";
+import {
+  getSessions,
+  deleteSession,
+  exportSessionToJSON,
+  validateSessionImport,
+  importSession,
+} from "../shared/sessionStorage";
 
 interface SessionManagerProps {
   onClose: () => void;
@@ -26,6 +32,8 @@ export default function SessionManager({
   onRestore,
 }: SessionManagerProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getSessions().then(setSessions);
@@ -73,26 +81,99 @@ export default function SessionManager({
     [onRestore]
   );
 
+  const handleExport = useCallback((session: Session) => {
+    const json = exportSessionToJSON(session);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `arcflow-session-${session.name.replace(/[^a-zA-Z0-9-_]/g, "_")}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const handleImport = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      setImportError(null);
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text) as unknown;
+        const result = validateSessionImport(data);
+
+        if (!result.valid || !result.session) {
+          setImportError(result.error ?? "Invalid session file.");
+          return;
+        }
+
+        await importSession(result.session);
+      } catch {
+        setImportError(
+          "Failed to read file. Please ensure it is a valid JSON file."
+        );
+      }
+
+      // Reset file input so the same file can be imported again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    },
+    []
+  );
+
   return (
     <div className="absolute inset-0 z-50 bg-gray-50 dark:bg-gray-900 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
         <h2 className="text-sm font-semibold">Saved Sessions</h2>
-        <button
-          onClick={onClose}
-          className="flex items-center justify-center w-6 h-6 rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
-          aria-label="Close sessions panel"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            className="w-4 h-4"
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            aria-label="Import session from JSON file"
           >
-            <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-          </svg>
-        </button>
+            Import
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={handleImport}
+          />
+          <button
+            onClick={onClose}
+            className="flex items-center justify-center w-6 h-6 rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
+            aria-label="Close sessions panel"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="w-4 h-4"
+            >
+              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+            </svg>
+          </button>
+        </div>
       </div>
+
+      {/* Import error */}
+      {importError && (
+        <div className="mx-4 mt-3 p-2 text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800">
+          {importError}
+          <button
+            onClick={() => setImportError(null)}
+            className="ml-2 underline hover:no-underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Session list */}
       <div className="flex-1 overflow-y-auto p-3">
@@ -124,6 +205,13 @@ export default function SessionManager({
                     </p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => handleExport(session)}
+                      className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      aria-label={`Export session "${session.name}"`}
+                    >
+                      Export
+                    </button>
                     <button
                       onClick={() => handleRestore(session)}
                       className="px-2 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors"
