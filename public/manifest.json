@@ -3,7 +3,7 @@
   "name": "ArcFlow",
   "version": "1.0.0",
   "description": "Arc Browser-inspired sidebar for Chrome with pinned apps, folders, workspaces, and smart tab management.",
-  "permissions": ["sidePanel", "tabs", "storage", "contextMenus"],
+  "permissions": ["sidePanel", "tabs", "storage", "contextMenus", "tabGroups"],
   "side_panel": {
     "default_path": "src/sidepanel/index.html"
   },

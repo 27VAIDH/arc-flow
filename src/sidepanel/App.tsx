@@ -8,11 +8,13 @@ import type {
   FolderItem,
 } from "../shared/types";
 import { useTheme, type ThemePreference } from "./useTheme";
+import type { Settings } from "../shared/types";
 import {
   getPinnedApps,
   addPinnedApp,
   removePinnedApp,
 } from "../shared/storage";
+import { getSettings, updateSettings } from "../shared/settingsStorage";
 import {
   getFolders,
   addItemToFolder,
@@ -351,6 +353,8 @@ export default function App() {
     x: number;
     y: number;
   } | null>(null);
+  const [workspaceIsolation, setWorkspaceIsolation] =
+    useState<Settings["workspaceIsolation"]>("sidebar-only");
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -360,12 +364,15 @@ export default function App() {
     })
   );
 
-  // Load active workspace, workspaces list, and tab-workspace map on mount
+  // Load active workspace, workspaces list, tab-workspace map, and settings on mount
   useEffect(() => {
     getActiveWorkspace().then((ws) => {
       setActiveWorkspaceId(ws.id);
     });
     getWorkspaces().then(setWorkspaces);
+    getSettings().then((s) => {
+      setWorkspaceIsolation(s.workspaceIsolation);
+    });
 
     // Request initial tab-workspace map from service worker
     chrome.runtime.sendMessage(
@@ -394,6 +401,12 @@ export default function App() {
         if (changes.workspaces) {
           const updated = (changes.workspaces.newValue as Workspace[]) ?? [];
           setWorkspaces(updated.sort((a, b) => a.sortOrder - b.sortOrder));
+        }
+        if (changes.settings) {
+          const newSettings = changes.settings.newValue as Settings | undefined;
+          if (newSettings) {
+            setWorkspaceIsolation(newSettings.workspaceIsolation);
+          }
         }
       }
     };
@@ -485,7 +498,26 @@ export default function App() {
 
   const handleWorkspaceChange = useCallback((workspaceId: string) => {
     setActiveWorkspaceId(workspaceId);
+    // Trigger workspace isolation (tab groups) in the service worker
+    chrome.runtime.sendMessage({
+      type: "APPLY_WORKSPACE_ISOLATION",
+      activeWorkspaceId: workspaceId,
+    });
   }, []);
+
+  const handleToggleIsolation = useCallback(() => {
+    const newMode =
+      workspaceIsolation === "sidebar-only" ? "full-isolation" : "sidebar-only";
+    setWorkspaceIsolation(newMode);
+    updateSettings({ workspaceIsolation: newMode }).then(() => {
+      if (newMode === "full-isolation") {
+        chrome.runtime.sendMessage({
+          type: "APPLY_WORKSPACE_ISOLATION",
+          activeWorkspaceId,
+        });
+      }
+    });
+  }, [workspaceIsolation, activeWorkspaceId]);
 
   // Filter tabs by active workspace
   const filteredTabs = useMemo(() => {
@@ -870,7 +902,31 @@ export default function App() {
           onWorkspaceChange={handleWorkspaceChange}
           onContextMenu={setContextMenu}
         />
-        <div className="flex items-center justify-end px-3 pb-2">
+        <div className="flex items-center justify-between px-3 pb-2">
+          <button
+            onClick={handleToggleIsolation}
+            className={`flex items-center gap-1.5 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-gray-800 ${
+              workspaceIsolation === "full-isolation"
+                ? "text-blue-600 dark:text-blue-400"
+                : "text-gray-500 dark:text-gray-400"
+            }`}
+            aria-label={`Workspace isolation: ${workspaceIsolation === "sidebar-only" ? "Sidebar only" : "Full isolation"}`}
+            title={`Isolation: ${workspaceIsolation === "sidebar-only" ? "Sidebar only" : "Full isolation"}`}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="w-4 h-4"
+            >
+              <path
+                fillRule="evenodd"
+                d="M3.25 3A2.25 2.25 0 0 0 1 5.25v9.5A2.25 2.25 0 0 0 3.25 17h13.5A2.25 2.25 0 0 0 19 14.75v-9.5A2.25 2.25 0 0 0 16.75 3H3.25ZM2.5 9v5.75c0 .414.336.75.75.75h13.5a.75.75 0 0 0 .75-.75V9h-7.25v3a.75.75 0 0 1-1.5 0V9H2.5Z"
+                clipRule="evenodd"
+              />
+            </svg>
+            {workspaceIsolation === "sidebar-only" ? "Sidebar" : "Full"}
+          </button>
           <ThemeToggle theme={theme} onCycle={cycleTheme} />
         </div>
       </footer>

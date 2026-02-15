@@ -40,6 +40,11 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - WorkspaceSwitcher component in `src/sidepanel/WorkspaceSwitcher.tsx` — icon strip in footer (Zone 5) for switching workspaces
 - Active workspace state tracked in App.tsx via `activeWorkspaceId`; loaded from `getActiveWorkspace()` on mount, updated via `chrome.storage.onChanged` listener for `activeWorkspaceId` key
 - Workspace switcher uses `boxShadow` for accent-color ring on active workspace icon (Tailwind ring-color not easily dynamic)
+- Tab-workspace map (`tabWorkspaceMap`) tracked via both `chrome.storage.onChanged` and `TAB_WORKSPACE_MAP_UPDATED` broadcast; unassigned tabs shown in active workspace
+- Tab filtering by workspace uses `useMemo` with `filteredTabs` in App.tsx
+- Settings stored under `settings` key in `chrome.storage.local`; helpers in `src/shared/settingsStorage.ts`
+- `chrome.tabs.group({ tabIds })` requires `tabIds` as non-empty tuple `[number, ...number[]]`; cast from `number[]`
+- Workspace isolation toggle in sidebar footer; `applyWorkspaceIsolation()` in service worker creates/updates Chrome tab groups
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -884,4 +889,80 @@ There are still stories with `passes: false` (US-023 through US-041), so the nex
   - Right-click context menu on workspace icons: Rename, Change Emoji, Change Color, Delete (Rename/Delete hidden for Default workspace)
   - Active workspace ID tracked in App.tsx state and synced via `chrome.storage.onChanged` listener for `activeWorkspaceId` key
   - The old WorkspaceManager list view above folders was removed; the switcher replaces it as the primary workspace UI
+---
+
+## Iteration 23 - Sun Feb 15 16:49:12 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-23.log
+---
+**US-023 is complete.** Here's what was implemented:
+
+- **`src/sidepanel/WorkspaceSwitcher.tsx`** — New component that:
+  - Displays workspaces as an icon strip in the sidebar footer (Zone 5)
+  - Each workspace shows emoji icon (28x28) with accent-color tinted background
+  - Active workspace has a 2px accent-color ring (via `boxShadow`)
+  - Clicking a workspace icon switches to that workspace via `setActiveWorkspace()`
+  - '+' icon at the end creates a new workspace and switches to it
+  - Right-click context menu: Rename, Change Emoji, Change Color, Delete
+  - Emoji/color pickers appear above the footer as popover overlays
+
+- **`src/sidepanel/App.tsx`** — Updated with:
+  - `activeWorkspaceId` state tracked and synced via storage change listener
+  - `WorkspaceSwitcher` placed in footer replacing old `WorkspaceManager` list view
+  - `handleWorkspaceChange` callback wired up
+
+All quality checks pass (typecheck, lint, build). Committed as `6b91302`.
+
+There are still stories with `passes: false` (US-024 through US-041), so the next iteration will pick up US-024.
+---
+
+## 2026-02-15 - US-024
+- Implemented tab-to-workspace assignment and filtering
+- Files changed:
+  - src/shared/types.ts (added TAB_WORKSPACE_MAP_UPDATED to ServiceWorkerMessage, added GET_TAB_WORKSPACE_MAP and MOVE_TAB_TO_WORKSPACE to SidePanelMessage)
+  - src/background/service-worker.ts (auto-assign tabs to active workspace on tabs.onCreated, clean up mapping on tabs.onRemoved, broadcastTabWorkspaceMap helper, GET_TAB_WORKSPACE_MAP and MOVE_TAB_TO_WORKSPACE handlers)
+  - src/sidepanel/App.tsx (added tabWorkspaceMap and workspaces state, filteredTabs computed via useMemo filtering by active workspace, "Move to Workspace" context menu items on tab right-click, listen for TAB_WORKSPACE_MAP_UPDATED messages)
+- **Learnings for future iterations:**
+  - Tab-workspace map is tracked both via storage change listener (`tabWorkspaceMap` key) and via `TAB_WORKSPACE_MAP_UPDATED` broadcast message from service worker for real-time updates
+  - Unassigned tabs (not in tabWorkspaceMap) are shown in the active workspace — this handles pre-existing tabs before workspace assignment was implemented
+  - "Move to Workspace" renders one context menu item per other workspace (showing emoji + name) rather than a sub-picker modal, keeping the UX simple
+  - `filteredTabs` uses `useMemo` to avoid re-filtering on every render; depends on `tabs`, `tabWorkspaceMap`, and `activeWorkspaceId`
+  - Service worker reads `activeWorkspaceId` directly from `chrome.storage.local.get` (not importing getActiveWorkspaceId) to avoid circular dependency concerns
+---
+
+## Iteration 24 - Sun Feb 15 16:52:33 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-24.log
+---
+**US-024 is complete.** Here's what was implemented:
+
+- **Auto-assignment on tab creation**: Service worker's `tabs.onCreated` listener reads the active workspace ID from storage and assigns the new tab via `assignTabToWorkspace()`
+- **Cleanup on tab removal**: `tabs.onRemoved` calls `removeTabFromMap()` to clean up the mapping
+- **Tab-workspace map broadcasting**: New `broadcastTabWorkspaceMap()` function sends `TAB_WORKSPACE_MAP_UPDATED` messages to the side panel after any map change
+- **Workspace-filtered tab list**: `filteredTabs` computed via `useMemo` — only shows tabs assigned to the active workspace (unassigned tabs default to showing in the active workspace)
+- **"Move to Workspace" context menu**: Right-clicking a tab shows one item per other workspace (`Move to {emoji} {name}`) that sends `MOVE_TAB_TO_WORKSPACE` to reassign the tab
+- **New message types**: `TAB_WORKSPACE_MAP_UPDATED` (SW→panel), `GET_TAB_WORKSPACE_MAP` and `MOVE_TAB_TO_WORKSPACE` (panel→SW)
+
+All quality checks pass (typecheck, lint, build). Committed as `477b8ce`.
+
+There are still stories with `passes: false` (US-025 through US-041), so the next iteration will pick up US-025.
+---
+
+## 2026-02-15 - US-025
+- Implemented workspace isolation: collapse other workspace tabs in Chrome
+- Files created:
+  - src/shared/settingsStorage.ts (getSettings, updateSettings, DEFAULT_SETTINGS)
+- Files changed:
+  - public/manifest.json (added `tabGroups` permission)
+  - src/shared/types.ts (added APPLY_WORKSPACE_ISOLATION to SidePanelMessage union)
+  - src/background/service-worker.ts (added applyWorkspaceIsolation function using chrome.tabGroups API, APPLY_WORKSPACE_ISOLATION handler, auto-apply on tab creation)
+  - src/sidepanel/App.tsx (added workspace isolation toggle in footer, loads/persists setting, sends APPLY_WORKSPACE_ISOLATION on workspace switch and setting change)
+  - scripts/ralph/prd.json (marked US-025 passes: true)
+- **Learnings for future iterations:**
+  - `chrome.tabs.group({ tabIds })` requires `tabIds` typed as `[number, ...number[]]` (non-empty tuple); cast from `number[]` since we already check `length === 0`
+  - `chrome.tabGroups.query({ windowId })` returns all tab groups in a window; match by title to reuse existing groups
+  - `chrome.tabGroups.update(groupId, { collapsed: true })` collapses a tab group in Chrome's native tab bar
+  - Settings stored in `chrome.storage.local` under `settings` key; `settingsStorage.ts` provides typed get/update with defaults
+  - `applyWorkspaceIsolation()` is called on workspace switch, setting change to full-isolation, and new tab creation
+  - Workspace isolation toggle button placed in sidebar footer alongside theme toggle
 ---
