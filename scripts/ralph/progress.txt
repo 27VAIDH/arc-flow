@@ -14,6 +14,7 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - Message types (ServiceWorkerMessage, SidePanelMessage, TabInfo) defined in `src/shared/types.ts`
 - Service worker broadcasts tab changes via `chrome.runtime.sendMessage`; side panel listens via `chrome.runtime.onMessage`
 - `chrome.runtime.sendMessage` throws if no listener exists (e.g., side panel closed); always `.catch()` the promise
+- Side panel communicates tab actions (close, etc.) via message passing to service worker which has `chrome.tabs` access
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -140,4 +141,69 @@ US-002 is complete. There are still stories with `passes: false` (US-003 through
   - Debouncing with `setTimeout` in service workers works but the timer may be cleared if the worker is terminated. State persistence to `chrome.storage.local` provides the safety net.
   - Side panel can request initial tabs via `GET_TABS` message with `sendResponse` pattern (return `true` from listener for async response).
   - `chrome.tabs.query({ currentWindow: true })` returns tabs for the window context the service worker is associated with.
+---
+
+## Iteration 3 - Sun Feb 15 15:56:13 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-3.log
+---
+US-003 is complete. There are still stories with `passes: false` (US-004 through US-041), so the next iteration will pick up US-004.
+
+**Summary of US-003 completion:**
+- Added `TabInfo`, `ServiceWorkerMessage`, and `SidePanelMessage` types to `src/shared/types.ts`
+- Updated `src/background/service-worker.ts` with:
+  - Tab lifecycle listeners: `onCreated`, `onRemoved`, `onActivated`, `onUpdated`, `onMoved`
+  - Startup tab query via `chrome.tabs.query({ currentWindow: true })`
+  - 50ms debounced refresh for batching rapid changes
+  - Broadcasting via `chrome.runtime.sendMessage`
+  - Persistence to `chrome.storage.local` under `tabList` key
+  - `GET_TABS` message handler for side panel requests
+- Updated `src/sidepanel/App.tsx` with:
+  - `chrome.runtime.onMessage` listener for `TABS_UPDATED` and `TAB_ACTIVATED`
+  - Initial tab load via `GET_TABS` message + storage fallback
+  - Basic tab list rendering with favicons
+- All checks pass (typecheck, lint, build)
+- Committed as `817bf2f`
+---
+
+## 2026-02-15 - US-004
+- Implemented tab list display with favicons, titles, and close buttons
+- Files changed:
+  - src/sidepanel/App.tsx (refactored into TabItem component with hover close button, placeholder search bar, proper 32px height and 4px gap)
+  - src/shared/types.ts (added CLOSE_TAB to SidePanelMessage union)
+  - src/background/service-worker.ts (added CLOSE_TAB message handler)
+- **Learnings for future iterations:**
+  - TabItem extracted as a separate component for per-item hover state management
+  - Favicon fallback: use an empty gray placeholder div when favIconUrl is missing; add onError handler to hide broken images
+  - Close tab from side panel uses message passing (CLOSE_TAB -> service worker -> chrome.tabs.remove) since side panel doesn't have direct chrome.tabs access
+  - `gap-1` in Tailwind = 4px gap between flex children
+---
+
+## Iteration 4 - Sun Feb 15 15:58:12 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-4.log
+---
+**US-004 is complete.** Here's what was implemented:
+
+- **TabItem component** with favicon (16x16), truncated title, and close button (X) that appears on hover
+- **Placeholder search bar** area above the tab list
+- **Tab items are 32px tall** (`h-8`) with **4px gap** (`gap-1`) between items
+- **CLOSE_TAB message** added to side panel → service worker communication, enabling tab closure from the sidebar
+- **Favicon fallback** with gray placeholder when no favicon URL is available, plus `onError` handler for broken images
+- All quality checks pass (typecheck, lint, build)
+- Committed as `91187dc`
+
+There are still stories with `passes: false` (US-005 through US-041), so the next iteration will pick up US-005.
+---
+
+## 2026-02-15 - US-005
+- Implemented tab switching and active tab indicator
+- Files changed:
+  - src/shared/types.ts (added SWITCH_TAB to SidePanelMessage union)
+  - src/background/service-worker.ts (added SWITCH_TAB handler calling chrome.tabs.update)
+  - src/sidepanel/App.tsx (added click handler on TabItem, active tab styling with 3px #2E75B6 left border and bold text)
+- **Learnings for future iterations:**
+  - Active tab styling uses `border-l-[3px] border-l-[#2E75B6]` with a matching transparent border on inactive tabs to prevent layout shift
+  - Tab switching follows same message-passing pattern as tab close: side panel -> SWITCH_TAB message -> service worker -> chrome.tabs.update
+  - Active state already tracked in TabInfo from US-003 (TAB_ACTIVATED message), so no additional state management was needed
 ---
