@@ -112,6 +112,11 @@ chrome.runtime.onMessage.addListener(
       });
       return true; // async response
     }
+    if (message.type === "SWITCH_TAB") {
+      chrome.tabs.update(message.tabId, { active: true }).catch(() => {
+        // Tab may no longer exist
+      });
+    }
     if (message.type === "CLOSE_TAB") {
       chrome.tabs.remove(message.tabId).catch(() => {
         // Tab may already be closed

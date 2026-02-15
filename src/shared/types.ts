@@ -65,7 +65,8 @@ export type ServiceWorkerMessage =
 // Messages sent from side panel to service worker
 export type SidePanelMessage =
   | { type: "GET_TABS" }
-  | { type: "CLOSE_TAB"; tabId: number };
+  | { type: "CLOSE_TAB"; tabId: number }
+  | { type: "SWITCH_TAB"; tabId: number };
 
 export interface Settings {
   theme: "system" | "light" | "dark";

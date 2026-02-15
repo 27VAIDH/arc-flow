@@ -4,6 +4,10 @@ import type { TabInfo, ServiceWorkerMessage } from "../shared/types";
 function TabItem({ tab }: { tab: TabInfo }) {
   const [hovered, setHovered] = useState(false);
 
+  const handleClick = () => {
+    chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: tab.id });
+  };
+
   const handleClose = (e: React.MouseEvent) => {
     e.stopPropagation();
     chrome.runtime.sendMessage({ type: "CLOSE_TAB", tabId: tab.id });
@@ -11,7 +15,12 @@ function TabItem({ tab }: { tab: TabInfo }) {
 
   return (
     <li
-      className="flex items-center gap-2 px-2 h-8 text-sm rounded group cursor-default hover:bg-gray-200 dark:hover:bg-gray-800"
+      onClick={handleClick}
+      className={`flex items-center gap-2 px-2 h-8 text-sm rounded cursor-default hover:bg-gray-200 dark:hover:bg-gray-800 ${
+        tab.active
+          ? "border-l-[3px] border-l-[#2E75B6] font-bold"
+          : "border-l-[3px] border-l-transparent"
+      }`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >

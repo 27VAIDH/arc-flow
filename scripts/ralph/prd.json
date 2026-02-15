@@ -71,7 +71,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "Virtual scrolling (react-window) deferred to performance story US-039. Keep it simple for now."
     },
     {
@@ -86,7 +86,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "Bidirectional sync: clicking sidebar switches tab; switching tab via native bar updates sidebar."
     },
     {
