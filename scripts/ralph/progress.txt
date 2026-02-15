@@ -31,6 +31,10 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - Custom collision detection: `pointerWithin` for folder drop targets, `rectIntersection` fallback for sortable items
 - Fuzzy search uses `fuse.js` with keys `title` (weight 0.6), `url` (weight 0.3), `folderName` (weight 0.1); threshold 0.4
 - React hooks lint rule `react-hooks/set-state-in-effect` disallows calling setState directly inside useEffect body; instead call it inside a setTimeout/callback
+- Workspace storage in `src/shared/workspaceStorage.ts`; keys: `workspaces`, `activeWorkspaceId`, `schemaVersion`, `tabWorkspaceMap`
+- Default workspace (id: "default") created on first install; cannot be deleted or renamed
+- Tab-to-workspace mapping stored as `Record<string, string>` (tabId as string key → workspaceId)
+- `ensureInitialized()` pattern: check if storage key exists before first use, create defaults if missing
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -725,4 +729,68 @@ There are still stories with `passes: false` (US-019 through US-041), so the nex
   - Active tab styling (3px #2E75B6 left border + bold) was already implemented in US-005
   - Real-time updates already work because `tabs.onUpdated` triggers `debouncedRefresh()` which broadcasts full tab list with audible/discarded props
   - This was a minimal change — only the DraggableTabItem component needed updates
+---
+
+## Iteration 19 - Sun Feb 15 16:38:26 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-19.log
+---
+**US-019 is complete.** Here's what was implemented:
+
+- **Audio indicator**: Tabs playing audio show a Lucide Volume2 speaker icon (blue) next to the title, using the `tab.audible` property
+- **Discarded/suspended tab styling**: Discarded tabs display with `opacity-50` and `italic` text, using the `tab.discarded` property
+- **Active tab**: Already had 3px `#2E75B6` left border + bold text from US-005 — verified consistency
+- **Real-time updates**: Already work via `tabs.onUpdated` → `debouncedRefresh()` → `TABS_UPDATED` broadcast with `audible`/`discarded` fields
+
+All quality checks pass (typecheck, lint, build). Committed as `3518159`.
+
+There are still stories with `passes: false` (US-020 through US-041), so the next iteration will pick up US-020.
+---
+
+## 2026-02-15 - US-020
+- Implemented folder-level actions: Open All Tabs, Close All Tabs, Collapse All Subfolders
+- Files changed:
+  - src/shared/types.ts (added CLOSE_TABS batch message type to SidePanelMessage)
+  - src/background/service-worker.ts (added CLOSE_TABS handler using chrome.tabs.remove with array)
+  - src/sidepanel/FolderTree.tsx (added Open All Tabs, Close All Tabs, Collapse All Subfolders to folder context menu; added handleCollapseAll; added onOpenAllTabs/onCloseAllTabs props)
+  - src/sidepanel/App.tsx (added handleOpenAllTabs and handleCloseAllTabs handlers, passed to FolderTree)
+  - scripts/ralph/prd.json (marked US-020 passes: true)
+- **Learnings for future iterations:**
+  - "Open All Tabs" opens saved links (type === 'link') as new tabs; "Close All Tabs" closes active tabs (type === 'tab') — saved links remain untouched
+  - `CLOSE_TABS` message type accepts `tabIds: number[]` for batch closing via `chrome.tabs.remove(tabIds)` which accepts an array natively
+  - "Collapse All Subfolders" recursively collects descendant folder IDs and sets `isCollapsed: true` on all of them with optimistic UI update
+  - Folder-level action callbacks (onOpenAllTabs, onCloseAllTabs) are passed from App to FolderTree as props since they need chrome.runtime.sendMessage access
+---
+
+## Iteration 20 - Sun Feb 15 16:41:25 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-154616/iter-20.log
+---
+**US-020 is complete.** Here's what was implemented:
+
+- **"Open All Tabs"** — Opens all saved links (type === 'link') in the folder as new tabs via `OPEN_URL` messages
+- **"Close All Tabs"** — Closes all active tabs (type === 'tab') in the folder via new `CLOSE_TABS` batch message; saved links remain untouched
+- **"Collapse All Subfolders"** — Collapses the folder and all nested subfolders recursively, with optimistic UI update and persistence to `chrome.storage.local`
+- Added `CLOSE_TABS` message type to `SidePanelMessage` for batch tab closing via `chrome.tabs.remove(tabIds[])`
+- All three actions added to folder right-click context menu alongside existing options (New Subfolder, Rename, Delete)
+
+All quality checks pass (typecheck, lint, build). Committed as `3176696`.
+
+There are still stories with `passes: false` (US-021 through US-041), so the next iteration will pick up US-021.
+---
+
+## 2026-02-15 - US-021
+- Implemented workspace storage model and helpers
+- Files created:
+  - src/shared/workspaceStorage.ts (getWorkspaces, createWorkspace, updateWorkspace, deleteWorkspace, getActiveWorkspace, setActiveWorkspace, getTabWorkspaceMap, assignTabToWorkspace, removeTabFromMap, getWorkspacePinnedApps, getWorkspaceFolders)
+- Files changed:
+  - scripts/ralph/prd.json (marked US-021 passes: true)
+- **Learnings for future iterations:**
+  - Workspace storage uses `ensureInitialized()` pattern — checks if `workspaces` key exists on first access and creates Default workspace if missing
+  - Default workspace has fixed id `"default"` and cannot be deleted or renamed (enforced in updateWorkspace/deleteWorkspace)
+  - Tab-to-workspace mapping stored as `Record<string, string>` with tabId as string key (since object keys are always strings)
+  - `saveWorkspaces()` wraps `chrome.storage.local.set` with quota error handling (catches `QUOTA_BYTES_PER_ITEM`)
+  - `deleteWorkspace()` also cleans up tab-workspace mappings and switches active workspace to Default if deleted workspace was active
+  - Schema version (key: `schemaVersion`, initial: 1) stored for future migration support
+  - Each workspace stores independent `pinnedApps[]` and `folders[]` — helpers `getWorkspacePinnedApps` and `getWorkspaceFolders` provide typed access
 ---
