@@ -64,6 +64,8 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - Session storage in `src/shared/sessionStorage.ts`; key: `sessions`, max 20 sessions, sorted by `savedAt` descending
 - Session data stores workspace snapshot (pinnedApps, folders) and tab URLs separately from live workspace state
 - `structuredClone()` used to deep-copy workspace data into session snapshots to avoid reference sharing
+- File download in side panel: `URL.createObjectURL(blob)` + programmatic `<a>` click + `URL.revokeObjectURL(url)`; file input `.value = ""` to allow re-import
+- Session export includes `schemaVersion` for forward compatibility; import validates required fields and assigns new `id`/`savedAt`
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -1445,4 +1447,33 @@ US-035 is complete. There are still stories with `passes: false` (US-036 through
   - Session restore uses "Replace" vs "Add" mode via `window.confirm()` — OK = replace, Cancel = add alongside
   - When adding props to a component that uses `useCallback`, always update the dependency array to satisfy React compiler's `preserve-manual-memoization` rule
   - Max 20 sessions enforced by removing oldest when limit reached
+---
+
+## Iteration 2 - Sun Feb 15 22:40:10 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-223132/iter-2.log
+---
+US-036 is complete. There are still stories with `passes: false` (US-037, US-038, US-039, US-040, US-041), so the next iteration will pick up US-037.
+
+**Summary of US-036 completion:**
+- **Session type** added to `src/shared/types.ts` with `id`, `name`, `savedAt`, `workspaceSnapshot` (pinnedApps + folders), and `tabUrls`
+- **Session storage helpers** in `src/shared/sessionStorage.ts` — CRUD operations with max 20 sessions cap
+- **SessionManager UI** in `src/sidepanel/SessionManager.tsx` — full-panel overlay showing saved sessions with restore/delete, tab previews
+- **"Save Session"** available in workspace right-click context menu and command palette
+- **"Restore Session"** available in command palette, opens SessionManager panel
+- **Restore prompts** user to choose "Replace current tabs" or "Add alongside"
+- **Sessions named** with timestamp default, editable via prompt
+- All quality checks pass (typecheck, lint, build)
+---
+
+## 2026-02-15 - US-037
+- Implemented session import/export as JSON
+- Files changed:
+  - `src/shared/sessionStorage.ts` - Added `exportSessionToJSON()`, `validateSessionImport()`, `importSession()` functions and `SessionExport` interface with schema version
+  - `src/sidepanel/SessionManager.tsx` - Added Export button per session card, Import button in header, hidden file input, error display for invalid imports
+- **Learnings for future iterations:**
+  - Export uses `URL.createObjectURL` + programmatic `<a>` click + `URL.revokeObjectURL` pattern for file downloads in extension side panels
+  - Import validation assigns new `id` (via `crypto.randomUUID()`) and `savedAt` timestamp to avoid ID collisions with existing sessions
+  - File input needs `value = ""` reset after import so the same file can be re-imported
+  - `structuredClone()` used in export to avoid reference sharing between exported data and live state
 ---
