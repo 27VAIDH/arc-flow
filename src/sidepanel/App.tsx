@@ -40,6 +40,8 @@ import SettingsPanel from "./SettingsPanel";
 import CommandPalette from "./CommandPalette";
 import OrganizeTabsModal from "./OrganizeTabsModal";
 import SessionManager from "./SessionManager";
+import Onboarding from "./Onboarding";
+import { isOnboardingCompleted } from "../shared/onboardingStorage";
 import { createSessionFromState } from "../shared/sessionStorage";
 import { buildCommands } from "./commandRegistry";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
@@ -374,6 +376,7 @@ export default function App() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showOrganizeTabs, setShowOrganizeTabs] = useState(false);
   const [showSessionManager, setShowSessionManager] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -382,6 +385,15 @@ export default function App() {
       },
     })
   );
+
+  // Check if onboarding is needed on mount
+  useEffect(() => {
+    isOnboardingCompleted().then((completed) => {
+      if (!completed) {
+        setTimeout(() => setShowOnboarding(true), 0);
+      }
+    });
+  }, []);
 
   // Listen for Ctrl+Shift+K to open command palette
   useEffect(() => {
@@ -1238,6 +1250,11 @@ export default function App() {
           onClose={() => setShowSessionManager(false)}
           onRestore={handleRestoreSession}
         />
+      )}
+
+      {/* Onboarding */}
+      {showOnboarding && (
+        <Onboarding onComplete={() => setShowOnboarding(false)} />
       )}
     </div>
   );

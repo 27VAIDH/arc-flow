@@ -70,6 +70,9 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - `chrome.declarativeNetRequest.updateDynamicRules()` requires removing existing rule IDs before adding new ones; always clear first then add
 - Focus mode state synced via `chrome.storage.onChanged` listener for `settings` key; service worker re-applies rules on any settings change
 - `UPDATE_FOCUS_MODE` message type used as explicit signal to service worker to re-apply declarativeNetRequest rules
+- Onboarding state tracked via `onboardingCompleted` boolean in `chrome.storage.local` (separate from Settings); helpers in `src/shared/onboardingStorage.ts`
+- `react-refresh/only-export-components` warning: don't export non-component functions from .tsx files; move helpers to separate .ts files
+- `chrome.history.search()` requires `history` permission in manifest.json
 ---
 
 ## Iteration 1 - Sun Feb 15 15:44:52 IST 2026
@@ -1515,4 +1518,34 @@ All quality checks pass (typecheck, ESLint, Prettier, build).
   - Focus mode uses `MAIN_FRAME` resource type to only intercept top-level navigations
   - Settings change listener in service worker (`chrome.storage.onChanged`) auto-applies focus mode rules, but explicit `UPDATE_FOCUS_MODE` message provides immediate feedback
   - Glob-to-regex conversion reused from Air Traffic Control pattern
+---
+
+## Iteration 4 - Sun Feb 15 22:49:01 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260215-223132/iter-4.log
+---
+US-038 is complete. There are still stories with `passes: false`:
+- **US-039**: Onboarding flow for first-time users (priority 39)
+- **US-040**: Performance optimization pass (priority 40)
+- **US-041**: Accessibility audit and keyboard navigation (priority 41)
+---
+
+## 2026-02-15 - US-039
+- Implemented 3-step onboarding flow for first-time users
+- Step 1: Pin favorite apps — shows top 10 visited sites via chrome.history.search (30 days), selectable checkboxes, pins selected sites
+- Step 2: Create first folder — inline text input with create button, success feedback
+- Step 3: Explore features — highlights search, workspaces, and settings with icons and descriptions
+- Step indicator dots, Back/Next/Skip buttons at every step, Skip completes onboarding
+- Onboarding tracked via `onboardingCompleted: boolean` in `chrome.storage.local`; does not show again once completed
+- Files changed:
+  - `src/sidepanel/Onboarding.tsx` (new) — 3-step onboarding overlay component
+  - `src/shared/onboardingStorage.ts` (new) — `isOnboardingCompleted()` and `setOnboardingCompleted()` helpers
+  - `src/sidepanel/App.tsx` — added onboarding state, mount check, and rendering
+  - `public/manifest.json` — added `history` permission
+  - `scripts/ralph/prd.json` — marked US-039 as passes: true
+- **Learnings for future iterations:**
+  - Don't export non-component functions from .tsx files (react-refresh/only-export-components warning); use separate .ts files
+  - `addPinnedApp()` takes `Omit<PinnedApp, "sortOrder">` — sortOrder is auto-assigned
+  - `chrome.history.search()` needs `history` permission in manifest
+  - Use `setTimeout(() => setState(...), 0)` pattern to avoid react-hooks/set-state-in-effect lint rule
 ---

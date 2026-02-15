@@ -678,7 +678,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 39,
-      "passes": false,
+      "passes": true,
       "notes": "Top sites via chrome.history.search({ text: '', maxResults: 10, startTime: 30 days ago })."
     },
     {
