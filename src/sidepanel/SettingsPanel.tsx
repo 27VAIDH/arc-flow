@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import type { Settings } from "../shared/types";
+import type { Settings, Workspace } from "../shared/types";
 import {
   getSettings,
   updateSettings,
   resetSettings,
 } from "../shared/settingsStorage";
+import { getWorkspaces } from "../shared/workspaceStorage";
 import {
   AUTO_ARCHIVE_OPTIONS,
   SUSPEND_THRESHOLD_OPTIONS,
@@ -46,9 +47,11 @@ function SelectField({
 
 export default function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
 
   useEffect(() => {
     getSettings().then(setSettings);
+    getWorkspaces().then(setWorkspaces);
   }, []);
 
   useEffect(() => {
@@ -262,6 +265,86 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                 })
               }
             />
+          </div>
+        </section>
+
+        {/* Air Traffic Control */}
+        <section>
+          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+            Air Traffic Control
+          </h3>
+          <div className="space-y-3">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Route new tabs to workspaces based on URL patterns. Use * as
+              wildcard (e.g. *slack.com*).
+            </p>
+            {settings.routingRules.map((rule, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={rule.pattern}
+                  onChange={(e) => {
+                    const rules = [...settings.routingRules];
+                    rules[index] = { ...rules[index], pattern: e.target.value };
+                    handleUpdate({ routingRules: rules });
+                  }}
+                  placeholder="*example.com*"
+                  className="text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-900 dark:text-gray-100 flex-1 min-w-0"
+                />
+                <select
+                  value={rule.workspaceId}
+                  onChange={(e) => {
+                    const rules = [...settings.routingRules];
+                    rules[index] = {
+                      ...rules[index],
+                      workspaceId: e.target.value,
+                    };
+                    handleUpdate({ routingRules: rules });
+                  }}
+                  className="text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-900 dark:text-gray-100 min-w-[100px]"
+                >
+                  {workspaces.map((ws) => (
+                    <option key={ws.id} value={ws.id}>
+                      {ws.emoji} {ws.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => {
+                    const rules = settings.routingRules.filter(
+                      (_, i) => i !== index
+                    );
+                    handleUpdate({ routingRules: rules });
+                  }}
+                  className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-500 dark:hover:text-red-400 shrink-0"
+                  aria-label="Delete rule"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    className="w-3.5 h-3.5"
+                  >
+                    <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={() => {
+                const rules = [
+                  ...settings.routingRules,
+                  {
+                    pattern: "",
+                    workspaceId: workspaces[0]?.id ?? "default",
+                  },
+                ];
+                handleUpdate({ routingRules: rules });
+              }}
+              className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+            >
+              + Add Rule
+            </button>
           </div>
         </section>
 

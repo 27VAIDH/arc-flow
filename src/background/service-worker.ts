@@ -178,19 +178,46 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
   }
 });
 
+// --- Air Traffic Control: URL routing rules ---
+
+function globToRegex(pattern: string): RegExp {
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+  const regexStr = escaped.replace(/\*/g, ".*");
+  return new RegExp(`^${regexStr}$`, "i");
+}
+
+async function getWorkspaceForUrl(url: string): Promise<string | null> {
+  const settings = await getSettings();
+  for (const rule of settings.routingRules) {
+    if (globToRegex(rule.pattern).test(url)) {
+      return rule.workspaceId;
+    }
+  }
+  return null;
+}
+
 // Tab lifecycle event listeners
 chrome.tabs.onCreated.addListener((tab) => {
-  // Auto-assign new tabs to the active workspace
   if (tab.id != null) {
-    chrome.storage.local.get("activeWorkspaceId", (result) => {
-      const activeWsId =
-        (result.activeWorkspaceId as string | undefined) ?? "default";
-      assignTabToWorkspace(tab.id!, activeWsId).then(() => {
-        broadcastTabWorkspaceMap();
-        // If full isolation is enabled, add the tab to its workspace tab group
-        applyWorkspaceIsolation(activeWsId).catch(() => {});
-      });
-    });
+    const tabUrl = tab.url ?? tab.pendingUrl ?? "";
+    const tabId = tab.id;
+
+    // Try routing rules first, then fall back to active workspace
+    const assignWorkspace = async () => {
+      let targetWsId: string | null = null;
+      if (tabUrl) {
+        targetWsId = await getWorkspaceForUrl(tabUrl);
+      }
+      if (!targetWsId) {
+        const result = await chrome.storage.local.get("activeWorkspaceId");
+        targetWsId =
+          (result.activeWorkspaceId as string | undefined) ?? "default";
+      }
+      await assignTabToWorkspace(tabId, targetWsId);
+      broadcastTabWorkspaceMap();
+      await applyWorkspaceIsolation(targetWsId).catch(() => {});
+    };
+    assignWorkspace().catch(() => {});
   }
   debouncedRefresh();
 });
@@ -218,7 +245,20 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
   debouncedRefresh();
 });
 
-chrome.tabs.onUpdated.addListener(() => {
+chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+  // Re-evaluate routing rules when a tab's URL changes (e.g., new tab navigates to a URL)
+  if (changeInfo.url && tab.id != null) {
+    const tabId = tab.id;
+    getWorkspaceForUrl(changeInfo.url)
+      .then(async (matchedWsId) => {
+        if (matchedWsId) {
+          await assignTabToWorkspace(tabId, matchedWsId);
+          broadcastTabWorkspaceMap();
+          await applyWorkspaceIsolation(matchedWsId).catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }
   debouncedRefresh();
 });
 
