@@ -151,6 +151,22 @@ export default function WorkspaceSwitcher({
     }
   }, [onWorkspaceChange]);
 
+  const handleClone = useCallback(
+    async (sourceWs: Workspace) => {
+      try {
+        const ws = await createWorkspace(
+          `${sourceWs.name} (Copy)`,
+          sourceWs.id
+        );
+        await setActiveWorkspace(ws.id);
+        onWorkspaceChange(ws.id);
+      } catch {
+        // Ignore errors
+      }
+    },
+    [onWorkspaceChange]
+  );
+
   const handleRenameCommit = useCallback(
     async (id: string) => {
       const trimmed = editName.trim();
@@ -234,6 +250,11 @@ export default function WorkspaceSwitcher({
         },
       });
 
+      items.push({
+        label: "Clone Workspace",
+        onClick: () => handleClone(ws),
+      });
+
       if (onSaveSession) {
         items.push({
           label: "Save Session",
@@ -250,7 +271,7 @@ export default function WorkspaceSwitcher({
 
       onContextMenu({ x: e.clientX, y: e.clientY, items });
     },
-    [onContextMenu, handleDelete, onSaveSession]
+    [onContextMenu, handleDelete, handleClone, onSaveSession]
   );
 
   return (

@@ -1,5 +1,18 @@
 @import "tailwindcss";
 
+@variant dark (&:is(.dark, .dark *));
+
+@theme {
+  --color-arc-bg: #0f0f17;
+  --color-arc-surface: #1a1a2e;
+  --color-arc-surface-hover: #252540;
+  --color-arc-border: #2a2a45;
+  --color-arc-text-primary: #e8e8ed;
+  --color-arc-text-secondary: #8888a0;
+  --color-arc-accent: #6366f1;
+  --color-arc-accent-hover: #818cf8;
+}
+
 /* System font stack with Inter preference */
 :root {
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,

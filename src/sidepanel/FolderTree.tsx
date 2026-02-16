@@ -49,6 +49,7 @@ function FolderHeader({
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(folder.name);
   const inputRef = useRef<HTMLInputElement>(null);
+  const committedRef = useRef(false);
 
   useEffect(() => {
     if (editing && inputRef.current) {
@@ -58,12 +59,13 @@ function FolderHeader({
   }, [editing]);
 
   const commitRename = () => {
+    if (committedRef.current) return;
+    committedRef.current = true;
     const trimmed = editName.trim();
     if (trimmed && trimmed !== folder.name) {
       onRename(folder.id, trimmed);
     }
     setEditing(false);
-    setEditName(folder.name);
   };
 
   const tabCount = folder.items.filter((i) => i.type === "tab").length;
@@ -77,7 +79,7 @@ function FolderHeader({
 
   return (
     <div
-      className="flex items-center gap-1 px-2 h-7 text-sm rounded-lg cursor-default hover:bg-gray-100 dark:hover:bg-arc-surface-hover group transition-colors duration-150"
+      className="flex-1 flex items-center gap-1 px-2 h-7 text-sm rounded-lg cursor-default hover:bg-gray-100 dark:hover:bg-arc-surface-hover group transition-colors duration-150"
       onContextMenu={(e) => onContextMenu(e, folder)}
     >
       {/* Chevron toggle */}
@@ -120,6 +122,7 @@ function FolderHeader({
           onKeyDown={(e) => {
             if (e.key === "Enter") commitRename();
             if (e.key === "Escape") {
+              committedRef.current = true;
               setEditing(false);
               setEditName(folder.name);
             }
@@ -131,6 +134,7 @@ function FolderHeader({
         <span
           className="truncate flex-1 select-none"
           onDoubleClick={() => {
+            committedRef.current = false;
             setEditName(folder.name);
             setEditing(true);
           }}
@@ -186,13 +190,11 @@ function DraggableFolderItem({
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
       role="treeitem"
       aria-level={depth + 2}
       aria-label={`${item.type === "link" ? "Saved link: " : ""}${item.title || item.url}`}
       tabIndex={0}
-      className={`flex items-center gap-2 px-2 h-7 text-sm rounded-lg cursor-default hover:bg-gray-100 dark:hover:bg-arc-surface-hover touch-none focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset transition-colors duration-150 ${item.type === "link" ? "cursor-pointer" : ""}`}
+      className={`group flex items-center gap-2 px-2 h-7 text-sm rounded-lg cursor-default hover:bg-gray-100 dark:hover:bg-arc-surface-hover focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset transition-colors duration-150 ${item.type === "link" ? "cursor-pointer" : ""}`}
       onClick={() => onClick?.(item, folderId)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -202,6 +204,17 @@ function DraggableFolderItem({
       }}
       onContextMenu={(e) => onContextMenu?.(e, item, folderId)}
     >
+      {/* Drag grip */}
+      <span
+        {...attributes}
+        {...listeners}
+        className="shrink-0 flex items-center cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 touch-none opacity-0 group-hover:opacity-100 transition-opacity"
+        aria-label="Drag to reorder"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+          <path d="M6 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm5-9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
+        </svg>
+      </span>
       {item.favicon ? (
         <img
           src={item.favicon}
@@ -219,7 +232,7 @@ function DraggableFolderItem({
         />
       )}
       <span
-        className={`truncate flex-1 select-none ${item.type === "link" ? "text-gray-500 dark:text-arc-text-secondary italic" : ""}`}
+        className="truncate flex-1 select-none"
       >
         {item.title || item.url}
       </span>
@@ -286,9 +299,7 @@ function SortableFolder({
       aria-label={folder.name}
     >
       <div
-        {...attributes}
-        {...listeners}
-        className={`touch-none rounded-lg transition-colors duration-150 ${
+        className={`group rounded-lg transition-colors duration-150 flex items-center ${
           isOver ? "bg-indigo-50 dark:bg-arc-accent/10 ring-1 ring-arc-accent/40" : ""
         }`}
         tabIndex={0}
@@ -308,6 +319,17 @@ function SortableFolder({
           }
         }}
       >
+        {/* Drag grip */}
+        <span
+          {...attributes}
+          {...listeners}
+          className="shrink-0 flex items-center cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 touch-none pl-1 opacity-0 group-hover:opacity-100 transition-opacity"
+          aria-label="Drag to reorder folder"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+            <path d="M6 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm5-9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
+          </svg>
+        </span>
         <FolderHeader
           folder={folder}
           onToggleCollapse={onToggleCollapse}
@@ -376,12 +398,14 @@ export default function FolderTree({
   );
 
   const handleRename = useCallback(async (id: string, name: string) => {
+    // Optimistic update
+    setFolders(prev => prev.map(f => f.id === id ? { ...f, name } : f));
     try {
       await renameFolder(id, name);
     } catch {
       // Name validation failed — ignore
     }
-  }, []);
+  }, [setFolders]);
 
   const handleDelete = useCallback(async (folder: Folder) => {
     const tabCount = folder.items.filter((i) => i.type === "tab").length;
@@ -534,7 +558,7 @@ export default function FolderTree({
   }
 
   return (
-    <div className="px-1 py-1">
+    <div className="px-1 py-1 border-t border-gray-200/80 dark:border-arc-border">
       <div className="flex items-center justify-between px-2 py-1">
         <span className="text-[11px] text-gray-400 dark:text-arc-text-secondary font-medium uppercase tracking-wider">
           Folders

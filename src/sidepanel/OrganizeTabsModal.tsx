@@ -130,11 +130,18 @@ function groupTabsByDomain(tabs: TabInfo[], folders: Folder[]): TabGroup[] {
     domainMap.set(parentDomain, existing);
   }
 
-  // Only keep groups with 2+ tabs
+  // Prefer groups with 2+ tabs
   const groups: TabGroup[] = [];
+  const singletons: TabGroup[] = [];
   for (const [domain, groupTabs] of domainMap) {
     if (groupTabs.length >= 2) {
       groups.push({
+        name: getDisplayName(domain),
+        hostname: domain,
+        tabs: groupTabs,
+      });
+    } else {
+      singletons.push({
         name: getDisplayName(domain),
         hostname: domain,
         tabs: groupTabs,
@@ -144,6 +151,11 @@ function groupTabsByDomain(tabs: TabInfo[], folders: Folder[]): TabGroup[] {
 
   // Sort by number of tabs descending
   groups.sort((a, b) => b.tabs.length - a.tabs.length);
+
+  // If no multi-tab groups, fall back to showing singleton ungrouped tabs as suggestions
+  if (groups.length === 0 && singletons.length > 0) {
+    return singletons.sort((a, b) => a.name.localeCompare(b.name));
+  }
 
   return groups;
 }
@@ -358,6 +370,21 @@ export default function OrganizeTabsModal({
   }
 
   if (groups.length === 0) {
+    // Compute diagnostic info
+    const tabIdsInFolders = new Set<number>();
+    for (const folder of folders) {
+      for (const item of folder.items) {
+        if (item.type === "tab" && item.tabId != null) {
+          tabIdsInFolders.add(item.tabId);
+        }
+      }
+    }
+    const inFolderCount = tabs.filter((t) => tabIdsInFolders.has(t.id)).length;
+    const ungroupedCount = tabs.length - inFolderCount;
+    const internalCount = tabs.filter(
+      (t) => t.url.startsWith("chrome://") || t.url.startsWith("edge://")
+    ).length;
+
     return (
       <div
         className="absolute inset-0 z-50 flex items-center justify-center bg-black/40"
@@ -370,11 +397,19 @@ export default function OrganizeTabsModal({
           className="w-[320px] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 p-4"
         >
           <h2 className="text-sm font-semibold mb-2">Organize Tabs</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-            No grouping suggestions available. Tabs are either already organized
-            or there aren&apos;t enough tabs from the same domain (minimum 2
-            needed).
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+            No grouping suggestions available.
           </p>
+          <div className="text-xs text-gray-400 dark:text-gray-500 space-y-1 mb-4">
+            <p>{tabs.length} total tab{tabs.length !== 1 ? "s" : ""}</p>
+            {inFolderCount > 0 && (
+              <p>{inFolderCount} already in folders</p>
+            )}
+            {internalCount > 0 && (
+              <p>{internalCount} internal (chrome://) tab{internalCount !== 1 ? "s" : ""}</p>
+            )}
+            <p>{ungroupedCount} ungrouped — each from a different domain</p>
+          </div>
           <button
             onClick={onClose}
             className="w-full px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"

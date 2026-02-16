@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import type { PinnedApp, TabInfo } from "../shared/types";
 import {
-  getPinnedApps,
   removePinnedApp,
   updatePinnedApp,
   reorderPinnedApps,
@@ -31,6 +30,7 @@ interface ContextMenuState {
 
 interface PinnedAppsRowProps {
   tabs: TabInfo[];
+  pinnedApps: PinnedApp[];
   onContextMenu: (menu: ContextMenuState) => void;
 }
 
@@ -82,14 +82,14 @@ function SortablePinnedApp({
       title={app.title}
       aria-label={`${app.title}${hasOpenTab ? " (open)" : ""}`}
     >
-      <div className={`w-8 h-8 rounded-full overflow-hidden bg-gray-100 dark:bg-arc-surface flex items-center justify-center transition-all duration-150 group-hover:scale-105 ${
+      <div className={`w-9 h-9 rounded-full bg-gray-100 dark:bg-arc-surface flex items-center justify-center transition-all duration-150 group-hover:scale-105 ${
         hasOpenTab ? "ring-2 ring-arc-accent/40 shadow-sm shadow-arc-accent/20" : ""
       }`}>
         {app.favicon ? (
           <img
             src={app.favicon}
             alt=""
-            className="w-5 h-5"
+            className="w-5 h-5 rounded-full"
             draggable={false}
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = "none";
@@ -114,9 +114,10 @@ function SortablePinnedApp({
 
 export default function PinnedAppsRow({
   tabs,
+  pinnedApps,
   onContextMenu,
 }: PinnedAppsRowProps) {
-  const [pinnedApps, setPinnedApps] = useState<PinnedApp[]>([]);
+  const [localPinnedApps, setLocalPinnedApps] = useState<PinnedApp[]>(pinnedApps);
   const [editingApp, setEditingApp] = useState<{
     id: string;
     field: "title" | "url";
@@ -133,34 +134,19 @@ export default function PinnedAppsRow({
     })
   );
 
+  // Sync local state with prop changes
   useEffect(() => {
-    getPinnedApps().then(setPinnedApps);
-
-    // Listen for storage changes to pinned apps
-    const handleStorageChange = (
-      changes: { [key: string]: chrome.storage.StorageChange },
-      area: string
-    ) => {
-      if (area === "local" && changes.pinnedApps) {
-        const apps = (changes.pinnedApps.newValue as PinnedApp[]) ?? [];
-        setPinnedApps(apps.sort((a, b) => a.sortOrder - b.sortOrder));
-      }
-    };
-
-    chrome.storage.onChanged.addListener(handleStorageChange);
-    return () => {
-      chrome.storage.onChanged.removeListener(handleStorageChange);
-    };
-  }, []);
+    setLocalPinnedApps(pinnedApps);
+  }, [pinnedApps]);
 
   useEffect(() => {
     if (editingApp && editInputRef.current) {
       editInputRef.current.focus();
       editInputRef.current.select();
     }
-  }, [editingApp]);
+  }, [editingApp?.id, editingApp?.field]);
 
-  if (pinnedApps.length === 0 && !editingApp) return null;
+  if (localPinnedApps.length === 0 && !editingApp) return null;
 
   // Build set of origins that have open tabs
   const activeOrigins = new Set(
@@ -236,20 +222,23 @@ export default function PinnedAppsRow({
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const oldIndex = pinnedApps.findIndex((a) => a.id === active.id);
-    const newIndex = pinnedApps.findIndex((a) => a.id === over.id);
+    const oldIndex = localPinnedApps.findIndex((a) => a.id === active.id);
+    const newIndex = localPinnedApps.findIndex((a) => a.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
 
-    const reordered = arrayMove(pinnedApps, oldIndex, newIndex);
-    setPinnedApps(reordered);
+    const reordered = arrayMove(localPinnedApps, oldIndex, newIndex);
+    setLocalPinnedApps(reordered);
     reorderPinnedApps(reordered.map((a) => a.id));
   };
 
   return (
     <nav
       aria-label="Pinned apps"
-      className="px-2 py-1.5 border-b border-gray-200/80 dark:border-arc-border"
+      className="px-3 py-2 border-b border-gray-200/80 dark:border-arc-border"
     >
+      <span className="text-[11px] text-gray-400 dark:text-arc-text-secondary font-medium uppercase tracking-wider px-1 mb-1 block">
+        Pinned Apps
+      </span>
       {editingApp && (
         <div className="mb-1.5">
           <input
@@ -274,16 +263,16 @@ export default function PinnedAppsRow({
         onDragEnd={handleDragEnd}
       >
         <SortableContext
-          items={pinnedApps.map((a) => a.id)}
+          items={localPinnedApps.map((a) => a.id)}
           strategy={horizontalListSortingStrategy}
         >
           <div
             ref={scrollRef}
-            className="flex gap-2 overflow-x-auto scrollbar-none"
+            className="flex flex-wrap gap-3 py-0.5"
             role="toolbar"
             aria-label="Pinned applications"
           >
-            {pinnedApps.map((app) => {
+            {localPinnedApps.map((app) => {
               const origin = getOrigin(app.url);
               const hasOpenTab = activeOrigins.has(origin);
 

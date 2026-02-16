@@ -55,13 +55,14 @@ function buildSearchItems(tabs: TabInfo[], folders: Folder[]): SearchResult[] {
     });
 
     for (const item of folder.items) {
-      if (item.type === "link") {
+      if (item.type === "link" || item.type === "tab") {
         items.push({
-          type: "link",
-          id: `link-${item.id}`,
+          type: item.type === "tab" ? "tab" : "link",
+          id: `${item.type}-${item.id}`,
           title: item.title || item.url,
           url: item.url,
           favicon: item.favicon,
+          tabId: item.type === "tab" && item.tabId != null ? item.tabId : undefined,
           folderId: folder.id,
           folderName: folder.name,
           score: 0,
