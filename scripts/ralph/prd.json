@@ -20,7 +20,7 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Foundation story. Use @crxjs/vite-plugin or vite-plugin-chrome-extension for HMR. File structure per PRD Section 4.5."
     },
     {
@@ -38,7 +38,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Panel persists across tab switches and page navigations. This is Chrome's native behavior for side panels."
     },
     {
@@ -55,7 +55,7 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "MV3 service workers can be terminated at any time. Critical state must be persisted to storage."
     },
     {
@@ -71,7 +71,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "Virtual scrolling (react-window) deferred to performance story US-039. Keep it simple for now."
     },
     {
@@ -86,7 +86,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "Bidirectional sync: clicking sidebar switches tab; switching tab via native bar updates sidebar."
     },
     {
@@ -101,7 +101,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -121,7 +121,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -137,7 +137,7 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "Backend/storage layer before UI."
     },
     {
@@ -155,7 +155,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "Origin matching via new URL(url).origin. Dot uses workspace accent color #2E75B6."
     },
     {
@@ -172,7 +172,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "This is the in-sidebar context menu. Chrome-level context menu is a separate story."
     },
     {
@@ -187,7 +187,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "Use @dnd-kit/core for drag-and-drop. Keyboard DnD alternative deferred to accessibility story."
     },
     {
@@ -201,7 +201,7 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -217,7 +217,7 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "Storage layer before UI. Folders stored under workspace in chrome.storage.local."
     },
     {
@@ -235,7 +235,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -251,7 +251,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "Depth validation via parentId chain count."
     },
     {
@@ -269,7 +269,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": "Use @dnd-kit/core with @dnd-kit/sortable. Drop zones: between items, on folder, on root area."
     },
     {
@@ -288,7 +288,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 17,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -308,7 +308,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": "Use fuse.js for fuzzy matching."
     },
     {
@@ -324,7 +324,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 19,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -340,7 +340,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 20,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -357,7 +357,7 @@
         "Typecheck passes"
       ],
       "priority": 21,
-      "passes": false,
+      "passes": true,
       "notes": "Storage layer before workspace UI. Migration logic for schema version changes."
     },
     {
@@ -374,7 +374,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 22,
-      "passes": false,
+      "passes": true,
       "notes": "Keep emoji picker simple (curated list, not full emoji-mart). Color palette from Tailwind extended."
     },
     {
@@ -392,7 +392,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 23,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -409,7 +409,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 24,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -425,7 +425,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 25,
-      "passes": false,
+      "passes": true,
       "notes": "Requires tabGroups permission."
     },
     {
@@ -440,7 +440,7 @@
         "Typecheck passes"
       ],
       "priority": 26,
-      "passes": false,
+      "passes": true,
       "notes": "Chrome limits extensions to 4 chrome.commands. Command palette (US-033) handles the rest."
     },
     {
@@ -457,7 +457,7 @@
         "Typecheck passes"
       ],
       "priority": 27,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -475,7 +475,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 28,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -493,7 +493,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 29,
-      "passes": false,
+      "passes": true,
       "notes": "50MB per tab is a conservative memory estimate."
     },
     {
@@ -512,7 +512,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 30,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -531,7 +531,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 31,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -550,7 +550,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 32,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -569,7 +569,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 33,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -585,7 +585,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 34,
-      "passes": false,
+      "passes": true,
       "notes": "True in-window splits not possible via extension API; use side-by-side windows."
     },
     {
@@ -604,7 +604,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 35,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -623,7 +623,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 36,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -640,7 +640,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 37,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -659,7 +659,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 38,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -678,7 +678,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 39,
-      "passes": false,
+      "passes": true,
       "notes": "Top sites via chrome.history.search({ text: '', maxResults: 10, startTime: 30 days ago })."
     },
     {
@@ -696,7 +696,7 @@
         "Typecheck passes"
       ],
       "priority": 40,
-      "passes": false,
+      "passes": true,
       "notes": "Use Chrome DevTools Performance panel for measurement."
     },
     {
@@ -717,7 +717,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 41,
-      "passes": false,
+      "passes": true,
       "notes": ""
     }
   ]

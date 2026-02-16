@@ -1,0 +1,1409 @@
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
+import type {
+  TabInfo,
+  PinnedApp,
+  Workspace,
+  ServiceWorkerMessage,
+  Folder,
+  FolderItem,
+  Session,
+} from "../shared/types";
+import { useTheme, type ThemePreference } from "./useTheme";
+import type { Settings } from "../shared/types";
+import {
+  getPinnedApps,
+  addPinnedApp,
+  removePinnedApp,
+} from "../shared/storage";
+import { getSettings, updateSettings } from "../shared/settingsStorage";
+import {
+  getFolders,
+  createFolder,
+  addItemToFolder,
+  removeItemFromFolder,
+  moveItemToFolder,
+  reorderFolders,
+  reorderItemsInFolder,
+} from "../shared/folderStorage";
+import {
+  getActiveWorkspace,
+  getWorkspaces,
+  createWorkspace,
+  setActiveWorkspace as setActiveWorkspaceStorage,
+} from "../shared/workspaceStorage";
+import PinnedAppsRow from "./PinnedAppsRow";
+import FolderTree from "./FolderTree";
+import SearchBar from "./SearchBar";
+import WorkspaceSwitcher from "./WorkspaceSwitcher";
+import ArchiveSection from "./ArchiveSection";
+import SettingsPanel from "./SettingsPanel";
+import CommandPalette from "./CommandPalette";
+import OrganizeTabsModal from "./OrganizeTabsModal";
+import SessionManager from "./SessionManager";
+import Onboarding from "./Onboarding";
+import { isOnboardingCompleted } from "../shared/onboardingStorage";
+import { createSessionFromState } from "../shared/sessionStorage";
+import { buildCommands } from "./commandRegistry";
+import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+  DragOverlay,
+  pointerWithin,
+  rectIntersection,
+  type CollisionDetection,
+  useDraggable,
+} from "@dnd-kit/core";
+import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { List } from "react-window";
+import type { CSSProperties } from "react";
+
+function getOrigin(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return "";
+  }
+}
+
+// Lazy-loading favicon with IntersectionObserver
+const LazyFavicon = memo(function LazyFavicon({
+  src,
+  alt,
+}: {
+  src: string;
+  alt: string;
+}) {
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const img = imgRef.current;
+    if (!img) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setLoaded(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "50px" }
+    );
+
+    observer.observe(img);
+    return () => observer.disconnect();
+  }, []);
+
+  return loaded ? (
+    <img
+      ref={imgRef}
+      src={src}
+      alt={alt}
+      className="w-4 h-4 shrink-0"
+      draggable={false}
+      onError={(e) => {
+        (e.target as HTMLImageElement).style.display = "none";
+      }}
+    />
+  ) : (
+    <span
+      ref={imgRef}
+      className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600"
+    />
+  );
+});
+
+const VIRTUAL_LIST_THRESHOLD = 50;
+const TAB_ITEM_HEIGHT = 36; // 32px height + 4px gap
+
+// Row component for react-window virtual list
+interface VirtualTabRowProps {
+  tabs: TabInfo[];
+  onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
+}
+
+function VirtualTabRow({
+  index,
+  style,
+  tabs,
+  onContextMenu,
+}: {
+  index: number;
+  style: CSSProperties;
+  ariaAttributes: Record<string, unknown>;
+  tabs: TabInfo[];
+  onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
+}) {
+  const tab = tabs[index];
+  if (!tab) return null;
+  return (
+    <DraggableTabItem
+      key={tab.id}
+      tab={tab}
+      onContextMenu={onContextMenu}
+      style={style}
+    />
+  );
+}
+
+const DraggableTabItem = memo(function DraggableTabItem({
+  tab,
+  onContextMenu,
+  style: outerStyle,
+}: {
+  tab: TabInfo;
+  onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
+  style?: React.CSSProperties;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({ id: `tab:${tab.id}` });
+
+  const style = {
+    ...outerStyle,
+    transform: transform
+      ? `translate(${transform.x}px, ${transform.y}px)`
+      : undefined,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const handleClick = () => {
+    chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: tab.id });
+  };
+
+  const handleClose = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    chrome.runtime.sendMessage({ type: "CLOSE_TAB", tabId: tab.id });
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button === 1) {
+      e.preventDefault();
+      chrome.runtime.sendMessage({ type: "CLOSE_TAB", tabId: tab.id });
+    }
+  };
+
+  const srLabel = [
+    tab.title || tab.url,
+    tab.active ? "active" : "",
+    tab.audible ? "playing audio" : "",
+    tab.discarded ? "suspended" : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      role="option"
+      aria-selected={tab.active}
+      aria-label={srLabel}
+      tabIndex={0}
+      onClick={handleClick}
+      onMouseDown={handleMouseDown}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleClick();
+        } else if (e.key === "Delete" || e.key === "Backspace") {
+          e.preventDefault();
+          chrome.runtime.sendMessage({ type: "CLOSE_TAB", tabId: tab.id });
+        }
+      }}
+      onContextMenu={(e) => onContextMenu(e, tab)}
+      className={`flex items-center gap-2 px-2 h-8 text-sm rounded cursor-default hover:bg-gray-200 dark:hover:bg-gray-800 touch-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ${
+        tab.active
+          ? "border-l-[3px] border-l-[#2E75B6] font-bold"
+          : "border-l-[3px] border-l-transparent"
+      } ${tab.discarded ? "opacity-50 italic" : ""}`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {tab.favIconUrl ? (
+        <LazyFavicon src={tab.favIconUrl} alt="" />
+      ) : (
+        <span
+          className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600"
+          aria-hidden="true"
+        />
+      )}
+      <span className="truncate flex-1 select-none">
+        {tab.title || tab.url}
+      </span>
+      {tab.audible && (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="w-3.5 h-3.5 shrink-0 text-blue-500 dark:text-blue-400"
+          aria-hidden="true"
+        >
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+        </svg>
+      )}
+      {hovered && (
+        <button
+          onClick={handleClose}
+          className="shrink-0 w-4 h-4 flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+          aria-label={`Close ${tab.title}`}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            className="w-3.5 h-3.5"
+          >
+            <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
+          </svg>
+        </button>
+      )}
+    </li>
+  );
+});
+
+function TabDragOverlay({ tab }: { tab: TabInfo }) {
+  return (
+    <div className="flex items-center gap-2 px-2 h-8 text-sm rounded bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-600 opacity-90">
+      {tab.favIconUrl ? (
+        <img src={tab.favIconUrl} alt="" className="w-4 h-4 shrink-0" />
+      ) : (
+        <span className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600" />
+      )}
+      <span className="truncate flex-1 select-none">
+        {tab.title || tab.url}
+      </span>
+    </div>
+  );
+}
+
+function FolderPickerDropdown({
+  folders,
+  x,
+  y,
+  onSelect,
+  onClose,
+}: {
+  folders: Folder[];
+  x: number;
+  y: number;
+  onSelect: (folderId: string) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [onClose]);
+
+  // Adjust position to stay within viewport
+  const style: React.CSSProperties = {
+    position: "fixed",
+    left: Math.min(x, window.innerWidth - 200),
+    top: Math.min(y, window.innerHeight - 200),
+    zIndex: 1000,
+  };
+
+  const renderFolderOption = (
+    folder: Folder,
+    depth: number
+  ): React.ReactNode => {
+    const children = folders.filter((f) => f.parentId === folder.id);
+    return (
+      <div key={folder.id}>
+        <button
+          onClick={() => onSelect(folder.id)}
+          className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+          style={{ paddingLeft: 12 + depth * 16 }}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="w-4 h-4 shrink-0 text-gray-500 dark:text-gray-400"
+          >
+            <path d="M3.75 3A1.75 1.75 0 0 0 2 4.75v3.26a3.235 3.235 0 0 1 1.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0 0 16.25 5h-4.836a.25.25 0 0 1-.177-.073L9.823 3.513A1.75 1.75 0 0 0 8.586 3H3.75ZM3.75 9A1.75 1.75 0 0 0 2 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0 0 18 15.25v-4.5A1.75 1.75 0 0 0 16.25 9H3.75Z" />
+          </svg>
+          <span className="truncate">{folder.name}</span>
+        </button>
+        {children.map((child) => renderFolderOption(child, depth + 1))}
+      </div>
+    );
+  };
+
+  const topLevelFolders = folders.filter((f) => f.parentId === null);
+
+  return (
+    <div
+      ref={ref}
+      style={style}
+      className="min-w-[180px] max-w-[240px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg py-1 max-h-[200px] overflow-y-auto"
+    >
+      <div className="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 font-medium">
+        Save to folder
+      </div>
+      {topLevelFolders.map((folder) => renderFolderOption(folder, 0))}
+    </div>
+  );
+}
+
+const THEME_LABELS: Record<ThemePreference, string> = {
+  system: "System",
+  light: "Light",
+  dark: "Dark",
+};
+
+function ThemeToggle({
+  theme,
+  onCycle,
+}: {
+  theme: ThemePreference;
+  onCycle: () => void;
+}) {
+  return (
+    <button
+      onClick={onCycle}
+      className="flex items-center gap-1.5 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
+      aria-label={`Theme: ${THEME_LABELS[theme]}. Click to cycle.`}
+      title={`Theme: ${THEME_LABELS[theme]}`}
+    >
+      {theme === "dark" ? (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className="w-4 h-4"
+        >
+          <path
+            fillRule="evenodd"
+            d="M7.455 2.004a.75.75 0 0 1 .26.77 7 7 0 0 0 9.958 7.967.75.75 0 0 1 1.067.853A8.5 8.5 0 1 1 6.647 1.921a.75.75 0 0 1 .808.083Z"
+            clipRule="evenodd"
+          />
+        </svg>
+      ) : theme === "light" ? (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className="w-4 h-4"
+        >
+          <path d="M10 2a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 2ZM10 15a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 15ZM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM15.657 5.404a.75.75 0 1 0-1.06-1.06l-1.061 1.06a.75.75 0 0 0 1.06 1.061l1.061-1.06ZM6.464 14.596a.75.75 0 1 0-1.06-1.06l-1.061 1.06a.75.75 0 0 0 1.06 1.061l1.061-1.06ZM18 10a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 18 10ZM5 10a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 5 10ZM14.596 15.657a.75.75 0 0 0 1.06-1.06l-1.06-1.061a.75.75 0 1 0-1.061 1.06l1.06 1.061ZM5.404 6.464a.75.75 0 0 0 1.06-1.06l-1.06-1.061a.75.75 0 1 0-1.061 1.06l1.06 1.061Z" />
+        </svg>
+      ) : (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className="w-4 h-4"
+        >
+          <path
+            fillRule="evenodd"
+            d="M2 4.25A2.25 2.25 0 0 1 4.25 2h11.5A2.25 2.25 0 0 1 18 4.25v8.5A2.25 2.25 0 0 1 15.75 15h-3.105a3.501 3.501 0 0 0 1.1 1.677A.75.75 0 0 1 13.26 18H6.74a.75.75 0 0 1-.484-1.323A3.501 3.501 0 0 0 7.355 15H4.25A2.25 2.25 0 0 1 2 12.75v-8.5Zm1.5 0a.75.75 0 0 1 .75-.75h11.5a.75.75 0 0 1 .75.75v7.5a.75.75 0 0 1-.75.75H4.25a.75.75 0 0 1-.75-.75v-7.5Z"
+            clipRule="evenodd"
+          />
+        </svg>
+      )}
+      {THEME_LABELS[theme]}
+    </button>
+  );
+}
+
+interface ContextMenuState {
+  x: number;
+  y: number;
+  items: ContextMenuItem[];
+}
+
+// Custom collision detection: prefer droppable folder targets, then fall back to closest center
+const customCollisionDetection: CollisionDetection = (args) => {
+  // First check for pointer-within collisions (good for drop targets like folders)
+  const pointerCollisions = pointerWithin(args);
+  if (pointerCollisions.length > 0) {
+    // Prefer folder drop targets
+    const folderDrops = pointerCollisions.filter((c) =>
+      String(c.id).startsWith("folder-drop:")
+    );
+    if (folderDrops.length > 0) return folderDrops;
+    return pointerCollisions;
+  }
+  // Fall back to rect intersection for sortable items
+  return rectIntersection(args);
+};
+
+export default function App() {
+  const [tabs, setTabs] = useState<TabInfo[]>([]);
+  const [pinnedApps, setPinnedApps] = useState<PinnedApp[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [activeDragTab, setActiveDragTab] = useState<TabInfo | null>(null);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState("default");
+  const [tabWorkspaceMap, setTabWorkspaceMap] = useState<
+    Record<string, string>
+  >({});
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [folderPicker, setFolderPicker] = useState<{
+    tab: TabInfo;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [workspaceIsolation, setWorkspaceIsolation] =
+    useState<Settings["workspaceIsolation"]>("sidebar-only");
+  const [focusModeEnabled, setFocusModeEnabled] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showOrganizeTabs, setShowOrganizeTabs] = useState(false);
+  const [showSessionManager, setShowSessionManager] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Check if onboarding is needed on mount
+  useEffect(() => {
+    isOnboardingCompleted().then((completed) => {
+      if (!completed) {
+        setTimeout(() => setShowOnboarding(true), 0);
+      }
+    });
+  }, []);
+
+  // Listen for Ctrl+Shift+K to open command palette
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "K") {
+        e.preventDefault();
+        setShowCommandPalette((prev) => !prev);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Load active workspace, workspaces list, tab-workspace map, and settings on mount
+  useEffect(() => {
+    getActiveWorkspace().then((ws) => {
+      setActiveWorkspaceId(ws.id);
+    });
+    getWorkspaces().then(setWorkspaces);
+    getSettings().then((s) => {
+      setWorkspaceIsolation(s.workspaceIsolation);
+      setFocusModeEnabled(s.focusMode.enabled);
+    });
+
+    // Request initial tab-workspace map from service worker
+    chrome.runtime.sendMessage(
+      { type: "GET_TAB_WORKSPACE_MAP" },
+      (response: Record<string, string>) => {
+        if (response) {
+          setTabWorkspaceMap(response);
+        }
+      }
+    );
+
+    const handleStorageChange = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      area: string
+    ) => {
+      if (area === "local") {
+        if (changes.activeWorkspaceId) {
+          const newId = changes.activeWorkspaceId.newValue as string;
+          if (newId) setActiveWorkspaceId(newId);
+        }
+        if (changes.tabWorkspaceMap) {
+          const newMap =
+            (changes.tabWorkspaceMap.newValue as Record<string, string>) ?? {};
+          setTabWorkspaceMap(newMap);
+        }
+        if (changes.workspaces) {
+          const updated = (changes.workspaces.newValue as Workspace[]) ?? [];
+          setWorkspaces(updated.sort((a, b) => a.sortOrder - b.sortOrder));
+        }
+        if (changes.settings) {
+          const newSettings = changes.settings.newValue as Settings | undefined;
+          if (newSettings) {
+            setWorkspaceIsolation(newSettings.workspaceIsolation);
+            setFocusModeEnabled(newSettings.focusMode.enabled);
+          }
+        }
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
+  }, []);
+
+  // Load folders and listen for storage changes
+  useEffect(() => {
+    getFolders().then(setFolders);
+
+    const handleStorageChange = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      area: string
+    ) => {
+      if (area === "local" && changes.folders) {
+        const updated = (changes.folders.newValue as Folder[]) ?? [];
+        setFolders(updated.sort((a, b) => a.sortOrder - b.sortOrder));
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
+  }, []);
+
+  // Load pinned apps and listen for changes
+  useEffect(() => {
+    getPinnedApps().then(setPinnedApps);
+
+    const handleStorageChange = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      area: string
+    ) => {
+      if (area === "local" && changes.pinnedApps) {
+        const apps = (changes.pinnedApps.newValue as PinnedApp[]) ?? [];
+        setPinnedApps(apps.sort((a, b) => a.sortOrder - b.sortOrder));
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    // Request initial tab list from service worker
+    chrome.runtime.sendMessage({ type: "GET_TABS" }, (response: TabInfo[]) => {
+      if (response) {
+        setTabs(response);
+      }
+    });
+
+    // Also try loading from storage in case service worker responds slowly
+    chrome.storage.local.get("tabList", (result) => {
+      if (result.tabList && Array.isArray(result.tabList)) {
+        const stored = result.tabList as TabInfo[];
+        setTabs((prev) => (prev.length === 0 ? stored : prev));
+      }
+    });
+
+    // Listen for tab state updates from service worker
+    const handleMessage = (message: ServiceWorkerMessage) => {
+      if (message.type === "OPEN_COMMAND_PALETTE") {
+        setShowCommandPalette(true);
+      } else if (message.type === "TABS_UPDATED") {
+        setTabs(message.tabs);
+      } else if (message.type === "TAB_WORKSPACE_MAP_UPDATED") {
+        setTabWorkspaceMap(message.tabWorkspaceMap);
+      } else if (message.type === "TAB_ACTIVATED") {
+        setTabs((prev) =>
+          prev.map((tab) => ({
+            ...tab,
+            active:
+              tab.id === message.tabId && tab.windowId === message.windowId,
+          }))
+        );
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(handleMessage);
+    return () => {
+      chrome.runtime.onMessage.removeListener(handleMessage);
+    };
+  }, []);
+
+  const handleWorkspaceChange = useCallback((workspaceId: string) => {
+    setActiveWorkspaceId(workspaceId);
+    // Trigger workspace isolation (tab groups) in the service worker
+    chrome.runtime.sendMessage({
+      type: "APPLY_WORKSPACE_ISOLATION",
+      activeWorkspaceId: workspaceId,
+    });
+  }, []);
+
+  const handleToggleIsolation = useCallback(() => {
+    const newMode =
+      workspaceIsolation === "sidebar-only" ? "full-isolation" : "sidebar-only";
+    setWorkspaceIsolation(newMode);
+    updateSettings({ workspaceIsolation: newMode }).then(() => {
+      if (newMode === "full-isolation") {
+        chrome.runtime.sendMessage({
+          type: "APPLY_WORKSPACE_ISOLATION",
+          activeWorkspaceId,
+        });
+      }
+    });
+  }, [workspaceIsolation, activeWorkspaceId]);
+
+  // Filter tabs by active workspace
+  const filteredTabs = useMemo(() => {
+    return tabs.filter((tab) => {
+      const wsId = tabWorkspaceMap[String(tab.id)];
+      // Show tabs that are assigned to the active workspace,
+      // or tabs that have no workspace assignment (unassigned tabs go to active workspace)
+      return !wsId || wsId === activeWorkspaceId;
+    });
+  }, [tabs, tabWorkspaceMap, activeWorkspaceId]);
+
+  const { theme, cycleTheme } = useTheme();
+
+  // Suspension stats
+  const suspendedCount = useMemo(
+    () => tabs.filter((t) => t.discarded).length,
+    [tabs]
+  );
+  const estimatedMBSaved = suspendedCount * 50;
+
+  // Stable callbacks for command palette actions
+  const focusSearchInput = useCallback(() => {
+    const input = document.querySelector<HTMLInputElement>(
+      'input[placeholder="Search tabs..."]'
+    );
+    input?.focus();
+  }, []);
+
+  const suspendOtherTabs = useCallback(() => {
+    const nonActive = filteredTabs.filter((t) => !t.active && !t.discarded);
+    for (const tab of nonActive) {
+      chrome.runtime.sendMessage({ type: "SUSPEND_TAB", tabId: tab.id });
+    }
+  }, [filteredTabs]);
+
+  const createNewWorkspace = useCallback(() => {
+    createWorkspace("New Workspace").then((ws) => {
+      setActiveWorkspaceStorage(ws.id);
+      handleWorkspaceChange(ws.id);
+    });
+  }, [handleWorkspaceChange]);
+
+  const toggleFocusMode = useCallback(() => {
+    getSettings().then((s) => {
+      const newEnabled = !s.focusMode.enabled;
+      updateSettings({
+        focusMode: { ...s.focusMode, enabled: newEnabled },
+      }).then(() => {
+        chrome.runtime.sendMessage({
+          type: "UPDATE_FOCUS_MODE",
+          enabled: newEnabled,
+          redirectRules: s.focusMode.redirectRules,
+        });
+      });
+    });
+  }, []);
+
+  const openSettings = useCallback(() => setShowSettings(true), []);
+
+  const splitViewActiveTab = useCallback(() => {
+    const activeTab = filteredTabs.find((t) => t.active);
+    if (activeTab) {
+      chrome.runtime.sendMessage({ type: "SPLIT_VIEW", tabId: activeTab.id });
+    }
+  }, [filteredTabs]);
+  const createNewFolder = useCallback(() => {
+    createFolder("New Folder");
+  }, []);
+
+  const handleSaveSession = useCallback(() => {
+    const defaultName = `Session ${new Date().toLocaleString()}`;
+    const name = window.prompt("Enter session name:", defaultName);
+    if (!name) return;
+    createSessionFromState({
+      name,
+      pinnedApps,
+      folders,
+      tabUrls: filteredTabs.map((t) => ({
+        url: t.url,
+        title: t.title || t.url,
+        favicon: t.favIconUrl || "",
+      })),
+    });
+  }, [pinnedApps, folders, filteredTabs]);
+
+  const handleRestoreSession = useCallback(
+    (session: Session, mode: "replace" | "add") => {
+      if (mode === "replace") {
+        // Close all current tabs in this workspace, then open session tabs
+        const tabIds = filteredTabs.filter((t) => !t.active).map((t) => t.id);
+        if (tabIds.length > 0) {
+          chrome.runtime.sendMessage({ type: "CLOSE_TABS", tabIds });
+        }
+      }
+      // Open all session tabs
+      for (const tab of session.tabUrls) {
+        chrome.runtime.sendMessage({ type: "OPEN_URL", url: tab.url });
+      }
+      setShowSessionManager(false);
+    },
+    [filteredTabs]
+  );
+
+  const openSessionManager = useCallback(() => setShowSessionManager(true), []);
+
+  // Build command palette commands
+  const commands = useMemo(
+    () =>
+      buildCommands({
+        workspaces,
+        onSwitchWorkspace: handleWorkspaceChange,
+        onCreateFolder: createNewFolder,
+        onSuspendOthers: suspendOtherTabs,
+        onToggleTheme: cycleTheme,
+        onOpenSettings: openSettings,
+        onSearchTabs: focusSearchInput,
+        onNewWorkspace: createNewWorkspace,
+        onToggleFocusMode: toggleFocusMode,
+        onSplitView: splitViewActiveTab,
+        onSaveSession: handleSaveSession,
+        onRestoreSession: openSessionManager,
+      }),
+    [
+      workspaces,
+      handleWorkspaceChange,
+      createNewFolder,
+      suspendOtherTabs,
+      cycleTheme,
+      openSettings,
+      focusSearchInput,
+      createNewWorkspace,
+      toggleFocusMode,
+      splitViewActiveTab,
+      handleSaveSession,
+      openSessionManager,
+    ]
+  );
+
+  const handleTabContextMenu = useCallback(
+    (e: React.MouseEvent, tab: TabInfo) => {
+      e.preventDefault();
+      const origin = getOrigin(tab.url);
+      const isPinned = pinnedApps.some((app) => getOrigin(app.url) === origin);
+
+      const items: ContextMenuItem[] = [];
+
+      if (isPinned) {
+        items.push({
+          label: "Unpin from ArcFlow",
+          onClick: () => {
+            const app = pinnedApps.find((a) => getOrigin(a.url) === origin);
+            if (app) {
+              removePinnedApp(app.id);
+            }
+          },
+        });
+      } else {
+        items.push({
+          label: "Pin to ArcFlow",
+          onClick: () => {
+            addPinnedApp({
+              id: crypto.randomUUID(),
+              url: tab.url,
+              title: tab.title || tab.url,
+              favicon: tab.favIconUrl || "",
+            }).catch(() => {
+              // Max pinned apps reached — silently ignore
+            });
+          },
+        });
+      }
+
+      // Add "Save Link to Folder..." if there are folders
+      if (folders.length > 0) {
+        items.push({
+          label: "Save Link to Folder...",
+          onClick: () => {
+            setFolderPicker({ tab, x: e.clientX, y: e.clientY });
+          },
+        });
+      }
+
+      // Add "Suspend Tab" if the tab is not already discarded
+      if (!tab.discarded) {
+        items.push({
+          label: "Suspend Tab",
+          onClick: () => {
+            chrome.runtime.sendMessage({
+              type: "SUSPEND_TAB",
+              tabId: tab.id,
+            });
+          },
+        });
+      }
+
+      // Add "Split View" to open tab in a side-by-side window
+      items.push({
+        label: "Split View",
+        onClick: () => {
+          chrome.runtime.sendMessage({
+            type: "SPLIT_VIEW",
+            tabId: tab.id,
+          });
+        },
+      });
+
+      // Add "Move to Workspace..." if there are multiple workspaces
+      if (workspaces.length > 1) {
+        const otherWorkspaces = workspaces.filter(
+          (ws) => ws.id !== activeWorkspaceId
+        );
+        for (const ws of otherWorkspaces) {
+          items.push({
+            label: `Move to ${ws.emoji} ${ws.name}`,
+            onClick: () => {
+              chrome.runtime.sendMessage({
+                type: "MOVE_TAB_TO_WORKSPACE",
+                tabId: tab.id,
+                workspaceId: ws.id,
+              });
+            },
+          });
+        }
+      }
+
+      setContextMenu({ x: e.clientX, y: e.clientY, items });
+    },
+    [pinnedApps, folders, workspaces, activeWorkspaceId]
+  );
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const handleSaveLinkToFolder = useCallback(
+    async (folderId: string) => {
+      if (!folderPicker) return;
+      const { tab } = folderPicker;
+      const newItem: FolderItem = {
+        id: crypto.randomUUID(),
+        type: "link",
+        tabId: null,
+        url: tab.url,
+        title: tab.title || tab.url,
+        favicon: tab.favIconUrl || "",
+        isArchived: false,
+        lastActiveAt: Date.now(),
+      };
+      await addItemToFolder(folderId, newItem);
+      setFolderPicker(null);
+    },
+    [folderPicker]
+  );
+
+  const handleOpenAllTabs = useCallback((folder: Folder) => {
+    // Open all saved links (type === 'link') as new tabs
+    const links = folder.items.filter((i) => i.type === "link");
+    for (const link of links) {
+      chrome.runtime.sendMessage({ type: "OPEN_URL", url: link.url });
+    }
+  }, []);
+
+  const handleCloseAllTabs = useCallback((folder: Folder) => {
+    // Close all active tabs (type === 'tab') via chrome.tabs.remove; saved links remain
+    const tabIds = folder.items
+      .filter((i) => i.type === "tab" && i.tabId != null)
+      .map((i) => i.tabId as number);
+    if (tabIds.length > 0) {
+      chrome.runtime.sendMessage({ type: "CLOSE_TABS", tabIds });
+    }
+  }, []);
+
+  const handleFolderItemClick = useCallback((item: FolderItem) => {
+    if (item.type === "link") {
+      chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
+    } else if (item.type === "tab" && item.tabId != null) {
+      chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: item.tabId });
+    }
+  }, []);
+
+  const handleFolderItemContextMenu = useCallback(
+    (e: React.MouseEvent, item: FolderItem, folderId: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const items: ContextMenuItem[] = [];
+
+      if (item.type === "link") {
+        items.push({
+          label: "Open Link",
+          onClick: () => {
+            chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
+          },
+        });
+        items.push({
+          label: "Remove",
+          onClick: () => {
+            removeItemFromFolder(folderId, item.id);
+          },
+        });
+      }
+
+      if (items.length > 0) {
+        setContextMenu({ x: e.clientX, y: e.clientY, items });
+      }
+    },
+    []
+  );
+
+  const handleDragStart = useCallback(
+    (event: DragStartEvent) => {
+      const id = String(event.active.id);
+      if (id.startsWith("tab:")) {
+        const tabId = parseInt(id.replace("tab:", ""), 10);
+        const tab = tabs.find((t) => t.id === tabId);
+        if (tab) setActiveDragTab(tab);
+      }
+    },
+    [tabs]
+  );
+
+  const handleDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      setActiveDragTab(null);
+      const { active, over } = event;
+      if (!over) return;
+
+      const activeId = String(active.id);
+      const overId = String(over.id);
+
+      // Case 1: Tab dropped onto a folder
+      if (activeId.startsWith("tab:") && overId.startsWith("folder-drop:")) {
+        const tabId = parseInt(activeId.replace("tab:", ""), 10);
+        const folderId = overId.replace("folder-drop:", "");
+        const tab = tabs.find((t) => t.id === tabId);
+        if (!tab) return;
+
+        const newItem: FolderItem = {
+          id: crypto.randomUUID(),
+          type: "tab",
+          tabId: tab.id,
+          url: tab.url,
+          title: tab.title || tab.url,
+          favicon: tab.favIconUrl || "",
+          isArchived: false,
+          lastActiveAt: Date.now(),
+        };
+
+        await addItemToFolder(folderId, newItem);
+        return;
+      }
+
+      // Case 2: Folder item dropped onto a different folder
+      if (
+        activeId.startsWith("folder-item:") &&
+        overId.startsWith("folder-drop:")
+      ) {
+        const itemId = activeId.replace("folder-item:", "");
+        const targetFolderId = overId.replace("folder-drop:", "");
+        try {
+          await moveItemToFolder(itemId, targetFolderId);
+        } catch {
+          // Item not found or target not found
+        }
+        return;
+      }
+
+      // Case 3: Reorder folder items within same folder
+      if (
+        activeId.startsWith("folder-item:") &&
+        overId.startsWith("folder-item:")
+      ) {
+        const activeItemId = activeId.replace("folder-item:", "");
+        const overItemId = overId.replace("folder-item:", "");
+
+        // Find which folder contains the active item
+        const sourceFolder = folders.find((f) =>
+          f.items.some((i) => i.id === activeItemId)
+        );
+        const targetFolder = folders.find((f) =>
+          f.items.some((i) => i.id === overItemId)
+        );
+
+        if (
+          sourceFolder &&
+          targetFolder &&
+          sourceFolder.id === targetFolder.id
+        ) {
+          // Reorder within same folder
+          const oldIndex = sourceFolder.items.findIndex(
+            (i) => i.id === activeItemId
+          );
+          const newIndex = sourceFolder.items.findIndex(
+            (i) => i.id === overItemId
+          );
+          if (oldIndex !== -1 && newIndex !== -1) {
+            const reorderedItems = arrayMove(
+              sourceFolder.items,
+              oldIndex,
+              newIndex
+            );
+
+            // Optimistic update
+            setFolders((prev) =>
+              prev.map((f) =>
+                f.id === sourceFolder.id ? { ...f, items: reorderedItems } : f
+              )
+            );
+
+            await reorderItemsInFolder(
+              sourceFolder.id,
+              reorderedItems.map((i) => i.id)
+            );
+          }
+        } else if (sourceFolder && targetFolder) {
+          // Move between folders
+          await moveItemToFolder(activeItemId, targetFolder.id);
+        }
+        return;
+      }
+
+      // Case 4: Reorder folders among siblings
+      if (activeId.startsWith("folder:") && overId.startsWith("folder:")) {
+        const activeFolderId = activeId.replace("folder:", "");
+        const overFolderId = overId.replace("folder:", "");
+
+        const activeFolder = folders.find((f) => f.id === activeFolderId);
+        const overFolder = folders.find((f) => f.id === overFolderId);
+
+        if (
+          activeFolder &&
+          overFolder &&
+          activeFolder.parentId === overFolder.parentId
+        ) {
+          const siblings = folders
+            .filter((f) => f.parentId === activeFolder.parentId)
+            .sort((a, b) => a.sortOrder - b.sortOrder);
+
+          const oldIndex = siblings.findIndex((f) => f.id === activeFolderId);
+          const newIndex = siblings.findIndex((f) => f.id === overFolderId);
+
+          if (oldIndex !== -1 && newIndex !== -1) {
+            const reordered = arrayMove(siblings, oldIndex, newIndex);
+
+            // Optimistic update
+            setFolders((prev) => {
+              const updated = [...prev];
+              reordered.forEach((f, i) => {
+                const idx = updated.findIndex((u) => u.id === f.id);
+                if (idx !== -1) {
+                  updated[idx] = { ...updated[idx], sortOrder: i };
+                }
+              });
+              return updated;
+            });
+
+            await reorderFolders(
+              reordered.map((f) => f.id),
+              activeFolder.parentId
+            );
+          }
+        }
+        return;
+      }
+    },
+    [tabs, folders, setFolders]
+  );
+
+  return (
+    <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+      {/* Live region for screen reader announcements */}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+        id="arcflow-live-region"
+      >
+        {filteredTabs.length} tab{filteredTabs.length !== 1 ? "s" : ""} open
+        {suspendedCount > 0 &&
+          `. ${suspendedCount} suspended, ~${estimatedMBSaved} MB saved`}
+      </div>
+
+      <header className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+        <h1 className="text-lg font-semibold">ArcFlow</h1>
+        <button
+          onClick={() => setShowOrganizeTabs(true)}
+          className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
+          title="Organize Tabs"
+          aria-label="Organize Tabs"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="w-4 h-4"
+          >
+            <path
+              fillRule="evenodd"
+              d="M2 3.75A.75.75 0 0 1 2.75 3h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 3.75Zm0 4.167a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Zm0 4.166a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Zm0 4.167a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Z"
+              clipRule="evenodd"
+            />
+          </svg>
+          Organize
+        </button>
+      </header>
+
+      {/* Search bar (Zone 1) */}
+      <nav aria-label="Tab search">
+        <SearchBar
+          tabs={tabs}
+          folders={folders}
+          onSwitchTab={(tabId) => {
+            chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId });
+          }}
+          onOpenUrl={(url) => {
+            chrome.runtime.sendMessage({ type: "OPEN_URL", url });
+          }}
+        />
+      </nav>
+
+      {/* Pinned Apps Row (Zone 2) */}
+      <PinnedAppsRow tabs={tabs} onContextMenu={setContextMenu} />
+
+      <main aria-label="Tab management">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={customCollisionDetection}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          {/* Folder Tree (Zone 3) */}
+          <FolderTree
+            onContextMenu={setContextMenu}
+            folders={folders}
+            setFolders={setFolders}
+            onItemClick={handleFolderItemClick}
+            onItemContextMenu={handleFolderItemContextMenu}
+            onOpenAllTabs={handleOpenAllTabs}
+            onCloseAllTabs={handleCloseAllTabs}
+          />
+
+          {/* Tab list */}
+          <section className="flex-1 px-1" aria-label="Open tabs">
+            <p
+              className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1"
+              aria-live="polite"
+            >
+              {filteredTabs.length} tab{filteredTabs.length !== 1 ? "s" : ""}{" "}
+              open
+            </p>
+            {filteredTabs.length >= VIRTUAL_LIST_THRESHOLD ? (
+              <List<VirtualTabRowProps>
+                style={{
+                  height: Math.min(filteredTabs.length * TAB_ITEM_HEIGHT, 400),
+                }}
+                rowComponent={VirtualTabRow}
+                rowCount={filteredTabs.length}
+                rowHeight={TAB_ITEM_HEIGHT}
+                rowProps={{
+                  tabs: filteredTabs,
+                  onContextMenu: handleTabContextMenu,
+                }}
+                overscanCount={5}
+              />
+            ) : (
+              <ul
+                className="flex flex-col gap-1"
+                role="listbox"
+                aria-label="Open tabs"
+              >
+                {filteredTabs.map((tab) => (
+                  <DraggableTabItem
+                    key={tab.id}
+                    tab={tab}
+                    onContextMenu={handleTabContextMenu}
+                  />
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <DragOverlay>
+            {activeDragTab ? <TabDragOverlay tab={activeDragTab} /> : null}
+          </DragOverlay>
+        </DndContext>
+
+        {/* Archive Section (Zone 4) */}
+        <ArchiveSection />
+      </main>
+
+      {/* Footer (Zone 5) */}
+      <footer className="border-t border-gray-200 dark:border-gray-700">
+        <WorkspaceSwitcher
+          activeWorkspaceId={activeWorkspaceId}
+          onWorkspaceChange={handleWorkspaceChange}
+          onContextMenu={setContextMenu}
+          onSaveSession={handleSaveSession}
+        />
+        {suspendedCount > 0 && (
+          <div className="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 text-center">
+            {suspendedCount} tab{suspendedCount !== 1 ? "s" : ""} suspended | ~
+            {estimatedMBSaved} MB saved
+          </div>
+        )}
+        <div className="flex items-center justify-between px-3 pb-2">
+          <button
+            onClick={handleToggleIsolation}
+            className={`flex items-center gap-1.5 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-gray-800 ${
+              workspaceIsolation === "full-isolation"
+                ? "text-blue-600 dark:text-blue-400"
+                : "text-gray-500 dark:text-gray-400"
+            }`}
+            aria-label={`Workspace isolation: ${workspaceIsolation === "sidebar-only" ? "Sidebar only" : "Full isolation"}`}
+            title={`Isolation: ${workspaceIsolation === "sidebar-only" ? "Sidebar only" : "Full isolation"}`}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="w-4 h-4"
+            >
+              <path
+                fillRule="evenodd"
+                d="M3.25 3A2.25 2.25 0 0 0 1 5.25v9.5A2.25 2.25 0 0 0 3.25 17h13.5A2.25 2.25 0 0 0 19 14.75v-9.5A2.25 2.25 0 0 0 16.75 3H3.25ZM2.5 9v5.75c0 .414.336.75.75.75h13.5a.75.75 0 0 0 .75-.75V9h-7.25v3a.75.75 0 0 1-1.5 0V9H2.5Z"
+                clipRule="evenodd"
+              />
+            </svg>
+            {workspaceIsolation === "sidebar-only" ? "Sidebar" : "Full"}
+          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={toggleFocusMode}
+              className={`flex items-center gap-1.5 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-gray-800 ${
+                focusModeEnabled
+                  ? "text-red-600 dark:text-red-400"
+                  : "text-gray-500 dark:text-gray-400"
+              }`}
+              aria-label={`Focus mode: ${focusModeEnabled ? "On" : "Off"}`}
+              title={`Focus mode: ${focusModeEnabled ? "On" : "Off"}`}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="w-4 h-4"
+              >
+                <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+                <path
+                  fillRule="evenodd"
+                  d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41ZM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              {focusModeEnabled ? "Focus" : ""}
+            </button>
+            <ThemeToggle theme={theme} onCycle={cycleTheme} />
+            <button
+              onClick={() => setShowSettings(true)}
+              className="flex items-center justify-center w-7 h-7 rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
+              aria-label="Open settings"
+              title="Settings"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="w-4 h-4"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M7.84 1.804A1 1 0 0 1 8.82 1h2.36a1 1 0 0 1 .98.804l.331 1.652a6.993 6.993 0 0 1 1.929 1.115l1.598-.54a1 1 0 0 1 1.186.447l1.18 2.044a1 1 0 0 1-.205 1.251l-1.267 1.113a7.047 7.047 0 0 1 0 2.228l1.267 1.113a1 1 0 0 1 .206 1.25l-1.18 2.045a1 1 0 0 1-1.187.447l-1.598-.54a6.993 6.993 0 0 1-1.929 1.115l-.33 1.652a1 1 0 0 1-.98.804H8.82a1 1 0 0 1-.98-.804l-.331-1.652a6.993 6.993 0 0 1-1.929-1.115l-1.598.54a1 1 0 0 1-1.186-.447l-1.18-2.044a1 1 0 0 1 .205-1.251l1.267-1.114a7.05 7.05 0 0 1 0-2.227L1.821 7.773a1 1 0 0 1-.206-1.25l1.18-2.045a1 1 0 0 1 1.187-.447l1.598.54A6.992 6.992 0 0 1 7.51 3.456l.33-1.652ZM10 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </footer>
+
+      {/* Folder Picker Dropdown */}
+      {folderPicker && (
+        <FolderPickerDropdown
+          folders={folders}
+          x={folderPicker.x}
+          y={folderPicker.y}
+          onSelect={handleSaveLinkToFolder}
+          onClose={() => setFolderPicker(null)}
+        />
+      )}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.items}
+          onClose={closeContextMenu}
+        />
+      )}
+
+      {/* Settings Panel */}
+      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+
+      {/* Command Palette */}
+      {showCommandPalette && (
+        <CommandPalette
+          commands={commands}
+          onClose={() => setShowCommandPalette(false)}
+        />
+      )}
+
+      {/* Organize Tabs Modal */}
+      {showOrganizeTabs && (
+        <OrganizeTabsModal
+          tabs={filteredTabs}
+          folders={folders}
+          onClose={() => setShowOrganizeTabs(false)}
+        />
+      )}
+
+      {/* Session Manager */}
+      {showSessionManager && (
+        <SessionManager
+          onClose={() => setShowSessionManager(false)}
+          onRestore={handleRestoreSession}
+        />
+      )}
+
+      {/* Onboarding */}
+      {showOnboarding && (
+        <Onboarding onComplete={() => setShowOnboarding(false)} />
+      )}
+    </div>
+  );
+}
