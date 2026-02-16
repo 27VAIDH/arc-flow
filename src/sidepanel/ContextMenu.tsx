@@ -87,7 +87,7 @@ export default function ContextMenu({
       ref={menuRef}
       role="menu"
       aria-label="Context menu"
-      className="fixed z-50 min-w-[160px] py-1 rounded-md shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
+      className="fixed z-50 min-w-[160px] py-1 rounded-xl shadow-xl bg-white dark:bg-arc-surface border border-gray-200 dark:border-arc-border"
       style={{ left: x, top: y }}
       onKeyDown={handleMenuKeyDown}
     >
@@ -99,7 +99,7 @@ export default function ContextMenu({
             item.onClick();
             onClose();
           }}
-          className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700"
+          className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-arc-text-primary hover:bg-gray-100 dark:hover:bg-arc-surface-hover focus:outline-none focus:bg-gray-100 dark:focus:bg-arc-surface-hover transition-colors duration-100"
         >
           {item.label}
         </button>

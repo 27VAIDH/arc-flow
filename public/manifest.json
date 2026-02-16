@@ -45,6 +45,13 @@
     },
     "open-command-palette": {
       "description": "Open command palette"
+    },
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
+      },
+      "description": "Toggle ArcFlow sidebar"
     }
   },
   "icons": {}

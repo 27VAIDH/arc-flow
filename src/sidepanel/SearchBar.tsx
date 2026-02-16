@@ -205,7 +205,7 @@ export default function SearchBar({
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 20 20"
           fill="currentColor"
-          className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none"
+          className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-arc-text-secondary pointer-events-none"
         >
           <path
             fillRule="evenodd"
@@ -226,7 +226,7 @@ export default function SearchBar({
             setTimeout(() => setIsFocused(false), 150);
           }}
           placeholder="Search tabs..."
-          className="w-full h-8 pl-8 pr-2 rounded bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full h-8 pl-8 pr-8 rounded-lg bg-gray-100 dark:bg-arc-surface text-gray-900 dark:text-arc-text-primary text-sm placeholder-gray-400 dark:placeholder-arc-text-secondary outline-none border border-transparent focus:border-arc-accent/50 focus:ring-1 focus:ring-arc-accent/30 shadow-inner dark:shadow-none transition-all duration-150"
           role="combobox"
           aria-expanded={showResults || undefined}
           aria-controls="search-results"
@@ -269,7 +269,7 @@ export default function SearchBar({
           id="search-results"
           role="listbox"
           aria-label="Search results"
-          className="absolute left-2 right-2 top-full mt-1 max-h-[320px] overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50"
+          className="absolute left-2 right-2 top-full mt-1 max-h-[320px] overflow-y-auto bg-white dark:bg-arc-surface border border-gray-200 dark:border-arc-border rounded-xl shadow-xl z-50"
         >
           {results.map((result, index) => (
             <button
@@ -283,10 +283,10 @@ export default function SearchBar({
                 activateResult(result);
               }}
               onMouseEnter={() => setSelectedIndex(index)}
-              className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left ${
+              className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors duration-100 ${
                 index === selectedIndex
-                  ? "bg-blue-50 dark:bg-blue-900/30"
-                  : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                  ? "bg-indigo-50 dark:bg-arc-accent/10"
+                  : "hover:bg-gray-50 dark:hover:bg-arc-surface-hover"
               }`}
             >
               {/* Icon based on type */}
@@ -322,7 +322,7 @@ export default function SearchBar({
               </div>
 
               {/* Type badge */}
-              <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+              <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary">
                 {result.type === "tab"
                   ? "Tab"
                   : result.type === "link"
@@ -336,7 +336,7 @@ export default function SearchBar({
 
       {/* No results */}
       {isFocused && debouncedQuery.trim() && results.length === 0 && (
-        <div className="absolute left-2 right-2 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 px-3 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
+        <div className="absolute left-2 right-2 top-full mt-1 bg-white dark:bg-arc-surface border border-gray-200 dark:border-arc-border rounded-xl shadow-xl z-50 px-3 py-3 text-sm text-gray-500 dark:text-arc-text-secondary text-center">
           No results found
         </div>
       )}

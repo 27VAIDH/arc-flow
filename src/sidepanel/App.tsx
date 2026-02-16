@@ -114,7 +114,7 @@ const LazyFavicon = memo(function LazyFavicon({
   ) : (
     <span
       ref={imgRef}
-      className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600"
+      className="w-4 h-4 shrink-0 rounded bg-gray-200 dark:bg-arc-surface-hover"
     />
   );
 });
@@ -220,9 +220,9 @@ const DraggableTabItem = memo(function DraggableTabItem({
         }
       }}
       onContextMenu={(e) => onContextMenu(e, tab)}
-      className={`flex items-center gap-2 px-2 h-8 text-sm rounded cursor-default hover:bg-gray-200 dark:hover:bg-gray-800 touch-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ${
+      className={`flex items-center gap-2 px-2 h-8 text-sm rounded-lg cursor-default transition-all duration-150 hover:bg-gray-100 dark:hover:bg-arc-surface-hover touch-none focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset ${
         tab.active
-          ? "border-l-[3px] border-l-[#2E75B6] font-bold"
+          ? "border-l-[3px] border-l-arc-accent font-medium bg-gray-100/50 dark:bg-arc-surface"
           : "border-l-[3px] border-l-transparent"
       } ${tab.discarded ? "opacity-50 italic" : ""}`}
       onMouseEnter={() => setHovered(true)}
@@ -232,11 +232,11 @@ const DraggableTabItem = memo(function DraggableTabItem({
         <LazyFavicon src={tab.favIconUrl} alt="" />
       ) : (
         <span
-          className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600"
+          className="w-4 h-4 shrink-0 rounded bg-gray-200 dark:bg-arc-surface-hover"
           aria-hidden="true"
         />
       )}
-      <span className="truncate flex-1 select-none">
+      <span className="truncate flex-1 select-none text-gray-700 dark:text-arc-text-primary">
         {tab.title || tab.url}
       </span>
       {tab.audible && (
@@ -248,7 +248,7 @@ const DraggableTabItem = memo(function DraggableTabItem({
           strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
-          className="w-3.5 h-3.5 shrink-0 text-blue-500 dark:text-blue-400"
+          className="w-3.5 h-3.5 shrink-0 text-arc-accent dark:text-arc-accent-hover"
           aria-hidden="true"
         >
           <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
@@ -278,11 +278,11 @@ const DraggableTabItem = memo(function DraggableTabItem({
 
 function TabDragOverlay({ tab }: { tab: TabInfo }) {
   return (
-    <div className="flex items-center gap-2 px-2 h-8 text-sm rounded bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-600 opacity-90">
+    <div className="flex items-center gap-2 px-2 h-8 text-sm rounded-lg bg-white dark:bg-arc-surface shadow-lg border border-gray-200 dark:border-arc-border opacity-90">
       {tab.favIconUrl ? (
         <img src={tab.favIconUrl} alt="" className="w-4 h-4 shrink-0" />
       ) : (
-        <span className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600" />
+        <span className="w-4 h-4 shrink-0 rounded bg-gray-200 dark:bg-arc-surface-hover" />
       )}
       <span className="truncate flex-1 select-none">
         {tab.title || tab.url}
@@ -340,7 +340,7 @@ function FolderPickerDropdown({
       <div key={folder.id}>
         <button
           onClick={() => onSelect(folder.id)}
-          className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+          className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-arc-surface-hover flex items-center gap-2 transition-colors duration-150"
           style={{ paddingLeft: 12 + depth * 16 }}
         >
           <svg
@@ -364,7 +364,7 @@ function FolderPickerDropdown({
     <div
       ref={ref}
       style={style}
-      className="min-w-[180px] max-w-[240px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg py-1 max-h-[200px] overflow-y-auto"
+      className="min-w-[180px] max-w-[240px] bg-white dark:bg-arc-surface border border-gray-200 dark:border-arc-border rounded-xl shadow-xl py-1 max-h-[200px] overflow-y-auto"
     >
       <div className="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 font-medium">
         Save to folder
@@ -390,7 +390,7 @@ function ThemeToggle({
   return (
     <button
       onClick={onCycle}
-      className="flex items-center gap-1.5 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
+      className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-150"
       aria-label={`Theme: ${THEME_LABELS[theme]}. Click to cycle.`}
       title={`Theme: ${THEME_LABELS[theme]}`}
     >
@@ -1140,7 +1140,7 @@ export default function App() {
   );
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+    <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 dark:bg-arc-bg dark:text-arc-text-primary">
       {/* Live region for screen reader announcements */}
       <div
         role="status"
@@ -1154,11 +1154,11 @@ export default function App() {
           `. ${suspendedCount} suspended, ~${estimatedMBSaved} MB saved`}
       </div>
 
-      <header className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-        <h1 className="text-lg font-semibold">ArcFlow</h1>
+      <header className="flex items-center justify-between px-4 py-3 border-b border-gray-200/80 dark:border-arc-border">
+        <h1 className="text-sm font-semibold tracking-tight text-gray-800 dark:text-arc-text-primary">ArcFlow</h1>
         <button
           onClick={() => setShowOrganizeTabs(true)}
-          className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
+          className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-150"
           title="Organize Tabs"
           aria-label="Organize Tabs"
         >
@@ -1216,7 +1216,7 @@ export default function App() {
           {/* Tab list */}
           <section className="flex-1 px-1" aria-label="Open tabs">
             <p
-              className="text-xs text-gray-500 dark:text-gray-400 px-2 py-1"
+              className="text-[11px] text-gray-400 dark:text-arc-text-secondary px-2 py-1 uppercase tracking-wider font-medium"
               aria-live="polite"
             >
               {filteredTabs.length} tab{filteredTabs.length !== 1 ? "s" : ""}{" "}
@@ -1263,7 +1263,7 @@ export default function App() {
       </main>
 
       {/* Footer (Zone 5) */}
-      <footer className="border-t border-gray-200 dark:border-gray-700">
+      <footer className="border-t border-gray-200/80 dark:border-arc-border">
         <WorkspaceSwitcher
           activeWorkspaceId={activeWorkspaceId}
           onWorkspaceChange={handleWorkspaceChange}
@@ -1271,7 +1271,7 @@ export default function App() {
           onSaveSession={handleSaveSession}
         />
         {suspendedCount > 0 && (
-          <div className="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 text-center">
+          <div className="px-3 py-1 text-[11px] text-gray-400 dark:text-arc-text-secondary text-center">
             {suspendedCount} tab{suspendedCount !== 1 ? "s" : ""} suspended | ~
             {estimatedMBSaved} MB saved
           </div>
@@ -1279,10 +1279,10 @@ export default function App() {
         <div className="flex items-center justify-between px-3 pb-2">
           <button
             onClick={handleToggleIsolation}
-            className={`flex items-center gap-1.5 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-gray-800 ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-full transition-colors duration-150 hover:bg-gray-100 dark:hover:bg-arc-surface-hover ${
               workspaceIsolation === "full-isolation"
-                ? "text-blue-600 dark:text-blue-400"
-                : "text-gray-500 dark:text-gray-400"
+                ? "text-arc-accent dark:text-arc-accent-hover bg-indigo-50 dark:bg-arc-accent/10"
+                : "text-gray-500 dark:text-arc-text-secondary"
             }`}
             aria-label={`Workspace isolation: ${workspaceIsolation === "sidebar-only" ? "Sidebar only" : "Full isolation"}`}
             title={`Isolation: ${workspaceIsolation === "sidebar-only" ? "Sidebar only" : "Full isolation"}`}
@@ -1304,10 +1304,10 @@ export default function App() {
           <div className="flex items-center gap-1">
             <button
               onClick={toggleFocusMode}
-              className={`flex items-center gap-1.5 px-2 py-1 text-xs rounded hover:bg-gray-200 dark:hover:bg-gray-800 ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-full transition-colors duration-150 hover:bg-gray-100 dark:hover:bg-arc-surface-hover ${
                 focusModeEnabled
-                  ? "text-red-600 dark:text-red-400"
-                  : "text-gray-500 dark:text-gray-400"
+                  ? "text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-500/10"
+                  : "text-gray-500 dark:text-arc-text-secondary"
               }`}
               aria-label={`Focus mode: ${focusModeEnabled ? "On" : "Off"}`}
               title={`Focus mode: ${focusModeEnabled ? "On" : "Off"}`}
@@ -1330,7 +1330,7 @@ export default function App() {
             <ThemeToggle theme={theme} onCycle={cycleTheme} />
             <button
               onClick={() => setShowSettings(true)}
-              className="flex items-center justify-center w-7 h-7 rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
+              className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-150"
               aria-label="Open settings"
               title="Settings"
             >

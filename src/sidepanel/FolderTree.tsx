@@ -77,13 +77,13 @@ function FolderHeader({
 
   return (
     <div
-      className="flex items-center gap-1 px-2 h-7 text-sm rounded cursor-default hover:bg-gray-200 dark:hover:bg-gray-800 group"
+      className="flex items-center gap-1 px-2 h-7 text-sm rounded-lg cursor-default hover:bg-gray-100 dark:hover:bg-arc-surface-hover group transition-colors duration-150"
       onContextMenu={(e) => onContextMenu(e, folder)}
     >
       {/* Chevron toggle */}
       <button
         onClick={() => onToggleCollapse(folder.id)}
-        className="shrink-0 w-4 h-4 flex items-center justify-center text-gray-400 dark:text-gray-500"
+        className="shrink-0 w-4 h-4 flex items-center justify-center text-gray-400 dark:text-arc-text-secondary"
         aria-label={folder.isCollapsed ? "Expand folder" : "Collapse folder"}
       >
         <svg
@@ -105,7 +105,7 @@ function FolderHeader({
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 20 20"
         fill="currentColor"
-        className="w-4 h-4 shrink-0 text-gray-500 dark:text-gray-400"
+        className="w-4 h-4 shrink-0 text-arc-accent dark:text-arc-accent-hover"
       >
         <path d="M3.75 3A1.75 1.75 0 0 0 2 4.75v3.26a3.235 3.235 0 0 1 1.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0 0 16.25 5h-4.836a.25.25 0 0 1-.177-.073L9.823 3.513A1.75 1.75 0 0 0 8.586 3H3.75ZM3.75 9A1.75 1.75 0 0 0 2 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0 0 18 15.25v-4.5A1.75 1.75 0 0 0 16.25 9H3.75Z" />
       </svg>
@@ -124,7 +124,7 @@ function FolderHeader({
               setEditName(folder.name);
             }
           }}
-          className="flex-1 text-sm bg-white dark:bg-gray-700 border border-blue-400 rounded px-1 py-0 outline-none"
+          className="flex-1 text-sm bg-white dark:bg-arc-surface border border-arc-accent/50 rounded-md px-1 py-0 outline-none"
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
@@ -141,7 +141,7 @@ function FolderHeader({
 
       {/* Count badge */}
       {badgeParts.length > 0 && (
-        <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+        <span className="text-[11px] text-gray-400 dark:text-arc-text-secondary shrink-0">
           ({badgeParts.join(", ")})
         </span>
       )}
@@ -192,7 +192,7 @@ function DraggableFolderItem({
       aria-level={depth + 2}
       aria-label={`${item.type === "link" ? "Saved link: " : ""}${item.title || item.url}`}
       tabIndex={0}
-      className={`flex items-center gap-2 px-2 h-7 text-sm rounded cursor-default hover:bg-gray-200 dark:hover:bg-gray-800 touch-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ${item.type === "link" ? "cursor-pointer" : ""}`}
+      className={`flex items-center gap-2 px-2 h-7 text-sm rounded-lg cursor-default hover:bg-gray-100 dark:hover:bg-arc-surface-hover touch-none focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset transition-colors duration-150 ${item.type === "link" ? "cursor-pointer" : ""}`}
       onClick={() => onClick?.(item, folderId)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -214,12 +214,12 @@ function DraggableFolderItem({
         />
       ) : (
         <span
-          className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600"
+          className="w-4 h-4 shrink-0 rounded bg-gray-200 dark:bg-arc-surface-hover"
           aria-hidden="true"
         />
       )}
       <span
-        className={`truncate flex-1 select-none ${item.type === "link" ? "text-gray-500 dark:text-gray-400 italic" : ""}`}
+        className={`truncate flex-1 select-none ${item.type === "link" ? "text-gray-500 dark:text-arc-text-secondary italic" : ""}`}
       >
         {item.title || item.url}
       </span>
@@ -288,8 +288,8 @@ function SortableFolder({
       <div
         {...attributes}
         {...listeners}
-        className={`touch-none rounded transition-colors ${
-          isOver ? "bg-blue-100 dark:bg-blue-900/40 ring-1 ring-blue-400" : ""
+        className={`touch-none rounded-lg transition-colors duration-150 ${
+          isOver ? "bg-indigo-50 dark:bg-arc-accent/10 ring-1 ring-arc-accent/40" : ""
         }`}
         tabIndex={0}
         onKeyDown={(e) => {
@@ -517,7 +517,7 @@ export default function FolderTree({
       <div className="px-2 py-1">
         <button
           onClick={() => handleCreateFolder()}
-          className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-2 py-1 rounded hover:bg-gray-200 dark:hover:bg-gray-800"
+          className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-arc-text-secondary hover:text-gray-700 dark:hover:text-gray-300 px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover transition-colors duration-150"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -536,12 +536,12 @@ export default function FolderTree({
   return (
     <div className="px-1 py-1">
       <div className="flex items-center justify-between px-2 py-1">
-        <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+        <span className="text-[11px] text-gray-400 dark:text-arc-text-secondary font-medium uppercase tracking-wider">
           Folders
         </span>
         <button
           onClick={() => handleCreateFolder()}
-          className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+          className="text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-150"
           aria-label="New Folder"
           title="New Folder"
         >
@@ -570,7 +570,7 @@ export default function FolderTree({
 
       {/* Error toast */}
       {toast && (
-        <div className="mx-2 mt-2 px-3 py-2 text-xs text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/30 rounded border border-red-200 dark:border-red-800">
+        <div className="mx-2 mt-2 px-3 py-2 text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-500/10 rounded-lg border border-red-200 dark:border-red-500/20">
           {toast}
         </div>
       )}

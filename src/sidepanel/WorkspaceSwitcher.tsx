@@ -267,7 +267,7 @@ export default function WorkspaceSwitcher({
               if (e.key === "Enter") handleRenameCommit(editingId);
               if (e.key === "Escape") setEditingId(null);
             }}
-            className="w-full text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-500 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full text-xs bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-arc-accent/50 text-gray-900 dark:text-arc-text-primary transition-colors duration-150"
             placeholder="Workspace name"
           />
         </div>
@@ -302,10 +302,10 @@ export default function WorkspaceSwitcher({
               key={ws.id}
               onClick={() => handleSwitchWorkspace(ws.id)}
               onContextMenu={(e) => handleContextMenu(e, ws)}
-              className={`w-7 h-7 rounded-md flex items-center justify-center text-sm shrink-0 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-arc-accent/50 ${
                 isActive
-                  ? "ring-2 ring-offset-1 dark:ring-offset-gray-900"
-                  : "opacity-70 hover:opacity-100"
+                  ? "ring-2 ring-offset-1 dark:ring-offset-arc-bg scale-105"
+                  : "opacity-60 hover:opacity-100 hover:scale-105"
               }`}
               style={{
                 backgroundColor: ws.accentColor + "20",
@@ -329,7 +329,7 @@ export default function WorkspaceSwitcher({
         {/* Add workspace button */}
         <button
           onClick={handleCreate}
-          className="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 shrink-0 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-arc-surface-hover shrink-0 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-arc-accent/50"
           aria-label="New Workspace"
           title="New Workspace"
           tabIndex={-1}
@@ -351,9 +351,9 @@ export default function WorkspaceSwitcher({
           ref={emojiPickerRef}
           role="dialog"
           aria-label="Choose emoji"
-          className="absolute bottom-full left-3 mb-1 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50"
+          className="absolute bottom-full left-3 mb-1 p-2 bg-white dark:bg-arc-surface border border-gray-200 dark:border-arc-border rounded-xl shadow-xl z-50"
         >
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">
+          <p className="text-[11px] text-gray-500 dark:text-arc-text-secondary mb-1.5 uppercase tracking-wider font-medium">
             Choose emoji
           </p>
           <div
@@ -365,7 +365,7 @@ export default function WorkspaceSwitcher({
               <button
                 key={emoji}
                 onClick={() => handleEmojiSelect(showEmojiPicker, emoji)}
-                className="w-7 h-7 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-base flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-7 h-7 rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-base flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-arc-accent/50 transition-colors duration-100"
                 aria-label={`Select emoji ${emoji}`}
               >
                 {emoji}
@@ -381,9 +381,9 @@ export default function WorkspaceSwitcher({
           ref={colorPickerRef}
           role="dialog"
           aria-label="Choose color"
-          className="absolute bottom-full left-3 mb-1 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50"
+          className="absolute bottom-full left-3 mb-1 p-2 bg-white dark:bg-arc-surface border border-gray-200 dark:border-arc-border rounded-xl shadow-xl z-50"
         >
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">
+          <p className="text-[11px] text-gray-500 dark:text-arc-text-secondary mb-1.5 uppercase tracking-wider font-medium">
             Choose color
           </p>
           <div
@@ -398,7 +398,7 @@ export default function WorkspaceSwitcher({
                 <button
                   key={color}
                   onClick={() => handleColorSelect(showColorPicker, color)}
-                  className={`w-6 h-6 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 ${isSelected ? "ring-2 ring-offset-1 ring-gray-400 dark:ring-offset-gray-800" : ""}`}
+                  className={`w-6 h-6 rounded-full focus:outline-none focus:ring-2 focus:ring-arc-accent/50 transition-transform duration-100 hover:scale-110 ${isSelected ? "ring-2 ring-offset-1 ring-gray-400 dark:ring-offset-arc-surface" : ""}`}
                   style={{ backgroundColor: color }}
                   title={color}
                   aria-label={`Select color ${color}${isSelected ? " (selected)" : ""}`}

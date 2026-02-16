@@ -264,15 +264,15 @@ export default function CommandPalette({
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/40"
+        className="absolute inset-0 bg-black/50 backdrop-frosted"
         onClick={onClose}
         aria-hidden="true"
       />
 
       {/* Modal */}
-      <div className="relative w-[480px] max-w-[calc(100%-32px)] bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-600 overflow-hidden">
+      <div className="relative w-[480px] max-w-[calc(100%-32px)] bg-white dark:bg-arc-surface rounded-2xl shadow-2xl border border-gray-200 dark:border-arc-border overflow-hidden">
         {/* Search input */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200/80 dark:border-arc-border">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 20 20"
@@ -291,7 +291,7 @@ export default function CommandPalette({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Type a command..."
-            className="flex-1 bg-transparent outline-none text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400"
+            className="flex-1 bg-transparent outline-none text-sm text-gray-900 dark:text-arc-text-primary placeholder-gray-400 dark:placeholder-arc-text-secondary"
             role="combobox"
             aria-expanded="true"
             aria-controls="command-palette-list"
@@ -302,7 +302,7 @@ export default function CommandPalette({
             }
             aria-autocomplete="list"
           />
-          <kbd className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">
+          <kbd className="text-xs text-gray-400 dark:text-arc-text-secondary bg-gray-100 dark:bg-arc-surface-hover px-1.5 py-0.5 rounded-md">
             esc
           </kbd>
         </div>
@@ -316,7 +316,7 @@ export default function CommandPalette({
           className="max-h-[320px] overflow-y-auto py-1"
         >
           {visibleCommands.length === 0 ? (
-            <div className="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+            <div className="px-4 py-6 text-center text-sm text-gray-500 dark:text-arc-text-secondary">
               No commands found
             </div>
           ) : (
@@ -331,18 +331,18 @@ export default function CommandPalette({
                   executeCommand(cmd);
                 }}
                 onMouseEnter={() => setSelectedIndex(index)}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left ${
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors duration-100 ${
                   index === selectedIndex
-                    ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    ? "bg-indigo-50 dark:bg-arc-accent/10 text-arc-accent dark:text-arc-accent-hover"
+                    : "text-gray-700 dark:text-arc-text-primary hover:bg-gray-50 dark:hover:bg-arc-surface-hover"
                 }`}
               >
-                <span className="shrink-0 text-gray-500 dark:text-gray-400">
+                <span className="shrink-0 text-gray-500 dark:text-arc-text-secondary">
                   {getIcon(cmd.icon)}
                 </span>
                 <span className="flex-1 truncate">{cmd.name}</span>
                 {cmd.shortcut && (
-                  <kbd className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded shrink-0">
+                  <kbd className="text-xs text-gray-400 dark:text-arc-text-secondary bg-gray-100 dark:bg-arc-surface-hover px-1.5 py-0.5 rounded-md shrink-0">
                     {cmd.shortcut}
                   </kbd>
                 )}

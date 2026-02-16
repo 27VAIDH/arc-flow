@@ -27,13 +27,13 @@ function SelectField({
 }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <label className="text-sm text-gray-700 dark:text-gray-300 shrink-0">
+      <label className="text-sm text-gray-700 dark:text-arc-text-primary shrink-0">
         {label}
       </label>
       <select
         value={String(value)}
         onChange={(e) => onChange(e.target.value)}
-        className="text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-900 dark:text-gray-100 min-w-[120px]"
+        className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary min-w-[120px] transition-colors duration-150"
       >
         {options.map((opt) => (
           <option key={String(opt.value)} value={String(opt.value)}>
@@ -96,19 +96,19 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="absolute inset-0 z-50 flex flex-col bg-gray-50 dark:bg-gray-900"
+      className="absolute inset-0 z-50 flex flex-col bg-gray-50 dark:bg-arc-bg"
       role="dialog"
       aria-modal="true"
       aria-label="Settings"
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200/80 dark:border-arc-border">
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-arc-text-primary tracking-tight">
           Settings
         </h2>
         <button
           onClick={onClose}
-          className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded"
+          className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-arc-text-secondary dark:hover:text-gray-200 rounded-lg transition-colors duration-150"
           aria-label="Close settings"
         >
           <svg
@@ -126,7 +126,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
         {/* Appearance */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
             Appearance
           </h3>
           <div className="space-y-3">
@@ -145,7 +145,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         {/* Tab Management */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
             Tab Management
           </h3>
           <div className="space-y-3">
@@ -170,12 +170,12 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         {/* Focus Mode */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
             Focus Mode
           </h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-4">
-              <label className="text-sm text-gray-700 dark:text-gray-300 shrink-0">
+              <label className="text-sm text-gray-700 dark:text-arc-text-primary shrink-0">
                 Enable focus mode
               </label>
               <button
@@ -194,7 +194,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                 className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
                   settings.focusMode.enabled
                     ? "bg-red-600"
-                    : "bg-gray-300 dark:bg-gray-600"
+                    : "bg-gray-300 dark:bg-arc-surface-hover"
                 }`}
               >
                 <span
@@ -206,7 +206,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                 />
               </button>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-gray-500 dark:text-arc-text-secondary">
               When enabled, navigating to blocked URLs will redirect to the
               configured productive URL.
             </p>
@@ -228,7 +228,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                     handleUpdate({ focusMode: updated });
                   }}
                   placeholder="*twitter.com*"
-                  className="text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-900 dark:text-gray-100 flex-1 min-w-0"
+                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-150 flex-1 min-w-0"
                 />
                 <input
                   type="text"
@@ -246,7 +246,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                     handleUpdate({ focusMode: updated });
                   }}
                   placeholder="https://notion.so"
-                  className="text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-900 dark:text-gray-100 flex-1 min-w-0"
+                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-150 flex-1 min-w-0"
                 />
                 <button
                   onClick={() => {
@@ -289,7 +289,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                     focusMode: { ...settings.focusMode, redirectRules: rules },
                   });
                 }}
-                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                className="text-sm text-arc-accent dark:text-arc-accent-hover hover:text-indigo-700 dark:hover:text-indigo-300"
               >
                 + Add Redirect Rule
               </button>
@@ -299,12 +299,12 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         {/* AI Grouping */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
             AI-Enhanced Grouping
           </h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-4">
-              <label className="text-sm text-gray-700 dark:text-gray-300 shrink-0">
+              <label className="text-sm text-gray-700 dark:text-arc-text-primary shrink-0">
                 Enable AI grouping
               </label>
               <button
@@ -318,8 +318,8 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                 }
                 className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
                   settings.aiGrouping.enabled
-                    ? "bg-blue-600"
-                    : "bg-gray-300 dark:bg-gray-600"
+                    ? "bg-arc-accent"
+                    : "bg-gray-300 dark:bg-arc-surface-hover"
                 }`}
               >
                 <span
@@ -333,7 +333,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
             </div>
             {settings.aiGrouping.enabled && (
               <>
-                <div className="p-2 rounded bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
                   <p className="text-xs text-amber-700 dark:text-amber-300">
                     Privacy: Only tab titles and URLs are sent to the AI
                     provider. No page content is shared.
@@ -355,7 +355,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                 />
                 {settings.aiGrouping.provider && (
                   <div className="flex items-center justify-between gap-4">
-                    <label className="text-sm text-gray-700 dark:text-gray-300 shrink-0">
+                    <label className="text-sm text-gray-700 dark:text-arc-text-primary shrink-0">
                       API Key
                     </label>
                     <input
@@ -374,7 +374,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                           ? "sk-ant-..."
                           : "sk-..."
                       }
-                      className="text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-900 dark:text-gray-100 min-w-[120px] w-full max-w-[180px]"
+                      className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-150 min-w-[120px] w-full max-w-[180px]"
                     />
                   </div>
                 )}
@@ -385,7 +385,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         {/* Workspaces */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
             Workspaces
           </h3>
           <div className="space-y-3">
@@ -404,11 +404,11 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         {/* Air Traffic Control */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
             Air Traffic Control
           </h3>
           <div className="space-y-3">
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-gray-500 dark:text-arc-text-secondary">
               Route new tabs to workspaces based on URL patterns. Use * as
               wildcard (e.g. *slack.com*).
             </p>
@@ -423,7 +423,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                     handleUpdate({ routingRules: rules });
                   }}
                   placeholder="*example.com*"
-                  className="text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-900 dark:text-gray-100 flex-1 min-w-0"
+                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-150 flex-1 min-w-0"
                 />
                 <select
                   value={rule.workspaceId}
@@ -435,7 +435,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                     };
                     handleUpdate({ routingRules: rules });
                   }}
-                  className="text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-900 dark:text-gray-100 min-w-[100px]"
+                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-150 min-w-[100px]"
                 >
                   {workspaces.map((ws) => (
                     <option key={ws.id} value={ws.id}>
@@ -475,7 +475,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                 ];
                 handleUpdate({ routingRules: rules });
               }}
-              className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+              className="text-sm text-arc-accent dark:text-arc-accent-hover hover:text-indigo-700 dark:hover:text-indigo-300"
             >
               + Add Rule
             </button>
@@ -486,7 +486,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
         <section className="pt-2">
           <button
             onClick={handleReset}
-            className="w-full text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded px-3 py-2 text-center"
+            className="w-full text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg px-3 py-2 text-center transition-colors duration-150"
           >
             Reset to Defaults
           </button>

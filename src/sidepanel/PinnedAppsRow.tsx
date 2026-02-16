@@ -82,7 +82,9 @@ function SortablePinnedApp({
       title={app.title}
       aria-label={`${app.title}${hasOpenTab ? " (open)" : ""}`}
     >
-      <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+      <div className={`w-8 h-8 rounded-full overflow-hidden bg-gray-100 dark:bg-arc-surface flex items-center justify-center transition-all duration-150 group-hover:scale-105 ${
+        hasOpenTab ? "ring-2 ring-arc-accent/40 shadow-sm shadow-arc-accent/20" : ""
+      }`}>
         {app.favicon ? (
           <img
             src={app.favicon}
@@ -94,15 +96,15 @@ function SortablePinnedApp({
             }}
           />
         ) : (
-          <span className="text-xs font-bold text-gray-500 dark:text-gray-400">
+          <span className="text-xs font-bold text-gray-500 dark:text-arc-text-secondary">
             {app.title.charAt(0).toUpperCase()}
           </span>
         )}
       </div>
-      {/* Active indicator dot */}
+      {/* Active indicator */}
       <div
-        className={`w-1.5 h-1.5 rounded-full mt-0.5 ${
-          hasOpenTab ? "bg-[#2E75B6]" : "bg-transparent"
+        className={`w-1 h-1 rounded-full mt-0.5 transition-colors duration-150 ${
+          hasOpenTab ? "bg-arc-accent" : "bg-transparent"
         }`}
         aria-hidden="true"
       />
@@ -246,7 +248,7 @@ export default function PinnedAppsRow({
   return (
     <nav
       aria-label="Pinned apps"
-      className="px-2 py-1.5 border-b border-gray-200 dark:border-gray-700"
+      className="px-2 py-1.5 border-b border-gray-200/80 dark:border-arc-border"
     >
       {editingApp && (
         <div className="mb-1.5">
@@ -259,7 +261,7 @@ export default function PinnedAppsRow({
             }
             onBlur={handleEditSubmit}
             onKeyDown={handleEditKeyDown}
-            className="w-full px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 outline-none focus:ring-1 focus:ring-[#2E75B6]"
+            className="w-full px-2 py-1 text-xs rounded-lg border border-gray-300 dark:border-arc-border bg-white dark:bg-arc-surface text-gray-900 dark:text-arc-text-primary outline-none focus:ring-1 focus:ring-arc-accent/50 transition-colors duration-150"
             placeholder={
               editingApp.field === "title" ? "App name" : "https://..."
             }
