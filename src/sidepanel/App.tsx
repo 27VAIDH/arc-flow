@@ -8,22 +8,21 @@ import type {
   FolderItem,
   Session,
 } from "../shared/types";
-import { useTheme, type ThemePreference } from "./useTheme";
+import { useTheme } from "./useTheme";
 import type { Settings } from "../shared/types";
 import {
-  getPinnedApps,
   addPinnedApp,
   removePinnedApp,
 } from "../shared/storage";
 import { getSettings, updateSettings } from "../shared/settingsStorage";
 import {
-  getFolders,
   createFolder,
   addItemToFolder,
   removeItemFromFolder,
   moveItemToFolder,
   reorderFolders,
   reorderItemsInFolder,
+  renameItemInFolder,
 } from "../shared/folderStorage";
 import {
   getActiveWorkspace,
@@ -161,7 +160,6 @@ const DraggableTabItem = memo(function DraggableTabItem({
   onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
   style?: React.CSSProperties;
 }) {
-  const [hovered, setHovered] = useState(false);
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: `tab:${tab.id}` });
 
@@ -203,7 +201,6 @@ const DraggableTabItem = memo(function DraggableTabItem({
       ref={setNodeRef}
       style={style}
       {...attributes}
-      {...listeners}
       role="option"
       aria-selected={tab.active}
       aria-label={srLabel}
@@ -220,14 +217,22 @@ const DraggableTabItem = memo(function DraggableTabItem({
         }
       }}
       onContextMenu={(e) => onContextMenu(e, tab)}
-      className={`flex items-center gap-2 px-2 h-8 text-sm rounded-lg cursor-default transition-all duration-150 hover:bg-gray-100 dark:hover:bg-arc-surface-hover touch-none focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset ${
+      className={`group flex items-center gap-2 px-2 h-8 text-sm rounded-lg cursor-default transition-all duration-150 hover:bg-gray-100 dark:hover:bg-arc-surface-hover focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset ${
         tab.active
           ? "border-l-[3px] border-l-arc-accent font-medium bg-gray-100/50 dark:bg-arc-surface"
           : "border-l-[3px] border-l-transparent"
       } ${tab.discarded ? "opacity-50 italic" : ""}`}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
+      {/* Drag grip */}
+      <span
+        {...listeners}
+        className="shrink-0 flex items-center cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 touch-none opacity-0 group-hover:opacity-100 transition-opacity"
+        aria-label="Drag to reorder"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+          <path d="M6 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm5-9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
+        </svg>
+      </span>
       {tab.favIconUrl ? (
         <LazyFavicon src={tab.favIconUrl} alt="" />
       ) : (
@@ -256,22 +261,21 @@ const DraggableTabItem = memo(function DraggableTabItem({
           <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
         </svg>
       )}
-      {hovered && (
-        <button
-          onClick={handleClose}
-          className="shrink-0 w-4 h-4 flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-          aria-label={`Close ${tab.title}`}
+      <button
+        onClick={handleClose}
+        onPointerDown={(e) => e.stopPropagation()}
+        className="shrink-0 w-4 h-4 flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
+        aria-label={`Close ${tab.title}`}
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 16 16"
+          fill="currentColor"
+          className="w-3.5 h-3.5"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 16 16"
-            fill="currentColor"
-            className="w-3.5 h-3.5"
-          >
-            <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
-          </svg>
-        </button>
-      )}
+          <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
+        </svg>
+      </button>
     </li>
   );
 });
@@ -374,67 +378,6 @@ function FolderPickerDropdown({
   );
 }
 
-const THEME_LABELS: Record<ThemePreference, string> = {
-  system: "System",
-  light: "Light",
-  dark: "Dark",
-};
-
-function ThemeToggle({
-  theme,
-  onCycle,
-}: {
-  theme: ThemePreference;
-  onCycle: () => void;
-}) {
-  return (
-    <button
-      onClick={onCycle}
-      className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-150"
-      aria-label={`Theme: ${THEME_LABELS[theme]}. Click to cycle.`}
-      title={`Theme: ${THEME_LABELS[theme]}`}
-    >
-      {theme === "dark" ? (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          className="w-4 h-4"
-        >
-          <path
-            fillRule="evenodd"
-            d="M7.455 2.004a.75.75 0 0 1 .26.77 7 7 0 0 0 9.958 7.967.75.75 0 0 1 1.067.853A8.5 8.5 0 1 1 6.647 1.921a.75.75 0 0 1 .808.083Z"
-            clipRule="evenodd"
-          />
-        </svg>
-      ) : theme === "light" ? (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          className="w-4 h-4"
-        >
-          <path d="M10 2a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 2ZM10 15a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 15ZM10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM15.657 5.404a.75.75 0 1 0-1.06-1.06l-1.061 1.06a.75.75 0 0 0 1.06 1.061l1.061-1.06ZM6.464 14.596a.75.75 0 1 0-1.06-1.06l-1.061 1.06a.75.75 0 0 0 1.06 1.061l1.061-1.06ZM18 10a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 18 10ZM5 10a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 5 10ZM14.596 15.657a.75.75 0 0 0 1.06-1.06l-1.06-1.061a.75.75 0 1 0-1.061 1.06l1.06 1.061ZM5.404 6.464a.75.75 0 0 0 1.06-1.06l-1.06-1.061a.75.75 0 1 0-1.061 1.06l1.06 1.061Z" />
-        </svg>
-      ) : (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          className="w-4 h-4"
-        >
-          <path
-            fillRule="evenodd"
-            d="M2 4.25A2.25 2.25 0 0 1 4.25 2h11.5A2.25 2.25 0 0 1 18 4.25v8.5A2.25 2.25 0 0 1 15.75 15h-3.105a3.501 3.501 0 0 0 1.1 1.677A.75.75 0 0 1 13.26 18H6.74a.75.75 0 0 1-.484-1.323A3.501 3.501 0 0 0 7.355 15H4.25A2.25 2.25 0 0 1 2 12.75v-8.5Zm1.5 0a.75.75 0 0 1 .75-.75h11.5a.75.75 0 0 1 .75.75v7.5a.75.75 0 0 1-.75.75H4.25a.75.75 0 0 1-.75-.75v-7.5Z"
-            clipRule="evenodd"
-          />
-        </svg>
-      )}
-      {THEME_LABELS[theme]}
-    </button>
-  );
-}
-
 interface ContextMenuState {
   x: number;
   y: number;
@@ -473,8 +416,6 @@ export default function App() {
     x: number;
     y: number;
   } | null>(null);
-  const [workspaceIsolation, setWorkspaceIsolation] =
-    useState<Settings["workspaceIsolation"]>("sidebar-only");
   const [focusModeEnabled, setFocusModeEnabled] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -521,7 +462,6 @@ export default function App() {
     });
     getWorkspaces().then(setWorkspaces);
     getSettings().then((s) => {
-      setWorkspaceIsolation(s.workspaceIsolation);
       setFocusModeEnabled(s.focusMode.enabled);
     });
 
@@ -556,7 +496,6 @@ export default function App() {
         if (changes.settings) {
           const newSettings = changes.settings.newValue as Settings | undefined;
           if (newSettings) {
-            setWorkspaceIsolation(newSettings.workspaceIsolation);
             setFocusModeEnabled(newSettings.focusMode.enabled);
           }
         }
@@ -569,45 +508,18 @@ export default function App() {
     };
   }, []);
 
-  // Load folders and listen for storage changes
+  // Extract pinned apps and folders from the active workspace
   useEffect(() => {
-    getFolders().then(setFolders);
-
-    const handleStorageChange = (
-      changes: { [key: string]: chrome.storage.StorageChange },
-      area: string
-    ) => {
-      if (area === "local" && changes.folders) {
-        const updated = (changes.folders.newValue as Folder[]) ?? [];
-        setFolders(updated.sort((a, b) => a.sortOrder - b.sortOrder));
-      }
-    };
-
-    chrome.storage.onChanged.addListener(handleStorageChange);
-    return () => {
-      chrome.storage.onChanged.removeListener(handleStorageChange);
-    };
-  }, []);
-
-  // Load pinned apps and listen for changes
-  useEffect(() => {
-    getPinnedApps().then(setPinnedApps);
-
-    const handleStorageChange = (
-      changes: { [key: string]: chrome.storage.StorageChange },
-      area: string
-    ) => {
-      if (area === "local" && changes.pinnedApps) {
-        const apps = (changes.pinnedApps.newValue as PinnedApp[]) ?? [];
-        setPinnedApps(apps.sort((a, b) => a.sortOrder - b.sortOrder));
-      }
-    };
-
-    chrome.storage.onChanged.addListener(handleStorageChange);
-    return () => {
-      chrome.storage.onChanged.removeListener(handleStorageChange);
-    };
-  }, []);
+    const ws = workspaces.find((w) => w.id === activeWorkspaceId);
+    if (ws) {
+      setPinnedApps(
+        [...(ws.pinnedApps ?? [])].sort((a, b) => a.sortOrder - b.sortOrder)
+      );
+      setFolders(
+        [...(ws.folders ?? [])].sort((a, b) => a.sortOrder - b.sortOrder)
+      );
+    }
+  }, [activeWorkspaceId, workspaces]);
 
   useEffect(() => {
     // Request initial tab list from service worker
@@ -652,38 +564,27 @@ export default function App() {
 
   const handleWorkspaceChange = useCallback((workspaceId: string) => {
     setActiveWorkspaceId(workspaceId);
-    // Trigger workspace isolation (tab groups) in the service worker
-    chrome.runtime.sendMessage({
-      type: "APPLY_WORKSPACE_ISOLATION",
-      activeWorkspaceId: workspaceId,
-    });
   }, []);
 
-  const handleToggleIsolation = useCallback(() => {
-    const newMode =
-      workspaceIsolation === "sidebar-only" ? "full-isolation" : "sidebar-only";
-    setWorkspaceIsolation(newMode);
-    updateSettings({ workspaceIsolation: newMode }).then(() => {
-      if (newMode === "full-isolation") {
-        chrome.runtime.sendMessage({
-          type: "APPLY_WORKSPACE_ISOLATION",
-          activeWorkspaceId,
-        });
-      }
-    });
-  }, [workspaceIsolation, activeWorkspaceId]);
-
-  // Filter tabs by active workspace
+  // Filter tabs by active workspace and exclude tabs assigned to folders
   const filteredTabs = useMemo(() => {
+    const tabIdsInFolders = new Set<number>(
+      folders
+        .flatMap((f) => f.items)
+        .filter((item) => item.type === "tab" && item.tabId != null)
+        .map((item) => item.tabId as number)
+    );
+
     return tabs.filter((tab) => {
       const wsId = tabWorkspaceMap[String(tab.id)];
-      // Show tabs that are assigned to the active workspace,
-      // or tabs that have no workspace assignment (unassigned tabs go to active workspace)
-      return !wsId || wsId === activeWorkspaceId;
+      // Show tabs assigned to the active workspace.
+      // Unmapped tabs default to "default" workspace (not shown everywhere).
+      const effectiveWsId = wsId || "default";
+      return effectiveWsId === activeWorkspaceId && !tabIdsInFolders.has(tab.id);
     });
-  }, [tabs, tabWorkspaceMap, activeWorkspaceId]);
+  }, [tabs, tabWorkspaceMap, activeWorkspaceId, folders]);
 
-  const { theme, cycleTheme } = useTheme();
+  const { cycleTheme } = useTheme();
 
   // Suspension stats
   const suspendedCount = useMemo(
@@ -717,6 +618,13 @@ export default function App() {
   const toggleFocusMode = useCallback(() => {
     getSettings().then((s) => {
       const newEnabled = !s.focusMode.enabled;
+      const hasRules = s.focusMode.redirectRules.some(
+        (r) => r.blockedPattern.trim() && r.redirectUrl.trim()
+      );
+      // If enabling but no rules configured, open settings so user can add rules
+      if (newEnabled && !hasRules) {
+        setShowSettings(true);
+      }
       updateSettings({
         focusMode: { ...s.focusMode, enabled: newEnabled },
       }).then(() => {
@@ -945,12 +853,19 @@ export default function App() {
   }, []);
 
   const handleFolderItemClick = useCallback((item: FolderItem) => {
-    if (item.type === "link") {
+    if (item.type === "tab" && item.tabId != null) {
+      // Check if the tab still exists in our known tabs list
+      const tabStillOpen = tabs.some((t) => t.id === item.tabId);
+      if (tabStillOpen) {
+        chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: item.tabId });
+      } else {
+        // Tab was closed — open the URL instead
+        chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
+      }
+    } else {
       chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
-    } else if (item.type === "tab" && item.tabId != null) {
-      chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: item.tabId });
     }
-  }, []);
+  }, [tabs]);
 
   const handleFolderItemContextMenu = useCallback(
     (e: React.MouseEvent, item: FolderItem, folderId: string) => {
@@ -965,13 +880,35 @@ export default function App() {
             chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
           },
         });
+      } else if (item.type === "tab") {
         items.push({
-          label: "Remove",
+          label: "Switch to Tab",
           onClick: () => {
-            removeItemFromFolder(folderId, item.id);
+            if (item.tabId != null) {
+              chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: item.tabId });
+            } else {
+              chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
+            }
           },
         });
       }
+
+      items.push({
+        label: "Rename",
+        onClick: () => {
+          const newName = window.prompt("Rename item:", item.title || item.url);
+          if (newName && newName.trim()) {
+            renameItemInFolder(folderId, item.id, newName.trim());
+          }
+        },
+      });
+
+      items.push({
+        label: "Remove",
+        onClick: () => {
+          removeItemFromFolder(folderId, item.id);
+        },
+      });
 
       if (items.length > 0) {
         setContextMenu({ x: e.clientX, y: e.clientY, items });
@@ -1193,9 +1130,9 @@ export default function App() {
       </nav>
 
       {/* Pinned Apps Row (Zone 2) */}
-      <PinnedAppsRow tabs={tabs} onContextMenu={setContextMenu} />
+      <PinnedAppsRow tabs={tabs} pinnedApps={pinnedApps} onContextMenu={setContextMenu} />
 
-      <main aria-label="Tab management">
+      <main className="flex-1 flex flex-col" aria-label="Tab management">
         <DndContext
           sensors={sensors}
           collisionDetection={customCollisionDetection}
@@ -1214,14 +1151,36 @@ export default function App() {
           />
 
           {/* Tab list */}
-          <section className="flex-1 px-1" aria-label="Open tabs">
-            <p
-              className="text-[11px] text-gray-400 dark:text-arc-text-secondary px-2 py-1 uppercase tracking-wider font-medium"
-              aria-live="polite"
-            >
-              {filteredTabs.length} tab{filteredTabs.length !== 1 ? "s" : ""}{" "}
-              open
-            </p>
+          <section className="flex-1 px-1 border-t border-gray-200/80 dark:border-arc-border" aria-label="Open tabs">
+            <div className="flex items-center justify-between px-2 py-1">
+              <p
+                className="text-[11px] text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider font-medium"
+                aria-live="polite"
+              >
+                {filteredTabs.length} tab{filteredTabs.length !== 1 ? "s" : ""}{" "}
+                open
+              </p>
+              {filteredTabs.length > 1 && (
+                <button
+                  onClick={() => {
+                    const nonActive = filteredTabs.filter((t) => !t.active);
+                    if (nonActive.length === 0) return;
+                    const confirmed = window.confirm(
+                      `Close ${nonActive.length} tab${nonActive.length !== 1 ? "s" : ""}? The active tab will remain open.`
+                    );
+                    if (!confirmed) return;
+                    chrome.runtime.sendMessage({
+                      type: "CLOSE_TABS",
+                      tabIds: nonActive.map((t) => t.id),
+                    });
+                  }}
+                  className="text-[11px] text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-150"
+                  title="Close all non-active tabs"
+                >
+                  Close All
+                </button>
+              )}
+            </div>
             {filteredTabs.length >= VIRTUAL_LIST_THRESHOLD ? (
               <List<VirtualTabRowProps>
                 style={{
@@ -1276,31 +1235,7 @@ export default function App() {
             {estimatedMBSaved} MB saved
           </div>
         )}
-        <div className="flex items-center justify-between px-3 pb-2">
-          <button
-            onClick={handleToggleIsolation}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-full transition-colors duration-150 hover:bg-gray-100 dark:hover:bg-arc-surface-hover ${
-              workspaceIsolation === "full-isolation"
-                ? "text-arc-accent dark:text-arc-accent-hover bg-indigo-50 dark:bg-arc-accent/10"
-                : "text-gray-500 dark:text-arc-text-secondary"
-            }`}
-            aria-label={`Workspace isolation: ${workspaceIsolation === "sidebar-only" ? "Sidebar only" : "Full isolation"}`}
-            title={`Isolation: ${workspaceIsolation === "sidebar-only" ? "Sidebar only" : "Full isolation"}`}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className="w-4 h-4"
-            >
-              <path
-                fillRule="evenodd"
-                d="M3.25 3A2.25 2.25 0 0 0 1 5.25v9.5A2.25 2.25 0 0 0 3.25 17h13.5A2.25 2.25 0 0 0 19 14.75v-9.5A2.25 2.25 0 0 0 16.75 3H3.25ZM2.5 9v5.75c0 .414.336.75.75.75h13.5a.75.75 0 0 0 .75-.75V9h-7.25v3a.75.75 0 0 1-1.5 0V9H2.5Z"
-                clipRule="evenodd"
-              />
-            </svg>
-            {workspaceIsolation === "sidebar-only" ? "Sidebar" : "Full"}
-          </button>
+        <div className="flex items-center justify-end px-3 pb-2">
           <div className="flex items-center gap-1">
             <button
               onClick={toggleFocusMode}
@@ -1327,7 +1262,6 @@ export default function App() {
               </svg>
               {focusModeEnabled ? "Focus" : ""}
             </button>
-            <ThemeToggle theme={theme} onCycle={cycleTheme} />
             <button
               onClick={() => setShowSettings(true)}
               className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-150"

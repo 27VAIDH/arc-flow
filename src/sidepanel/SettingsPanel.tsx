@@ -10,7 +10,6 @@ import {
   AUTO_ARCHIVE_OPTIONS,
   SUSPEND_THRESHOLD_OPTIONS,
   THEME_OPTIONS,
-  WORKSPACE_ISOLATION_OPTIONS,
   AI_PROVIDER_OPTIONS,
 } from "../shared/constants";
 
@@ -140,6 +139,41 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                 })
               }
             />
+            <div>
+              <label className="text-sm text-gray-700 dark:text-arc-text-primary block mb-2">
+                Accent Color
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  "#2E75B6", "#EF4444", "#F97316", "#EAB308",
+                  "#22C55E", "#14B8A6", "#06B6D4", "#6366f1",
+                  "#A855F7", "#EC4899", "#78716C", "#64748B",
+                ].map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => {
+                      handleUpdate({ accentColor: color });
+                      // Apply immediately without waiting for storage roundtrip
+                      document.documentElement.style.setProperty("--color-arc-accent", color);
+                      const r = parseInt(color.slice(1, 3), 16);
+                      const g = parseInt(color.slice(3, 5), 16);
+                      const b = parseInt(color.slice(5, 7), 16);
+                      const lighten = (c: number) => Math.min(255, Math.round(c + (255 - c) * 0.2));
+                      const hover = `#${lighten(r).toString(16).padStart(2, "0")}${lighten(g).toString(16).padStart(2, "0")}${lighten(b).toString(16).padStart(2, "0")}`;
+                      document.documentElement.style.setProperty("--color-arc-accent-hover", hover);
+                    }}
+                    className={`w-6 h-6 rounded-full focus:outline-none focus:ring-2 focus:ring-arc-accent/50 transition-transform duration-100 hover:scale-110 ${
+                      settings.accentColor?.toLowerCase() === color.toLowerCase()
+                        ? "ring-2 ring-offset-1 ring-gray-400 dark:ring-offset-arc-surface"
+                        : ""
+                    }`}
+                    style={{ backgroundColor: color }}
+                    title={color}
+                    aria-label={`Select accent color ${color}${settings.accentColor === color ? " (selected)" : ""}`}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -210,6 +244,17 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
               When enabled, navigating to blocked URLs will redirect to the
               configured productive URL.
             </p>
+            {settings.focusMode.enabled &&
+              (settings.focusMode.redirectRules.length === 0 ||
+                settings.focusMode.redirectRules.every(
+                  (r) => !r.blockedPattern.trim() || !r.redirectUrl.trim()
+                )) && (
+                <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    Add redirect rules below for focus mode to take effect.
+                  </p>
+                </div>
+              )}
             {settings.focusMode.redirectRules.map((rule, index) => (
               <div key={index} className="flex items-center gap-2">
                 <input
@@ -380,25 +425,6 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                 )}
               </>
             )}
-          </div>
-        </section>
-
-        {/* Workspaces */}
-        <section>
-          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
-            Workspaces
-          </h3>
-          <div className="space-y-3">
-            <SelectField
-              label="Workspace isolation"
-              value={settings.workspaceIsolation}
-              options={WORKSPACE_ISOLATION_OPTIONS}
-              onChange={(v) =>
-                handleUpdate({
-                  workspaceIsolation: v as Settings["workspaceIsolation"],
-                })
-              }
-            />
           </div>
         </section>
 

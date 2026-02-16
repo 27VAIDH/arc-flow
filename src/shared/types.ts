@@ -78,8 +78,7 @@ export type SidePanelMessage =
   | { type: "OPEN_URL"; url: string }
   | { type: "GET_TAB_WORKSPACE_MAP" }
   | { type: "MOVE_TAB_TO_WORKSPACE"; tabId: number; workspaceId: string }
-  | { type: "APPLY_WORKSPACE_ISOLATION"; activeWorkspaceId: string }
-  | { type: "SUSPEND_TAB"; tabId: number }
+  |{ type: "SUSPEND_TAB"; tabId: number }
   | { type: "SPLIT_VIEW"; tabId: number }
   | {
       type: "UPDATE_FOCUS_MODE";
@@ -102,7 +101,6 @@ export interface Settings {
   theme: "system" | "light" | "dark";
   autoArchiveMinutes: number;
   suspendAfterMinutes: number;
-  workspaceIsolation: "sidebar-only" | "full-isolation";
   focusMode: {
     enabled: boolean;
     redirectRules: { blockedPattern: string; redirectUrl: string }[];
@@ -113,4 +111,5 @@ export interface Settings {
     apiKey: string;
   };
   routingRules: { pattern: string; workspaceId: string }[];
+  accentColor: string;
 }

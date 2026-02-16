@@ -102,11 +102,47 @@ function debouncedRefresh(): void {
   }, DEBOUNCE_MS);
 }
 
+// Reconcile: assign unmapped tabs to the active workspace and remove stale entries
+async function reconcileTabWorkspaceMap(): Promise<Record<string, string>> {
+  const tabs = await queryCurrentWindowTabs();
+  const tabMap = await getTabWorkspaceMap();
+  const result = await chrome.storage.local.get("activeWorkspaceId");
+  const activeWsId = (result.activeWorkspaceId as string | undefined) ?? "default";
+  const currentTabIds = new Set(tabs.map((t) => String(t.id)));
+  let changed = false;
+
+  for (const tab of tabs) {
+    const key = String(tab.id);
+    if (!tabMap[key]) {
+      tabMap[key] = activeWsId;
+      changed = true;
+    }
+  }
+
+  // Remove stale entries for tabs that no longer exist
+  for (const key of Object.keys(tabMap)) {
+    if (!currentTabIds.has(key)) {
+      delete tabMap[key];
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    await chrome.storage.local.set({ tabWorkspaceMap: tabMap });
+    broadcastTabWorkspaceMap();
+  }
+
+  return tabMap;
+}
+
 // On startup, query existing tabs and persist + broadcast
 async function initialize(): Promise<void> {
   const tabs = await queryCurrentWindowTabs();
   await persistTabs(tabs);
   broadcastTabs(tabs);
+
+  // Reconcile: assign any unmapped tabs to the active workspace
+  await reconcileTabWorkspaceMap();
 }
 
 initialize();
@@ -215,7 +251,6 @@ chrome.tabs.onCreated.addListener((tab) => {
       }
       await assignTabToWorkspace(tabId, targetWsId);
       broadcastTabWorkspaceMap();
-      await applyWorkspaceIsolation(targetWsId).catch(() => {});
     };
     assignWorkspace().catch(() => {});
   }
@@ -254,7 +289,6 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
         if (matchedWsId) {
           await assignTabToWorkspace(tabId, matchedWsId);
           broadcastTabWorkspaceMap();
-          await applyWorkspaceIsolation(matchedWsId).catch(() => {});
         }
       })
       .catch(() => {});
@@ -265,68 +299,6 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
 chrome.tabs.onMoved.addListener(() => {
   debouncedRefresh();
 });
-
-// --- Workspace isolation via Chrome tab groups ---
-
-async function applyWorkspaceIsolation(
-  activeWorkspaceId: string
-): Promise<void> {
-  const settings = await getSettings();
-  if (settings.workspaceIsolation !== "full-isolation") return;
-
-  const workspaces = await getWorkspaces();
-  const tabWorkspaceMap = await getTabWorkspaceMap();
-  const allTabs = await chrome.tabs.query({ currentWindow: true });
-
-  // Group tabs by workspace ID
-  const tabsByWorkspace = new Map<string, number[]>();
-  for (const tab of allTabs) {
-    if (tab.id == null) continue;
-    const wsId = tabWorkspaceMap[String(tab.id)] ?? "default";
-    const existing = tabsByWorkspace.get(wsId) ?? [];
-    existing.push(tab.id);
-    tabsByWorkspace.set(wsId, existing);
-  }
-
-  // Get existing tab groups in the current window
-  const currentWindow = await chrome.windows.getCurrent();
-  const existingGroups = await chrome.tabGroups.query({
-    windowId: currentWindow.id,
-  });
-
-  for (const [wsId, tabIds] of tabsByWorkspace) {
-    if (tabIds.length === 0) continue;
-
-    const workspace = workspaces.find((w) => w.id === wsId);
-    const groupTitle = workspace?.name ?? "Default";
-    const isActive = wsId === activeWorkspaceId;
-
-    // Check if a tab group with this title already exists
-    const existingGroup = existingGroups.find((g) => g.title === groupTitle);
-
-    // Chrome types require a non-empty tuple for tabIds
-    const tabIdsTuple = tabIds as [number, ...number[]];
-
-    if (existingGroup) {
-      // Move tabs into the existing group
-      await chrome.tabs.group({
-        tabIds: tabIdsTuple,
-        groupId: existingGroup.id,
-      });
-      // Collapse non-active workspace groups
-      await chrome.tabGroups.update(existingGroup.id, {
-        collapsed: !isActive,
-      });
-    } else {
-      // Create a new tab group
-      const groupId = await chrome.tabs.group({ tabIds: tabIdsTuple });
-      await chrome.tabGroups.update(groupId, {
-        title: groupTitle,
-        collapsed: !isActive,
-      });
-    }
-  }
-}
 
 // --- Workspace keyboard shortcuts (Ctrl+Shift+1 through Ctrl+Shift+4) ---
 
@@ -347,9 +319,6 @@ chrome.commands.onCommand.addListener(async (command) => {
 
   const targetWorkspace = workspaces[index];
   await setActiveWorkspace(targetWorkspace.id);
-
-  // Apply workspace isolation if enabled
-  await applyWorkspaceIsolation(targetWorkspace.id).catch(() => {});
 });
 
 // --- Auto-archive engine ---
@@ -644,7 +613,8 @@ chrome.runtime.onMessage.addListener(
       chrome.tabs.create({ url: message.url }).catch(() => {});
     }
     if (message.type === "GET_TAB_WORKSPACE_MAP") {
-      getTabWorkspaceMap().then((map) => {
+      // Reconcile before responding to catch tabs created between service worker restarts
+      reconcileTabWorkspaceMap().then((map) => {
         sendResponse(map);
       });
       return true; // async response
@@ -652,11 +622,6 @@ chrome.runtime.onMessage.addListener(
     if (message.type === "MOVE_TAB_TO_WORKSPACE") {
       assignTabToWorkspace(message.tabId, message.workspaceId).then(() => {
         broadcastTabWorkspaceMap();
-      });
-    }
-    if (message.type === "APPLY_WORKSPACE_ISOLATION") {
-      applyWorkspaceIsolation(message.activeWorkspaceId).catch(() => {
-        // Tab groups API may not be available
       });
     }
     if (message.type === "SUSPEND_TAB") {

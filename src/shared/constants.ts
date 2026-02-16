@@ -4,7 +4,6 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: "system",
   autoArchiveMinutes: 720, // 12 hours
   suspendAfterMinutes: 720, // 12 hours
-  workspaceIsolation: "sidebar-only",
   focusMode: {
     enabled: false,
     redirectRules: [],
@@ -15,6 +14,7 @@ export const DEFAULT_SETTINGS: Settings = {
     apiKey: "",
   },
   routingRules: [],
+  accentColor: "#6366f1",
 };
 
 export const AUTO_ARCHIVE_OPTIONS = [
@@ -40,11 +40,6 @@ export const THEME_OPTIONS = [
   { label: "System", value: "system" },
   { label: "Light", value: "light" },
   { label: "Dark", value: "dark" },
-] as const;
-
-export const WORKSPACE_ISOLATION_OPTIONS = [
-  { label: "Sidebar only", value: "sidebar-only" },
-  { label: "Full isolation", value: "full-isolation" },
 ] as const;
 
 export const AI_PROVIDER_OPTIONS = [
