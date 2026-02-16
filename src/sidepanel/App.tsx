@@ -42,6 +42,10 @@ import SessionManager from "./SessionManager";
 import Onboarding from "./Onboarding";
 import { isOnboardingCompleted } from "../shared/onboardingStorage";
 import { createSessionFromState } from "../shared/sessionStorage";
+import { updateWorkspace } from "../shared/workspaceStorage";
+import QuickNotes from "./QuickNotes";
+import TabPreviewCard from "./TabPreviewCard";
+import type { TabPreviewInfo } from "./TabPreviewCard";
 import { buildCommands } from "./commandRegistry";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
 import {
@@ -155,10 +159,14 @@ const DraggableTabItem = memo(function DraggableTabItem({
   tab,
   onContextMenu,
   style: outerStyle,
+  onMouseEnter,
+  onMouseLeave,
 }: {
   tab: TabInfo;
   onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
   style?: React.CSSProperties;
+  onMouseEnter?: (e: React.MouseEvent, tab: TabInfo) => void;
+  onMouseLeave?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: `tab:${tab.id}` });
@@ -217,6 +225,8 @@ const DraggableTabItem = memo(function DraggableTabItem({
         }
       }}
       onContextMenu={(e) => onContextMenu(e, tab)}
+      onMouseEnter={onMouseEnter ? (e) => onMouseEnter(e, tab) : undefined}
+      onMouseLeave={onMouseLeave}
       className={`group flex items-center gap-2 px-2 h-8 text-sm rounded-lg cursor-default transition-all duration-150 hover:bg-gray-100 dark:hover:bg-arc-surface-hover focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset ${
         tab.active
           ? "border-l-[3px] border-l-arc-accent font-medium bg-gray-100/50 dark:bg-arc-surface"
@@ -422,6 +432,11 @@ export default function App() {
   const [showOrganizeTabs, setShowOrganizeTabs] = useState(false);
   const [showSessionManager, setShowSessionManager] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [tabPreview, setTabPreview] = useState<{
+    tab: TabPreviewInfo;
+    position: { top: number; left: number };
+  } | null>(null);
+  const tabPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -685,6 +700,78 @@ export default function App() {
 
   const openSessionManager = useCallback(() => setShowSessionManager(true), []);
 
+  // QuickNotes: derive from active workspace
+  const activeWorkspace = useMemo(
+    () => workspaces.find((w) => w.id === activeWorkspaceId),
+    [workspaces, activeWorkspaceId]
+  );
+
+  const handleNotesChange = useCallback(
+    (notes: string) => {
+      updateWorkspace(activeWorkspaceId, {
+        notes,
+        notesLastEditedAt: Date.now(),
+      });
+    },
+    [activeWorkspaceId]
+  );
+
+  const handleNotesCollapseToggle = useCallback(() => {
+    if (!activeWorkspace) return;
+    updateWorkspace(activeWorkspaceId, {
+      notesCollapsed: !activeWorkspace.notesCollapsed,
+    });
+  }, [activeWorkspaceId, activeWorkspace]);
+
+  // Tab hover preview handlers
+  const handleTabHoverStart = useCallback(
+    (e: React.MouseEvent, tab: TabInfo) => {
+      if (tabPreviewTimerRef.current) clearTimeout(tabPreviewTimerRef.current);
+      tabPreviewTimerRef.current = setTimeout(() => {
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const ws = workspaces.find(
+          (w) => w.id === (tabWorkspaceMap[String(tab.id)] || "default")
+        );
+        const previewInfo: TabPreviewInfo = {
+          id: tab.id,
+          title: tab.title || tab.url,
+          url: tab.url,
+          favIconUrl: tab.favIconUrl || "",
+          active: tab.active,
+          audible: tab.audible,
+          discarded: tab.discarded,
+          lastActiveAt: 0,
+          workspaceName: ws?.name || "Default",
+          workspaceEmoji: ws?.emoji || "\uD83C\uDFE0",
+        };
+        setTabPreview({
+          tab: previewInfo,
+          position: { top: rect.top, left: rect.right + 8 },
+        });
+      }, 400);
+    },
+    [workspaces, tabWorkspaceMap]
+  );
+
+  const handleTabHoverEnd = useCallback(() => {
+    if (tabPreviewTimerRef.current) clearTimeout(tabPreviewTimerRef.current);
+    tabPreviewTimerRef.current = null;
+    setTabPreview(null);
+  }, []);
+
+  // Focus Notes command
+  const focusNotes = useCallback(() => {
+    if (activeWorkspace?.notesCollapsed) {
+      updateWorkspace(activeWorkspaceId, { notesCollapsed: false });
+    }
+    setTimeout(() => {
+      const textarea = document.querySelector<HTMLTextAreaElement>(
+        'textarea[aria-label^="Workspace notes"]'
+      );
+      textarea?.focus();
+    }, 100);
+  }, [activeWorkspaceId, activeWorkspace]);
+
   // Build command palette commands
   const commands = useMemo(
     () =>
@@ -701,6 +788,7 @@ export default function App() {
         onSplitView: splitViewActiveTab,
         onSaveSession: handleSaveSession,
         onRestoreSession: openSessionManager,
+        onFocusNotes: focusNotes,
       }),
     [
       workspaces,
@@ -715,6 +803,7 @@ export default function App() {
       splitViewActiveTab,
       handleSaveSession,
       openSessionManager,
+      focusNotes,
     ]
   );
 
@@ -1206,6 +1295,8 @@ export default function App() {
                     key={tab.id}
                     tab={tab}
                     onContextMenu={handleTabContextMenu}
+                    onMouseEnter={handleTabHoverStart}
+                    onMouseLeave={handleTabHoverEnd}
                   />
                 ))}
               </ul>
@@ -1220,6 +1311,19 @@ export default function App() {
         {/* Archive Section (Zone 4) */}
         <ArchiveSection />
       </main>
+
+      {/* Quick Notes */}
+      {activeWorkspace && (
+        <QuickNotes
+          workspaceId={activeWorkspaceId}
+          workspaceName={activeWorkspace.name}
+          notes={activeWorkspace.notes ?? ""}
+          notesCollapsed={activeWorkspace.notesCollapsed ?? true}
+          notesLastEditedAt={activeWorkspace.notesLastEditedAt ?? 0}
+          onNotesChange={handleNotesChange}
+          onCollapseToggle={handleNotesCollapseToggle}
+        />
+      )}
 
       {/* Footer (Zone 5) */}
       <footer className="border-t border-gray-200/80 dark:border-arc-border">
@@ -1337,6 +1441,15 @@ export default function App() {
       {/* Onboarding */}
       {showOnboarding && (
         <Onboarding onComplete={() => setShowOnboarding(false)} />
+      )}
+
+      {/* Tab Preview Card */}
+      {tabPreview && (
+        <TabPreviewCard
+          tab={tabPreview.tab}
+          position={tabPreview.position}
+          onClose={handleTabHoverEnd}
+        />
       )}
     </div>
   );

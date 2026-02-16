@@ -6,6 +6,18 @@ export interface Workspace {
   pinnedApps: PinnedApp[];
   folders: Folder[];
   sortOrder: number;
+  notes: string;
+  notesCollapsed: boolean;
+  notesLastEditedAt: number;
+}
+
+export interface WorkspaceTemplate {
+  id: string;
+  name: string;
+  emoji: string;
+  accentColor: string;
+  pinnedApps: { url: string; title: string }[];
+  folders: string[];
 }
 
 export interface PinnedApp {
@@ -84,7 +96,8 @@ export type SidePanelMessage =
       type: "UPDATE_FOCUS_MODE";
       enabled: boolean;
       redirectRules: { blockedPattern: string; redirectUrl: string }[];
-    };
+    }
+  | { type: "GET_TAB_INFO"; tabId: number };
 
 export interface Session {
   id: string;

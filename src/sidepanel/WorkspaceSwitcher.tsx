@@ -3,10 +3,12 @@ import type { Workspace } from "../shared/types";
 import {
   getWorkspaces,
   createWorkspace,
+  createWorkspaceFromTemplate,
   updateWorkspace,
   deleteWorkspace,
   setActiveWorkspace,
 } from "../shared/workspaceStorage";
+import WorkspaceTemplatesModal from "./WorkspaceTemplates";
 
 const CURATED_EMOJIS = [
   "🏠",
@@ -64,6 +66,7 @@ export default function WorkspaceSwitcher({
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
   const [showColorPicker, setShowColorPicker] = useState<string | null>(null);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const emojiPickerRef = useRef<HTMLDivElement>(null);
@@ -139,17 +142,30 @@ export default function WorkspaceSwitcher({
     [onWorkspaceChange]
   );
 
-  const handleCreate = useCallback(async () => {
-    try {
-      const ws = await createWorkspace("New Workspace");
-      await setActiveWorkspace(ws.id);
-      onWorkspaceChange(ws.id);
-      setEditingId(ws.id);
-      setEditName(ws.name);
-    } catch {
-      // Ignore errors
-    }
-  }, [onWorkspaceChange]);
+  const handleCreate = useCallback(() => {
+    setShowTemplateModal(true);
+  }, []);
+
+  const handleTemplateCreate = useCallback(
+    async (templateId: string | null) => {
+      try {
+        let ws;
+        if (templateId) {
+          ws = await createWorkspaceFromTemplate(templateId);
+        } else {
+          ws = await createWorkspace("New Workspace");
+          await setActiveWorkspace(ws.id);
+          setEditingId(ws.id);
+          setEditName(ws.name);
+        }
+        onWorkspaceChange(ws.id);
+      } catch {
+        // Ignore errors
+      }
+      setShowTemplateModal(false);
+    },
+    [onWorkspaceChange]
+  );
 
   const handleClone = useCallback(
     async (sourceWs: Workspace) => {
@@ -395,6 +411,13 @@ export default function WorkspaceSwitcher({
           </div>
         </div>
       )}
+
+      {/* Template Picker Modal */}
+      <WorkspaceTemplatesModal
+        isOpen={showTemplateModal}
+        onClose={() => setShowTemplateModal(false)}
+        onCreate={handleTemplateCreate}
+      />
 
       {/* Color Picker Popover (above the footer) */}
       {showColorPicker && (
