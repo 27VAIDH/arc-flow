@@ -214,11 +214,11 @@ const DraggableTabItem = memo(function DraggableTabItem({
         }
       }}
       onContextMenu={(e) => onContextMenu(e, tab)}
-      className={`group flex items-center gap-2 px-2 h-8 text-sm rounded-lg cursor-default transition-all duration-150 hover:bg-gray-100 dark:hover:bg-arc-surface-hover focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset ${
+      className={`group flex items-center gap-2 px-3 h-8 text-sm rounded-lg cursor-default transition-all duration-150 hover:bg-gray-100 dark:hover:bg-white/[0.05] focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset ${
         tab.active
-          ? "border-l-[3px] border-l-arc-accent font-medium bg-gray-100/50 dark:bg-arc-surface"
-          : "border-l-[3px] border-l-transparent"
-      } ${tab.discarded ? "opacity-50 italic" : ""}`}
+          ? "font-medium dark:text-arc-text-primary dark:bg-white/[0.08]"
+          : ""
+      } ${tab.discarded ? "opacity-40 italic" : ""}`}
     >
       {/* Drag grip */}
       <span
@@ -235,6 +235,12 @@ const DraggableTabItem = memo(function DraggableTabItem({
           <path d="M6 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm5-9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
         </svg>
       </span>
+      {/* Active dot indicator */}
+      {tab.active ? (
+        <span className="w-1 h-1 rounded-full bg-arc-accent shrink-0" />
+      ) : (
+        <span className="w-1 h-1 shrink-0" />
+      )}
       {tab.favIconUrl ? (
         <LazyFavicon src={tab.favIconUrl} alt="" />
       ) : (
@@ -266,7 +272,7 @@ const DraggableTabItem = memo(function DraggableTabItem({
       <button
         onClick={handleClose}
         onPointerDown={(e) => e.stopPropagation()}
-        className="shrink-0 w-4 h-4 flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="shrink-0 w-4 h-4 flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
         aria-label={`Close ${tab.title}`}
       >
         <svg
