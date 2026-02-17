@@ -1789,3 +1789,36 @@ US-005 is complete. There are still stories with `passes: false` (US-006 through
   - SearchBar.tsx input had border, ring, shadow-inner, and placeholder classes all on one long className string — careful not to miss any when removing
   - The search icon color class was on the SVG element above the input, not on the input itself
 ---
+
+## Iteration 6 - Tue Feb 17 23:46:21 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-6.log
+---
+US-006 is complete. There are still stories with `passes: false` (US-007, US-008, US-009, US-010), so the next iteration will pick up US-007.
+
+**Summary of US-006 changes:**
+- Removed `border border-transparent focus:border-arc-accent/50 focus:ring-1 focus:ring-arc-accent/30` from search input
+- Removed `shadow-inner dark:shadow-none` from search input
+- Changed background from `dark:bg-arc-surface` to `dark:bg-white/[0.06]`
+- Added `dark:focus:bg-white/[0.08]` for subtle focus background change
+- Changed placeholder to `dark:placeholder-white/20`
+- Changed search icon to `dark:text-white/25`
+- All checks pass, committed as `5cc49e2`
+---
+
+## 2026-02-17 - US-007
+- Implemented typographic hierarchy for tab list items in DraggableTabItem (App.tsx)
+- Removed heavy border-l-[3px] border-l-arc-accent active indicator and border-l-transparent for inactive tabs
+- Added small dot indicator (w-1 h-1 rounded-full bg-arc-accent) for active tabs, invisible placeholder for inactive
+- Active tab: font-medium dark:text-arc-text-primary dark:bg-white/[0.08]
+- Inactive tabs: no special styling (clean default)
+- Discarded/suspended opacity changed from opacity-50 to opacity-40
+- Close button (X): added duration-150 to transition-opacity for smooth reveal
+- Tab hover background: dark:hover:bg-white/[0.05] (was dark:hover:bg-arc-surface-hover)
+- Tab row padding: px-2 → px-3
+- Files changed: src/sidepanel/App.tsx
+- **Learnings for future iterations:**
+  - DraggableTabItem is a memo'd component at the top of App.tsx (line ~151)
+  - Pre-existing lint errors exist in App.tsx (line 523 setPinnedApps in effect) — not related to UI changes
+  - The close button already had opacity-0 group-hover:opacity-100, just needed duration-150 added
+---
