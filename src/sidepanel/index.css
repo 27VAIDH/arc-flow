@@ -73,6 +73,26 @@
   cursor: not-allowed;
 }
 
+/* Swipe boundary rubber-band bounce animations */
+.swipe-bounce-left {
+  animation: bounceLeft 300ms ease-out;
+}
+.swipe-bounce-right {
+  animation: bounceRight 300ms ease-out;
+}
+@keyframes bounceLeft {
+  0% { transform: translateX(0); }
+  30% { transform: translateX(-12px); }
+  60% { transform: translateX(4px); }
+  100% { transform: translateX(0); }
+}
+@keyframes bounceRight {
+  0% { transform: translateX(0); }
+  30% { transform: translateX(12px); }
+  60% { transform: translateX(-4px); }
+  100% { transform: translateX(0); }
+}
+
 /* Tab preview card fade-in */
 .animate-fade-in {
   animation: fadeIn 100ms ease-out;

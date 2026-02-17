@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, memo, type RefObject } from "react";
+import { useSwipeGesture } from "./useSwipeGesture";
 import type {
   TabInfo,
   PinnedApp,
@@ -563,6 +564,48 @@ export default function App() {
     position: { top: number; left: number };
   } | null>(null);
   const tabPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mainContentRef = useRef<HTMLElement>(null);
+  const [swipeBounce, setSwipeBounce] = useState<"left" | "right" | null>(null);
+
+  // Sorted workspaces for swipe navigation
+  const sortedWorkspaces = useMemo(
+    () => [...workspaces].sort((a, b) => a.sortOrder - b.sortOrder),
+    [workspaces]
+  );
+
+  const handleSwipeLeft = useCallback(() => {
+    const idx = sortedWorkspaces.findIndex((w) => w.id === activeWorkspaceId);
+    if (idx === -1) return;
+    if (idx < sortedWorkspaces.length - 1) {
+      const nextWs = sortedWorkspaces[idx + 1];
+      setActiveWorkspaceStorage(nextWs.id);
+      setActiveWorkspaceId(nextWs.id);
+    } else {
+      // At last workspace — rubber-band bounce
+      setSwipeBounce("left");
+      setTimeout(() => setSwipeBounce(null), 300);
+    }
+  }, [sortedWorkspaces, activeWorkspaceId]);
+
+  const handleSwipeRight = useCallback(() => {
+    const idx = sortedWorkspaces.findIndex((w) => w.id === activeWorkspaceId);
+    if (idx === -1) return;
+    if (idx > 0) {
+      const prevWs = sortedWorkspaces[idx - 1];
+      setActiveWorkspaceStorage(prevWs.id);
+      setActiveWorkspaceId(prevWs.id);
+    } else {
+      // At first workspace — rubber-band bounce
+      setSwipeBounce("right");
+      setTimeout(() => setSwipeBounce(null), 300);
+    }
+  }, [sortedWorkspaces, activeWorkspaceId]);
+
+  useSwipeGesture(mainContentRef, {
+    onSwipeLeft: handleSwipeLeft,
+    onSwipeRight: handleSwipeRight,
+    disabled: sortedWorkspaces.length <= 1,
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -1467,7 +1510,11 @@ export default function App() {
       {/* Pinned Apps Row (Zone 2) */}
       <PinnedAppsRow tabs={tabs} pinnedApps={pinnedApps} onContextMenu={setContextMenu} />
 
-      <main className="flex-1 flex flex-col" aria-label="Tab management">
+      <main
+        ref={mainContentRef}
+        className={`flex-1 flex flex-col${swipeBounce === "left" ? " swipe-bounce-left" : swipeBounce === "right" ? " swipe-bounce-right" : ""}`}
+        aria-label="Tab management"
+      >
         <DndContext
           sensors={sensors}
           collisionDetection={customCollisionDetection}
