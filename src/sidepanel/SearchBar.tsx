@@ -203,6 +203,22 @@ export default function SearchBar({
     return [...domainResults, ...dedupedFuse].slice(0, 20);
   }, [fuse, debouncedQuery, allTabs, tabWorkspaceMap, activeWorkspaceId]);
 
+  // Determine if we should show "Open in New Tab" action
+  const hasSwitchToTabResults = results.some((r) => r.matchType === "switch-to-tab");
+  const queryLooksLikeUrl = debouncedQuery.includes(".") || debouncedQuery.toLowerCase().startsWith("http");
+  const showOpenInNewTab = hasSwitchToTabResults && queryLooksLikeUrl;
+
+  // Find index of last Switch-to-Tab result (for inserting the action after it)
+  const lastSwitchToTabIndex = useMemo(() => {
+    for (let i = results.length - 1; i >= 0; i--) {
+      if (results[i].matchType === "switch-to-tab") return i;
+    }
+    return -1;
+  }, [results]);
+
+  // Total selectable items including the "Open in New Tab" action
+  const totalSelectableItems = results.length + (showOpenInNewTab ? 1 : 0);
+
   const activateResult = useCallback(
     (result: SearchResult) => {
       if (result.type === "tab" && result.tabId != null) {
@@ -228,6 +244,31 @@ export default function SearchBar({
     [onSwitchTab, onSwitchWorkspaceAndTab, onOpenUrl, tabWorkspaceMap, activeWorkspaceId]
   );
 
+  const openQueryInNewTab = useCallback(() => {
+    let url = debouncedQuery.trim();
+    if (!/^https?:\/\//i.test(url)) {
+      url = `https://${url}`;
+    }
+    onOpenUrl(url);
+    setQuery("");
+    setDebouncedQuery("");
+    inputRef.current?.blur();
+  }, [debouncedQuery, onOpenUrl]);
+
+  // The "Open in New Tab" action occupies an index right after the last Switch-to-Tab result
+  const openInNewTabIndex = showOpenInNewTab ? lastSwitchToTabIndex + 1 : -1;
+
+  // Map a selectedIndex to the actual result index (accounting for the injected action)
+  const getResultIndex = useCallback(
+    (selIdx: number): number => {
+      if (showOpenInNewTab && selIdx > openInNewTabIndex) {
+        return selIdx - 1;
+      }
+      return selIdx;
+    },
+    [showOpenInNewTab, openInNewTabIndex]
+  );
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
       if (e.key === "Escape") {
@@ -237,20 +278,24 @@ export default function SearchBar({
         return;
       }
 
-      if (results.length === 0) return;
+      if (totalSelectableItems === 0) return;
 
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1));
+        setSelectedIndex((prev) => Math.min(prev + 1, totalSelectableItems - 1));
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setSelectedIndex((prev) => Math.max(prev - 1, 0));
       } else if (e.key === "Enter") {
         e.preventDefault();
-        activateResult(results[selectedIndex]);
+        if (selectedIndex === openInNewTabIndex) {
+          openQueryInNewTab();
+        } else {
+          activateResult(results[getResultIndex(selectedIndex)]);
+        }
       }
     },
-    [results, selectedIndex, activateResult]
+    [totalSelectableItems, selectedIndex, activateResult, results, openInNewTabIndex, openQueryInNewTab, getResultIndex]
   );
 
   // Scroll selected result into view
@@ -367,7 +412,12 @@ export default function SearchBar({
           aria-label="Search results"
           className="absolute left-2 right-2 top-full mt-1 max-h-[320px] overflow-y-auto bg-white dark:bg-arc-surface border border-gray-200 dark:border-arc-border rounded-xl shadow-xl z-50"
         >
-          {results.map((result, index) => {
+          {results.map((result, resultIndex) => {
+            // Compute the selectable index accounting for the injected "Open in New Tab" action
+            const selectableIndex = showOpenInNewTab && resultIndex > lastSwitchToTabIndex
+              ? resultIndex + 1
+              : resultIndex;
+
             const isOtherWs =
               result.matchType === "switch-to-tab" &&
               result.tabId != null &&
@@ -379,7 +429,7 @@ export default function SearchBar({
             return (
               <div key={result.id}>
                 {/* Divider before first other-workspace result */}
-                {index === otherWsDividerIndex && (
+                {resultIndex === otherWsDividerIndex && (
                   <div className="flex items-center gap-2 px-3 py-1.5">
                     <div className="flex-1 h-px bg-gray-200 dark:bg-arc-border" />
                     <span className="text-[10px] text-gray-400 dark:text-arc-text-secondary whitespace-nowrap">
@@ -391,15 +441,15 @@ export default function SearchBar({
                 <button
                   id={`search-result-${result.id}`}
                   role="option"
-                  aria-selected={index === selectedIndex}
-                  data-index={index}
+                  aria-selected={selectableIndex === selectedIndex}
+                  data-index={selectableIndex}
                   onMouseDown={(e) => {
                     e.preventDefault();
                     activateResult(result);
                   }}
-                  onMouseEnter={() => setSelectedIndex(index)}
+                  onMouseEnter={() => setSelectedIndex(selectableIndex)}
                   className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors duration-100 ${
-                    index === selectedIndex
+                    selectableIndex === selectedIndex
                       ? "bg-indigo-50 dark:bg-arc-accent/10"
                       : "hover:bg-gray-50 dark:hover:bg-arc-surface-hover"
                   }`}
@@ -457,6 +507,39 @@ export default function SearchBar({
                     </span>
                   )}
                 </button>
+
+                {/* "Open in New Tab" action after the last Switch-to-Tab result */}
+                {showOpenInNewTab && resultIndex === lastSwitchToTabIndex && (
+                  <button
+                    id="search-result-open-new-tab"
+                    role="option"
+                    aria-selected={openInNewTabIndex === selectedIndex}
+                    data-index={openInNewTabIndex}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      openQueryInNewTab();
+                    }}
+                    onMouseEnter={() => setSelectedIndex(openInNewTabIndex)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors duration-100 ${
+                      openInNewTabIndex === selectedIndex
+                        ? "bg-indigo-50 dark:bg-arc-accent/10"
+                        : "bg-gray-50 dark:bg-arc-surface-hover/50 hover:bg-gray-100 dark:hover:bg-arc-surface-hover"
+                    }`}
+                  >
+                    {/* Plus icon */}
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="w-4 h-4 shrink-0 text-gray-400 dark:text-arc-text-secondary"
+                    >
+                      <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
+                    </svg>
+                    <span className="flex-1 min-w-0 truncate text-gray-600 dark:text-arc-text-secondary">
+                      Open {debouncedQuery} in new tab
+                    </span>
+                  </button>
+                )}
               </div>
             );
           })}

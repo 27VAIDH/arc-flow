@@ -6,6 +6,7 @@ Started: Tue Feb 17 22:40:27 IST 2026
 - Types are in `src/shared/types.ts`; Workspace type has `id`, `name`, `emoji`, `accentColor`, `pinnedApps`, `folders`, `sortOrder`
 - `tabWorkspaceMap` keys are stringified tab IDs (use `String(tab.id)`)
 - Domain-match results in SearchBar are split into `currentWsMatches` and `otherWsMatches` arrays, concatenated with current-workspace first
+- When injecting extra UI items into the results list (like "Open in New Tab"), use a selectable index mapping to keep keyboard nav working correctly
 - Pre-existing lint error in App.tsx (setState in effect) — not introduced by any US
 ---
 
@@ -50,4 +51,35 @@ US-004 is complete. There are still stories with `passes: false` (US-005 through
   - `setActiveWorkspaceStorage` is imported as `setActiveWorkspaceStorage` (aliased from `setActiveWorkspace` in workspaceStorage) — already available in App.tsx
   - The `activateResult` callback needed `tabWorkspaceMap` and `activeWorkspaceId` in its dependency array for proper cross-workspace detection
   - The 100ms delay before `SWITCH_TAB` allows the workspace switch to propagate through storage listeners
+---
+
+## Iteration 2 - Tue Feb 17 22:44:53 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-224027/iter-2.log
+---
+US-005 is complete. There are still stories with `passes: false` (US-006 through US-009), so another iteration will pick up the next story.
+
+**Summary of US-005 implementation:**
+- Added `onSwitchWorkspaceAndTab: (workspaceId: string, tabId: number) => void` callback prop to `SearchBarProps`
+- Updated `activateResult()` in SearchBar to detect when a Switch-to-Tab result belongs to a different workspace (by checking `tabWorkspaceMap` against `activeWorkspaceId`) and call `onSwitchWorkspaceAndTab` instead of `onSwitchTab`
+- Implemented the callback in App.tsx: calls `setActiveWorkspaceStorage()` + `setActiveWorkspaceId()`, then after a 100ms delay sends the `SWITCH_TAB` message to allow the workspace switch to propagate
+- Current-workspace Switch-to-Tab results continue using the existing `onSwitchTab` flow
+- TypeScript typecheck passes cleanly
+---
+
+## 2026-02-17 - US-006
+- What was implemented: "Open in New Tab" action below Switch-to-Tab results
+- Files changed: `src/sidepanel/SearchBar.tsx`
+- Added URL-like query detection (contains '.' or starts with 'http') combined with Switch-to-Tab results check
+- Computed `lastSwitchToTabIndex` to position the action right after the last Switch-to-Tab result
+- Introduced `totalSelectableItems` and `openInNewTabIndex` to support keyboard navigation across both results and the action
+- Added `getResultIndex()` mapping to translate selectable indices back to result array indices
+- Added `openQueryInNewTab()` callback that normalizes query to URL (prepends `https://` if needed) and calls `onOpenUrl`
+- Rendered the action with a plus icon (+), muted background styling, and "Open [query] in new tab" text
+- Action is keyboard-navigable (ArrowDown/ArrowUp/Enter all work)
+- Action only appears when query looks like a URL AND Switch-to-Tab results exist
+- **Learnings for future iterations:**
+  - When injecting non-result items into the dropdown, maintain a mapping between selectable index and result array index to keep keyboard nav consistent
+  - The `data-index` attribute on each item must match the selectable index for scroll-into-view to work
+  - Variable declarations used by `useCallback` must appear before the callback in the component body (no hoisting for `const`)
 ---
