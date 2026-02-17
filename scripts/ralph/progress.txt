@@ -1647,3 +1647,29 @@ All stories have `passes: true`. All 41 user stories are complete.
   - ESLint `@typescript-eslint/no-unused-vars` does NOT respect underscore prefix by default — need `eslint-disable-next-line` comments
   - Pre-existing lint error in App.tsx line 515 (`react-hooks/set-state-in-effect`) — not introduced by this PR
 ---
+
+## Iteration 1 - Tue Feb 17 19:27:20 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-192153/iter-1.log
+---
+US-001 is complete. There are still 8 stories with `passes: false` (US-002 through US-009), so the work continues.
+
+**US-001 Summary:**
+- Added `allTabs: TabInfo[]` and `tabWorkspaceMap: Record<string, string>` to SearchBar's props interface
+- App.tsx now passes both props to SearchBar
+- Typecheck and lint pass
+- Committed as `feat: US-001 - Pass allTabs and tabWorkspaceMap props to SearchBar`
+---
+
+## 2026-02-17 - US-002
+- Implemented domain-match search pass for Switch-to-Tab results
+- Files changed:
+  - src/sidepanel/SearchBar.tsx (added matchType to SearchResult, domain-match pass before Fuse.js, workspace-aware ordering, deduplication)
+  - src/sidepanel/App.tsx (pass activeWorkspaceId prop to SearchBar)
+  - scripts/ralph/prd.json (marked US-002 as passes: true)
+- **Learnings for future iterations:**
+  - Domain matching uses `new URL(tab.url).hostname` wrapped in try-catch for malformed URLs
+  - Tab workspace lookup: `tabWorkspaceMap[String(tab.id)]` — keys are string-typed tabIds
+  - Deduplication needs both id-based and tabId-based checks since the same tab can appear in both domain-match and Fuse.js with different ids (e.g., `tab-123` from allTabs vs `tab-123` from searchItems)
+  - Pre-existing lint errors in App.tsx (set-state-in-effect) and PinnedAppsRow.tsx (exhaustive-deps) — not introduced by this change
+---

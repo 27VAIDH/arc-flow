@@ -1122,6 +1122,7 @@ export default function App() {
           folders={folders}
           allTabs={tabs}
           tabWorkspaceMap={tabWorkspaceMap}
+          activeWorkspaceId={activeWorkspaceId}
           onSwitchTab={(tabId) => {
             chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId });
           }}

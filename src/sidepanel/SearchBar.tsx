@@ -19,6 +19,7 @@ interface SearchResult {
   folderId?: string;
   folderName?: string;
   score: number;
+  matchType?: "switch-to-tab";
 }
 
 interface SearchBarProps {
@@ -26,6 +27,7 @@ interface SearchBarProps {
   folders: Folder[];
   allTabs: TabInfo[];
   tabWorkspaceMap: Record<string, string>;
+  activeWorkspaceId: string;
   onSwitchTab: (tabId: number) => void;
   onOpenUrl: (url: string) => void;
 }
@@ -79,10 +81,9 @@ function buildSearchItems(tabs: TabInfo[], folders: Folder[]): SearchResult[] {
 export default function SearchBar({
   tabs,
   folders,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  allTabs: _allTabs,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  tabWorkspaceMap: _tabWorkspaceMap,
+  allTabs,
+  tabWorkspaceMap,
+  activeWorkspaceId,
   onSwitchTab,
   onOpenUrl,
 }: SearchBarProps) {
@@ -125,19 +126,54 @@ export default function SearchBar({
   const results = useMemo(() => {
     if (!debouncedQuery.trim()) return [];
 
+    const q = debouncedQuery.toLowerCase();
+
+    // Domain-match pass: find allTabs whose hostname includes the query
+    const currentWsMatches: SearchResult[] = [];
+    const otherWsMatches: SearchResult[] = [];
+    const domainMatchTabIds = new Set<number>();
+
+    for (const tab of allTabs) {
+      try {
+        const hostname = new URL(tab.url).hostname.toLowerCase();
+        if (hostname.includes(q)) {
+          const tabWsId = tabWorkspaceMap[String(tab.id)] || "default";
+          const result: SearchResult = {
+            type: "tab",
+            id: `tab-${tab.id}`,
+            title: tab.title || tab.url,
+            url: tab.url,
+            favicon: tab.favIconUrl,
+            tabId: tab.id,
+            score: 0,
+            matchType: "switch-to-tab",
+          };
+          if (tabWsId === activeWorkspaceId) {
+            currentWsMatches.push(result);
+          } else {
+            otherWsMatches.push(result);
+          }
+          domainMatchTabIds.add(tab.id);
+        }
+      } catch {
+        // Skip tabs with malformed URLs
+      }
+    }
+
+    const domainResults = [...currentWsMatches, ...otherWsMatches];
+
+    // Fuse.js fuzzy search pass
     const fuseResults = fuse.search(debouncedQuery);
 
     // Custom ranking: exact > starts-with > fuzzy > URL match
-    return fuseResults
+    const rankedFuseResults = fuseResults
       .map((r) => {
         const item = r.item;
-        const q = debouncedQuery.toLowerCase();
         const titleLower = item.title.toLowerCase();
         const urlLower = item.url.toLowerCase();
 
         let rankScore = r.score ?? 1;
 
-        // Boost exact matches
         if (titleLower === q) {
           rankScore = 0;
         } else if (titleLower.startsWith(q)) {
@@ -148,9 +184,20 @@ export default function SearchBar({
 
         return { ...item, score: rankScore };
       })
-      .sort((a, b) => a.score - b.score)
-      .slice(0, 20);
-  }, [fuse, debouncedQuery]);
+      .sort((a, b) => a.score - b.score);
+
+    // Deduplicate: domain-match wins over Fuse.js results
+    const seenIds = new Set(domainResults.map((r) => r.id));
+    const dedupedFuse = rankedFuseResults.filter((r) => {
+      // Also deduplicate by tabId for tabs that appear in domain matches
+      if (r.tabId != null && domainMatchTabIds.has(r.tabId)) return false;
+      if (seenIds.has(r.id)) return false;
+      seenIds.add(r.id);
+      return true;
+    });
+
+    return [...domainResults, ...dedupedFuse].slice(0, 20);
+  }, [fuse, debouncedQuery, allTabs, tabWorkspaceMap, activeWorkspaceId]);
 
   const activateResult = useCallback(
     (result: SearchResult) => {
