@@ -9,6 +9,7 @@ export interface Workspace {
   notes: string;
   notesCollapsed: boolean;
   notesLastEditedAt: number;
+  panelColor?: string;
 }
 
 export interface WorkspaceTemplate {
@@ -125,4 +126,5 @@ export interface Settings {
   };
   routingRules: { pattern: string; workspaceId: string }[];
   accentColor: string;
+  panelColor: string;
 }
