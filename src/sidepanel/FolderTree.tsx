@@ -79,7 +79,7 @@ function FolderHeader({
 
   return (
     <div
-      className="flex-1 flex items-center gap-1 px-2 h-7 text-sm rounded-lg cursor-default hover:bg-gray-100 dark:hover:bg-white/[0.05] group transition-colors duration-150"
+      className="flex-1 flex items-center gap-1 px-2 h-7 text-sm rounded-lg cursor-default hover:bg-gray-100 dark:hover:bg-white/[0.05] group transition-colors duration-200"
       onContextMenu={(e) => onContextMenu(e, folder)}
     >
       {/* Chevron toggle */}
@@ -194,7 +194,7 @@ function DraggableFolderItem({
       aria-level={depth + 2}
       aria-label={`${item.type === "link" ? "Saved link: " : ""}${item.title || item.url}`}
       tabIndex={0}
-      className={`group flex items-center gap-2 px-2 h-7 text-sm rounded-lg cursor-default hover:bg-gray-100 dark:hover:bg-white/[0.05] focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset transition-colors duration-150 ${item.type === "link" ? "cursor-pointer" : ""}`}
+      className={`group flex items-center gap-2 px-2 h-7 text-sm rounded-lg cursor-default hover:bg-gray-100 dark:hover:bg-white/[0.05] focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset transition-colors duration-200 ${item.type === "link" ? "cursor-pointer" : ""}`}
       onClick={() => onClick?.(item, folderId)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -211,7 +211,12 @@ function DraggableFolderItem({
         className="shrink-0 flex items-center cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 touch-none opacity-0 group-hover:opacity-100 transition-opacity"
         aria-label="Drag to reorder"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 16 16"
+          fill="currentColor"
+          className="w-3 h-3"
+        >
           <path d="M6 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm5-9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
         </svg>
       </span>
@@ -231,9 +236,7 @@ function DraggableFolderItem({
           aria-hidden="true"
         />
       )}
-      <span
-        className="truncate flex-1 select-none"
-      >
+      <span className="truncate flex-1 select-none">
         {item.title || item.url}
       </span>
     </div>
@@ -299,8 +302,10 @@ function SortableFolder({
       aria-label={folder.name}
     >
       <div
-        className={`group rounded-lg transition-colors duration-150 flex items-center ${
-          isOver ? "bg-indigo-50 dark:bg-arc-accent/10 ring-1 ring-arc-accent/40" : ""
+        className={`group rounded-lg transition-colors duration-200 flex items-center ${
+          isOver
+            ? "bg-indigo-50 dark:bg-arc-accent/10 ring-1 ring-arc-accent/40"
+            : ""
         }`}
         tabIndex={0}
         onKeyDown={(e) => {
@@ -326,7 +331,12 @@ function SortableFolder({
           className="shrink-0 flex items-center cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 touch-none pl-1 opacity-0 group-hover:opacity-100 transition-opacity"
           aria-label="Drag to reorder folder"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            className="w-3 h-3"
+          >
             <path d="M6 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm5-9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
           </svg>
         </span>
@@ -397,15 +407,18 @@ export default function FolderTree({
     [folders, setFolders]
   );
 
-  const handleRename = useCallback(async (id: string, name: string) => {
-    // Optimistic update
-    setFolders(prev => prev.map(f => f.id === id ? { ...f, name } : f));
-    try {
-      await renameFolder(id, name);
-    } catch {
-      // Name validation failed — ignore
-    }
-  }, [setFolders]);
+  const handleRename = useCallback(
+    async (id: string, name: string) => {
+      // Optimistic update
+      setFolders((prev) => prev.map((f) => (f.id === id ? { ...f, name } : f)));
+      try {
+        await renameFolder(id, name);
+      } catch {
+        // Name validation failed — ignore
+      }
+    },
+    [setFolders]
+  );
 
   const handleDelete = useCallback(async (folder: Folder) => {
     const tabCount = folder.items.filter((i) => i.type === "tab").length;
@@ -541,7 +554,7 @@ export default function FolderTree({
       <div className="px-2 py-1">
         <button
           onClick={() => handleCreateFolder()}
-          className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-arc-text-secondary hover:text-gray-700 dark:hover:text-gray-300 px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover transition-colors duration-150"
+          className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-arc-text-secondary hover:text-gray-700 dark:hover:text-gray-300 px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover transition-colors duration-200"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -565,7 +578,7 @@ export default function FolderTree({
         </span>
         <button
           onClick={() => handleCreateFolder()}
-          className="text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-150"
+          className="text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
           aria-label="New Folder"
           title="New Folder"
         >

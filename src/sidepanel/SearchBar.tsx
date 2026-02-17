@@ -228,7 +228,7 @@ export default function SearchBar({
             setTimeout(() => setIsFocused(false), 150);
           }}
           placeholder="Search tabs..."
-          className="w-full h-8 pl-8 pr-8 rounded-lg bg-gray-100 dark:bg-white/[0.06] dark:focus:bg-white/[0.08] text-gray-900 dark:text-arc-text-primary text-sm placeholder-gray-400 dark:placeholder-white/20 outline-none transition-all duration-150"
+          className="w-full h-8 pl-8 pr-8 rounded-lg bg-gray-100 dark:bg-white/[0.06] dark:focus:bg-white/[0.08] text-gray-900 dark:text-arc-text-primary text-sm placeholder-gray-400 dark:placeholder-white/20 outline-none transition-all duration-200"
           role="combobox"
           aria-expanded={showResults || undefined}
           aria-controls="search-results"
@@ -271,7 +271,7 @@ export default function SearchBar({
           id="search-results"
           role="listbox"
           aria-label="Search results"
-          className="absolute left-2 right-2 top-full mt-1 max-h-[320px] overflow-y-auto bg-white dark:bg-arc-surface border border-gray-200 dark:border-arc-border rounded-xl shadow-xl z-50"
+          className="absolute left-2 right-2 top-full mt-1 max-h-[320px] overflow-y-auto bg-white dark:bg-arc-surface border border-gray-200 dark:border-arc-border rounded-xl shadow-xl z-50 animate-slide-up"
         >
           {results.map((result, index) => (
             <button

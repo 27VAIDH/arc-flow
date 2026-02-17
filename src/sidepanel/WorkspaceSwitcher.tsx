@@ -290,7 +290,7 @@ export default function WorkspaceSwitcher({
               if (e.key === "Enter") handleRenameCommit(editingId);
               if (e.key === "Escape") setEditingId(null);
             }}
-            className="w-full text-xs bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-arc-accent/50 text-gray-900 dark:text-arc-text-primary transition-colors duration-150"
+            className="w-full text-xs bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-arc-accent/50 text-gray-900 dark:text-arc-text-primary transition-colors duration-200"
             placeholder="Workspace name"
           />
         </div>
@@ -325,7 +325,7 @@ export default function WorkspaceSwitcher({
               key={ws.id}
               onClick={() => handleSwitchWorkspace(ws.id)}
               onContextMenu={(e) => handleContextMenu(e, ws)}
-              className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-arc-accent/50 ${
+              className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-arc-accent/50 ${
                 isActive
                   ? "ring-2 ring-offset-1 dark:ring-offset-arc-bg scale-105"
                   : "opacity-60 hover:opacity-100 hover:scale-105"
@@ -352,7 +352,7 @@ export default function WorkspaceSwitcher({
         {/* Add workspace button */}
         <button
           onClick={handleCreate}
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-arc-surface-hover shrink-0 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-arc-accent/50"
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-arc-surface-hover shrink-0 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-arc-accent/50"
           aria-label="New Workspace"
           title="New Workspace"
           tabIndex={-1}
@@ -371,7 +371,7 @@ export default function WorkspaceSwitcher({
         {onOpenSettings && (
           <button
             onClick={onOpenSettings}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-arc-surface-hover shrink-0 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-arc-accent/50"
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-arc-surface-hover shrink-0 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-arc-accent/50"
             aria-label="Open settings"
             title="Settings"
             tabIndex={-1}
@@ -398,7 +398,7 @@ export default function WorkspaceSwitcher({
           ref={emojiPickerRef}
           role="dialog"
           aria-label="Choose emoji"
-          className="absolute bottom-full left-3 mb-1 p-2 bg-white dark:bg-arc-surface border border-gray-200 dark:border-arc-border rounded-xl shadow-xl z-50"
+          className="absolute bottom-full left-3 mb-1 p-2 bg-white dark:bg-arc-surface border border-gray-200 dark:border-arc-border rounded-xl shadow-xl z-50 animate-slide-up"
         >
           <p className="text-[11px] text-gray-500 dark:text-arc-text-secondary mb-1.5 uppercase tracking-wider font-medium">
             Choose emoji
@@ -428,7 +428,7 @@ export default function WorkspaceSwitcher({
           ref={colorPickerRef}
           role="dialog"
           aria-label="Choose color"
-          className="absolute bottom-full left-3 mb-1 p-2 bg-white dark:bg-arc-surface border border-gray-200 dark:border-arc-border rounded-xl shadow-xl z-50"
+          className="absolute bottom-full left-3 mb-1 p-2 bg-white dark:bg-arc-surface border border-gray-200 dark:border-arc-border rounded-xl shadow-xl z-50 animate-slide-up"
         >
           <p className="text-[11px] text-gray-500 dark:text-arc-text-secondary mb-1.5 uppercase tracking-wider font-medium">
             Choose color

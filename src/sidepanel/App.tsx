@@ -213,7 +213,7 @@ const DraggableTabItem = memo(function DraggableTabItem({
         }
       }}
       onContextMenu={(e) => onContextMenu(e, tab)}
-      className={`group flex items-center gap-2 px-3 h-8 text-sm rounded-lg cursor-default transition-all duration-150 hover:bg-gray-100 dark:hover:bg-white/[0.05] focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset ${
+      className={`group flex items-center gap-2 px-3 h-8 text-sm rounded-lg cursor-default transition-all duration-200 hover:bg-gray-100 dark:hover:bg-white/[0.05] focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset ${
         tab.active
           ? "font-medium dark:text-arc-text-primary dark:bg-white/[0.08]"
           : ""
@@ -271,7 +271,7 @@ const DraggableTabItem = memo(function DraggableTabItem({
       <button
         onClick={handleClose}
         onPointerDown={(e) => e.stopPropagation()}
-        className="shrink-0 w-4 h-4 flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+        className="shrink-0 w-4 h-4 flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
         aria-label={`Close ${tab.title}`}
       >
         <svg
@@ -351,7 +351,7 @@ function FolderPickerDropdown({
       <div key={folder.id}>
         <button
           onClick={() => onSelect(folder.id)}
-          className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-arc-surface-hover flex items-center gap-2 transition-colors duration-150"
+          className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-arc-surface-hover flex items-center gap-2 transition-colors duration-200"
           style={{ paddingLeft: 12 + depth * 16 }}
         >
           <svg
@@ -1102,7 +1102,7 @@ export default function App() {
         </h1>
         <button
           onClick={() => setShowOrganizeTabs(true)}
-          className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-150"
+          className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-200"
           title="Organize Tabs"
           aria-label="Organize Tabs"
         >
@@ -1162,10 +1162,7 @@ export default function App() {
           />
 
           {/* Tab list */}
-          <section
-            className="flex-1 px-1 pt-3"
-            aria-label="Open tabs"
-          >
+          <section className="flex-1 px-1 pt-3" aria-label="Open tabs">
             <div className="flex items-center justify-between px-2 py-1">
               <p
                 className="text-[11px] text-gray-400 dark:text-arc-text-secondary font-medium"
@@ -1188,7 +1185,7 @@ export default function App() {
                       tabIds: nonActive.map((t) => t.id),
                     });
                   }}
-                  className="text-[11px] text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-150"
+                  className="text-[11px] text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
                   title="Close all non-active tabs"
                 >
                   Close All

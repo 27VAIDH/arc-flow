@@ -32,7 +32,7 @@ function SelectField({
       <select
         value={String(value)}
         onChange={(e) => onChange(e.target.value)}
-        className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary min-w-[120px] transition-colors duration-150"
+        className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary min-w-[120px] transition-colors duration-200"
       >
         {options.map((opt) => (
           <option key={String(opt.value)} value={String(opt.value)}>
@@ -107,7 +107,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
         </h2>
         <button
           onClick={onClose}
-          className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-arc-text-secondary dark:hover:text-gray-200 rounded-lg transition-colors duration-150"
+          className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-arc-text-secondary dark:hover:text-gray-200 rounded-lg transition-colors duration-200"
           aria-label="Close settings"
         >
           <svg
@@ -145,25 +145,42 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
               </label>
               <div className="flex flex-wrap gap-2">
                 {[
-                  "#2E75B6", "#EF4444", "#F97316", "#EAB308",
-                  "#22C55E", "#14B8A6", "#06B6D4", "#6366f1",
-                  "#A855F7", "#EC4899", "#78716C", "#64748B",
+                  "#2E75B6",
+                  "#EF4444",
+                  "#F97316",
+                  "#EAB308",
+                  "#22C55E",
+                  "#14B8A6",
+                  "#06B6D4",
+                  "#6366f1",
+                  "#A855F7",
+                  "#EC4899",
+                  "#78716C",
+                  "#64748B",
                 ].map((color) => (
                   <button
                     key={color}
                     onClick={() => {
                       handleUpdate({ accentColor: color });
                       // Apply immediately without waiting for storage roundtrip
-                      document.documentElement.style.setProperty("--color-arc-accent", color);
+                      document.documentElement.style.setProperty(
+                        "--color-arc-accent",
+                        color
+                      );
                       const r = parseInt(color.slice(1, 3), 16);
                       const g = parseInt(color.slice(3, 5), 16);
                       const b = parseInt(color.slice(5, 7), 16);
-                      const lighten = (c: number) => Math.min(255, Math.round(c + (255 - c) * 0.2));
+                      const lighten = (c: number) =>
+                        Math.min(255, Math.round(c + (255 - c) * 0.2));
                       const hover = `#${lighten(r).toString(16).padStart(2, "0")}${lighten(g).toString(16).padStart(2, "0")}${lighten(b).toString(16).padStart(2, "0")}`;
-                      document.documentElement.style.setProperty("--color-arc-accent-hover", hover);
+                      document.documentElement.style.setProperty(
+                        "--color-arc-accent-hover",
+                        hover
+                      );
                     }}
                     className={`w-6 h-6 rounded-full focus:outline-none focus:ring-2 focus:ring-arc-accent/50 transition-transform duration-100 hover:scale-110 ${
-                      settings.accentColor?.toLowerCase() === color.toLowerCase()
+                      settings.accentColor?.toLowerCase() ===
+                      color.toLowerCase()
                         ? "ring-2 ring-offset-1 ring-gray-400 dark:ring-offset-arc-surface"
                         : ""
                     }`}
@@ -273,7 +290,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                     handleUpdate({ focusMode: updated });
                   }}
                   placeholder="*twitter.com*"
-                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-150 flex-1 min-w-0"
+                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 flex-1 min-w-0"
                 />
                 <input
                   type="text"
@@ -291,7 +308,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                     handleUpdate({ focusMode: updated });
                   }}
                   placeholder="https://notion.so"
-                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-150 flex-1 min-w-0"
+                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 flex-1 min-w-0"
                 />
                 <button
                   onClick={() => {
@@ -419,7 +436,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                           ? "sk-ant-..."
                           : "sk-..."
                       }
-                      className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-150 min-w-[120px] w-full max-w-[180px]"
+                      className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 min-w-[120px] w-full max-w-[180px]"
                     />
                   </div>
                 )}
@@ -449,7 +466,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                     handleUpdate({ routingRules: rules });
                   }}
                   placeholder="*example.com*"
-                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-150 flex-1 min-w-0"
+                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 flex-1 min-w-0"
                 />
                 <select
                   value={rule.workspaceId}
@@ -461,7 +478,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                     };
                     handleUpdate({ routingRules: rules });
                   }}
-                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-150 min-w-[100px]"
+                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 min-w-[100px]"
                 >
                   {workspaces.map((ws) => (
                     <option key={ws.id} value={ws.id}>
@@ -512,7 +529,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
         <section className="pt-2">
           <button
             onClick={handleReset}
-            className="w-full text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg px-3 py-2 text-center transition-colors duration-150"
+            className="w-full text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg px-3 py-2 text-center transition-colors duration-200"
           >
             Reset to Defaults
           </button>

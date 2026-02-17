@@ -1885,3 +1885,44 @@ Remaining stories with `passes: false`: **US-009** (footer simplification), **US
   - Focus mode toggle was in both the footer and command palette; removing from footer still leaves it accessible via command palette and settings panel
   - Pre-existing lint error (react-hooks/set-state-in-effect at line ~512 in App.tsx) exists for the workspace/pinned-apps effect — not introduced by this change
 ---
+
+## Iteration 9 - Tue Feb 17 23:53:36 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-9.log
+---
+US-009 is complete. There is still US-010 with `passes: false`, so another iteration will pick it up.
+
+**Summary of US-009 changes:**
+- Removed the Focus button + Settings gear row from the App.tsx footer
+- Removed the "X tabs suspended" text line from the footer
+- Added a settings gear icon (w-4 h-4) to WorkspaceSwitcher, placed after the + button in the workspace icon strip
+- Clicking the gear calls the same `onOpenSettings` callback
+- Cleaned up unused `focusModeEnabled` state and `Settings` import
+- Footer is now a single clean row: `[workspace emojis] [+] [gear]`
+- Focus mode remains accessible via SettingsPanel and command palette
+- Typecheck passes, no new lint errors introduced
+---
+
+## 2026-02-17 - US-010
+- What was implemented: Added subtle micro-animations for hover states and popover entries
+  - Changed all `transition-colors duration-150` and `transition-all duration-150` classes to `duration-200` across all components (App.tsx, SearchBar.tsx, ContextMenu.tsx, WorkspaceSwitcher.tsx, PinnedAppsRow.tsx, FolderTree.tsx, SettingsPanel.tsx)
+  - Updated `.transition-arc` CSS class from 0.15s to 0.2s in index.css
+  - Added `@keyframes slideUp` and `.animate-slide-up` CSS class to index.css (opacity 0→1, translateY(4px)→0 over 150ms ease-out)
+  - Applied `animate-slide-up` to SearchBar results dropdown
+  - Applied `animate-slide-up` to ContextMenu container
+  - Applied `animate-slide-up` to WorkspaceSwitcher emoji picker and color picker popovers
+- Files changed:
+  - src/sidepanel/index.css (added animation keyframes + class, updated transition-arc)
+  - src/sidepanel/App.tsx (duration-150 → duration-200)
+  - src/sidepanel/SearchBar.tsx (duration-150 → duration-200, added animate-slide-up)
+  - src/sidepanel/ContextMenu.tsx (duration-100 → duration-200, added animate-slide-up)
+  - src/sidepanel/WorkspaceSwitcher.tsx (duration-150 → duration-200, added animate-slide-up to popovers)
+  - src/sidepanel/PinnedAppsRow.tsx (duration-150 → duration-200)
+  - src/sidepanel/FolderTree.tsx (duration-150 → duration-200)
+  - src/sidepanel/SettingsPanel.tsx (duration-150 → duration-200)
+  - scripts/ralph/prd.json (US-010 passes: true)
+- **Learnings for future iterations:**
+  - ContextMenu.tsx used duration-100 (not duration-150) — AC specifically says duration-150 but updating ContextMenu's duration-100 to duration-200 was necessary for global consistency
+  - Some components (WorkspaceSwitcher emoji/color pickers, SettingsPanel accent color buttons) also use duration-100 for transform animations — these were left as-is since the AC only specifies changing duration-150
+  - Pre-existing ESLint errors exist (react-hooks/set-state-in-effect in App.tsx, missing dep warning in PinnedAppsRow.tsx) — not introduced by this story
+---
