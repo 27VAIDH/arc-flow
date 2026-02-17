@@ -498,3 +498,38 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - Rubber-band bounce uses CSS animation classes toggled via state + setTimeout(300ms) to remove — simpler than transition-based approach
   - The <main> element is the right target for swipe gestures — it covers the folder tree, tab list, and DnD area but excludes the footer/workspace switcher
 ---
+
+## Iteration 14 - Tue Feb 17 18:46:50 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-180605/iter-14.log
+---
+**US-014 is complete.** There is still 1 story with `passes: false` remaining (US-015).
+
+**Summary of US-014 completion:**
+- **Feature**: Integrated swipe navigation with rubber-band boundary handling into App.tsx
+- **Key changes**:
+  - Imported `useSwipeGesture` hook and attached it to the `<main>` content area via `mainContentRef`
+  - `handleSwipeLeft`: switches to next workspace by sortOrder, or triggers bounce animation at last workspace
+  - `handleSwipeRight`: switches to previous workspace by sortOrder, or triggers bounce animation at first workspace
+  - Added `sortedWorkspaces` memo for consistent sortOrder-based navigation
+  - Swipe disabled when only 1 workspace exists via `disabled` flag
+  - CSS rubber-band bounce animations (`bounceLeft`/`bounceRight` @keyframes) complete within 300ms
+  - `swipeBounce` state toggles CSS animation classes, cleared via `setTimeout(300ms)`
+- **Files changed**: `src/sidepanel/App.tsx`, `src/sidepanel/index.css`
+- **Commit**: `2d5347a` — `feat: US-014 - Integrate swipe navigation with boundary handling into App.tsx`
+- **Typecheck**: Passes cleanly
+---
+
+## 2026-02-17 - US-015
+- Added workspace dot indicators and arrow navigation buttons to WorkspaceSwitcher footer
+- Dot indicators: one 6px circle per workspace, active dot uses workspace's accentColor, inactive dots are gray-600
+- Left/right arrow buttons flank the dots; disabled (opacity-0) at first/last workspace boundaries
+- Clicking dots or arrows triggers handleSwitchWorkspace() with the appropriate workspace ID
+- Dots and arrows hidden when only 1 workspace exists (workspaces.length > 1 guard)
+- Dots spaced 8px apart (gap-2), arrows use chevron SVG icons
+- Files changed: src/sidepanel/WorkspaceSwitcher.tsx
+- **Learnings for future iterations:**
+  - WorkspaceSwitcher already has workspaces state sorted on load — but for dot navigation, we re-sort inline to guarantee consistent sortOrder-based ordering
+  - Using an IIFE inside JSX `{(() => { ... })()}` allows complex conditional rendering with local variables without extracting a separate component
+  - Disabled arrows use opacity-0 + pointer-events-none to maintain layout space while being invisible
+---
