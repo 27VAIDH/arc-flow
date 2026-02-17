@@ -8,7 +8,7 @@ import type {
   FolderItem,
   Session,
 } from "../shared/types";
-import { useTheme } from "./useTheme";
+import { useTheme, applyPanelColor } from "./useTheme";
 import type { Settings } from "../shared/types";
 import {
   addPinnedApp,
@@ -605,6 +605,20 @@ export default function App() {
       setFolders(
         [...(ws.folders ?? [])].sort((a, b) => a.sortOrder - b.sortOrder)
       );
+    }
+  }, [activeWorkspaceId, workspaces]);
+
+  // Apply workspace-level panel color on workspace switch
+  useEffect(() => {
+    const ws = workspaces.find((w) => w.id === activeWorkspaceId);
+    if (!ws) return;
+    if (ws.panelColor) {
+      applyPanelColor(ws.panelColor);
+    } else {
+      // Fall back to global panel color from settings
+      getSettings().then((s) => {
+        applyPanelColor(s.panelColor);
+      });
     }
   }, [activeWorkspaceId, workspaces]);
 

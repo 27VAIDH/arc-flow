@@ -8,6 +8,8 @@ import {
   deleteWorkspace,
   setActiveWorkspace,
 } from "../shared/workspaceStorage";
+import { applyPanelColor } from "./useTheme";
+import { getSettings } from "../shared/settingsStorage";
 import WorkspaceTemplatesModal from "./WorkspaceTemplates";
 
 const CURATED_EMOJIS = [
@@ -66,11 +68,13 @@ export default function WorkspaceSwitcher({
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
   const [showColorPicker, setShowColorPicker] = useState<string | null>(null);
+  const [showPanelColorPicker, setShowPanelColorPicker] = useState<string | null>(null);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const colorPickerRef = useRef<HTMLDivElement>(null);
+  const panelColorPickerRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
 
   // Load workspaces
@@ -118,11 +122,19 @@ export default function WorkspaceSwitcher({
       ) {
         setShowColorPicker(null);
       }
+      if (
+        showPanelColorPicker &&
+        panelColorPickerRef.current &&
+        !panelColorPickerRef.current.contains(e.target as Node)
+      ) {
+        setShowPanelColorPicker(null);
+      }
     };
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setShowEmojiPicker(null);
         setShowColorPicker(null);
+        setShowPanelColorPicker(null);
         setEditingId(null);
       }
     };
@@ -132,7 +144,7 @@ export default function WorkspaceSwitcher({
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleEscape);
     };
-  }, [showEmojiPicker, showColorPicker]);
+  }, [showEmojiPicker, showColorPicker, showPanelColorPicker]);
 
   const handleSwitchWorkspace = useCallback(
     async (wsId: string) => {
@@ -237,6 +249,33 @@ export default function WorkspaceSwitcher({
     setShowColorPicker(null);
   }, []);
 
+  const handlePanelColorSelect = useCallback(async (wsId: string, color: string) => {
+    try {
+      await updateWorkspace(wsId, { panelColor: color });
+      // Apply immediately if this is the active workspace
+      if (wsId === activeWorkspaceId) {
+        applyPanelColor(color);
+      }
+    } catch {
+      // Ignore errors
+    }
+    setShowPanelColorPicker(null);
+  }, [activeWorkspaceId]);
+
+  const handlePanelColorClear = useCallback(async (wsId: string) => {
+    try {
+      await updateWorkspace(wsId, { panelColor: "" });
+      // If this is the active workspace, fall back to global setting
+      if (wsId === activeWorkspaceId) {
+        const settings = await getSettings();
+        applyPanelColor(settings.panelColor);
+      }
+    } catch {
+      // Ignore errors
+    }
+    setShowPanelColorPicker(null);
+  }, [activeWorkspaceId]);
+
   const handleContextMenu = useCallback(
     (e: React.MouseEvent, ws: Workspace) => {
       e.preventDefault();
@@ -263,6 +302,13 @@ export default function WorkspaceSwitcher({
         label: "Change Color",
         onClick: () => {
           setShowColorPicker(ws.id);
+        },
+      });
+
+      items.push({
+        label: "Panel Color",
+        onClick: () => {
+          setShowPanelColorPicker(ws.id);
         },
       });
 
@@ -446,6 +492,52 @@ export default function WorkspaceSwitcher({
                   style={{ backgroundColor: color }}
                   title={color}
                   aria-label={`Select color ${color}${isSelected ? " (selected)" : ""}`}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Panel Color Picker Popover (above the footer) */}
+      {showPanelColorPicker && (
+        <div
+          ref={panelColorPickerRef}
+          role="dialog"
+          aria-label="Choose panel color"
+          className="absolute bottom-full left-3 mb-1 p-2 bg-white dark:bg-arc-surface border border-gray-200 dark:border-arc-border rounded-xl shadow-xl z-50"
+        >
+          <p className="text-[11px] text-gray-500 dark:text-arc-text-secondary mb-1.5 uppercase tracking-wider font-medium">
+            Panel Color
+          </p>
+          <div
+            className="grid grid-cols-7 gap-1.5"
+            role="radiogroup"
+            aria-label="Panel color options"
+          >
+            {/* Default/Reset swatch */}
+            <button
+              onClick={() => handlePanelColorClear(showPanelColorPicker)}
+              className={`w-6 h-6 rounded-full focus:outline-none focus:ring-2 focus:ring-arc-accent/50 transition-transform duration-100 hover:scale-110 ${
+                !workspaces.find((w) => w.id === showPanelColorPicker)?.panelColor
+                  ? "ring-2 ring-offset-1 ring-gray-400 dark:ring-offset-arc-surface"
+                  : ""
+              }`}
+              style={{ background: "linear-gradient(135deg, #0f0f17, #1a1a2e)" }}
+              title="Default (use global setting)"
+              aria-label="Reset to default panel color"
+            />
+            {COLOR_PALETTE.map((color) => {
+              const ws = workspaces.find((w) => w.id === showPanelColorPicker);
+              const isSelected = ws?.panelColor === color;
+              return (
+                <button
+                  key={color}
+                  onClick={() => handlePanelColorSelect(showPanelColorPicker, color)}
+                  className={`w-6 h-6 rounded-full focus:outline-none focus:ring-2 focus:ring-arc-accent/50 transition-transform duration-100 hover:scale-110 ${isSelected ? "ring-2 ring-offset-1 ring-gray-400 dark:ring-offset-arc-surface" : ""}`}
+                  style={{ backgroundColor: color }}
+                  title={color}
+                  aria-label={`Select panel color ${color}${isSelected ? " (selected)" : ""}`}
                 />
               );
             })}

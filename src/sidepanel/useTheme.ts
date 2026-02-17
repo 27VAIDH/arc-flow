@@ -74,7 +74,7 @@ export function useTheme() {
       if (s.accentColor) {
         applyAccentColor(s.accentColor);
       }
-      applyPanelColor(s.panelColor);
+      // Panel color applied by App.tsx to support per-workspace overrides
     });
   }, []);
 
@@ -93,9 +93,7 @@ export function useTheme() {
         if (newSettings?.accentColor) {
           applyAccentColor(newSettings.accentColor);
         }
-        if (newSettings) {
-          applyPanelColor(newSettings.panelColor);
-        }
+        // Panel color is now managed by App.tsx to support per-workspace overrides
       }
     };
     chrome.storage.onChanged.addListener(handler);

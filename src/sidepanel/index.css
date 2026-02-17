@@ -52,6 +52,11 @@
   transition: all 0.15s ease;
 }
 
+/* Smooth panel color transition for workspace switches */
+.dark {
+  transition: background-color 200ms ease;
+}
+
 /* Frosted glass backdrop */
 .backdrop-frosted {
   backdrop-filter: blur(12px) saturate(180%);

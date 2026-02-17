@@ -20,6 +20,8 @@ Branch: ralph/v1.1-delight-stickiness
 - Panel background color applied via CSS variables (--color-arc-panel-bg, --color-arc-panel-bg-secondary) set in useTheme.ts applyPanelColor()
 - applyPanelColor() is exported from useTheme.ts for direct use by SettingsPanel
 - VirtualTabRow passes props via rowProps — any new DraggableTabItem props must also be added to VirtualTabRowProps and VirtualTabRow
+- Panel color application is owned by App.tsx (not useTheme) to support per-workspace overrides — useTheme exports applyPanelColor() but doesn't call it
+- Per-workspace panelColor overrides global settings.panelColor; empty/undefined workspace panelColor falls back to global
 ---
 
 ## 2026-02-17 - US-001
@@ -195,4 +197,75 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - The dark:bg-[var(--color-arc-panel-bg)] Tailwind arbitrary value syntax works for referencing CSS variables in dark mode
   - Default panel bg values in @theme block match the original arc-bg (#0f0f17) so no visual change until user customizes
   - lightenColorByPercent() is a more flexible version of lightenColor() — takes a percent parameter (0.1 = 10%, 0.2 = 20%)
+---
+
+## Iteration 6 - Tue Feb 17 18:21:00 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-180605/iter-6.log
+---
+**US-006 is complete.** There are still 9 stories with `passes: false` remaining (US-007 through US-015).
+
+**Summary of US-006 completion:**
+- **Feature**: Added panel color CSS variable system to `useTheme.ts` for sidebar background color customization
+- **Key changes**:
+  - Added `--color-arc-panel-bg` and `--color-arc-panel-bg-secondary` CSS variables to `index.css` @theme block with default dark values matching existing `arc-bg`
+  - Created `applyPanelColor(color)` function (exported) that sets both CSS variables, computes 10% lighter secondary variant, and adds/removes `light-panel` class based on luminance
+  - Added `getLuminance()` and `lightenColorByPercent()` helper functions
+  - `useTheme` hook now applies panel color on mount and listens for `chrome.storage.onChanged` updates
+  - Updated `App.tsx` and `SettingsPanel.tsx` to use `dark:bg-[var(--color-arc-panel-bg)]` instead of hardcoded `dark:bg-arc-bg`
+- **Files changed**: `src/sidepanel/useTheme.ts`, `src/sidepanel/index.css`, `src/sidepanel/App.tsx`, `src/sidepanel/SettingsPanel.tsx`
+- **Commit**: `e40ff7c` — `feat: US-006 - Apply panel color via CSS variables in useTheme hook`
+- **Typecheck**: Passes cleanly
+---
+
+## 2026-02-17 - US-007
+- Added Panel Color picker section to SettingsPanel.tsx below the Accent Color section
+- Extracted COLOR_PALETTE constant to replace inline array (shared between accent and panel color pickers)
+- Imported applyPanelColor from useTheme.ts for immediate visual feedback on color selection
+- Added 12-color preset grid matching accent color palette plus a "Default" swatch (gradient dark circle)
+- Added hex input field with regex validation (/^#[0-9A-Fa-f]{6}$/) that applies color on valid input
+- Added "Reset" button that clears panelColor and reverts to default dark theme background
+- Selected color shows ring indicator; default swatch shows ring when no custom color is set
+- Files changed: src/sidepanel/SettingsPanel.tsx
+- **Learnings for future iterations:**
+  - The accent color section had an inline array of 12 colors — extracted to COLOR_PALETTE constant for reuse
+  - applyPanelColor() must be called alongside handleUpdate() for immediate visual feedback (storage roundtrip has latency)
+  - The "Default" swatch uses a linear-gradient background to visually distinguish it from color swatches
+---
+
+## Iteration 7 - Tue Feb 17 18:22:46 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-180605/iter-7.log
+---
+**US-007 is complete.** There are still 8 stories with `passes: false` remaining (US-008 through US-015).
+
+**Summary of US-007 completion:**
+- **Feature**: Added Panel Color picker UI section to `SettingsPanel.tsx` below the Accent Color section
+- **Key changes**:
+  - Extracted `COLOR_PALETTE` constant (12 colors) to replace inline array, shared by both accent and panel color pickers
+  - Imported `applyPanelColor` from `useTheme.ts` for immediate visual feedback
+  - 12-color preset grid with ring indicator on selected color
+  - "Default" swatch with gradient dark background to visually distinguish reset option
+  - Hex input field with regex validation — applies color only on valid 6-digit hex
+  - "Reset" button clears panelColor and reverts to default dark theme
+- **Files changed**: `src/sidepanel/SettingsPanel.tsx`
+- **Commit**: `2dce84d` — `feat: US-007 - Add panel color picker UI in SettingsPanel`
+- **Typecheck & lint**: Pass cleanly
+---
+
+## 2026-02-17 - US-008
+- Added per-workspace panel color support with smooth CSS transitions
+- Added "Panel Color" option to workspace context menu in WorkspaceSwitcher.tsx
+- Added panel color picker popover with 12-color palette + Default/Reset swatch
+- handlePanelColorSelect saves via updateWorkspace() and applies immediately via applyPanelColor()
+- handlePanelColorClear clears workspace panelColor and falls back to global setting
+- Added useEffect in App.tsx that applies workspace-level panelColor on workspace switch, falling back to global settings
+- Moved panel color ownership from useTheme to App.tsx to support per-workspace overrides
+- Added CSS transition (200ms ease) on background-color for .dark class in index.css for smooth workspace switches
+- Files changed: src/sidepanel/WorkspaceSwitcher.tsx, src/sidepanel/App.tsx, src/sidepanel/useTheme.ts, src/sidepanel/index.css
+- **Learnings for future iterations:**
+  - Panel color application is now owned by App.tsx (not useTheme) — useTheme still exports applyPanelColor() but no longer applies it on mount or settings change
+  - The workspace-switch effect at [activeWorkspaceId, workspaces] handles both workspace switches AND workspace data updates (since storage changes trigger setWorkspaces)
+  - SettingsPanel still calls applyPanelColor() directly for immediate feedback when changing global panel color
+  - The Default swatch in panel color picker clears the workspace override and falls back to global setting via getSettings()
 ---
