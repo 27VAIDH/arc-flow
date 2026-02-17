@@ -1854,3 +1854,34 @@ US-007 is complete. There are still stories with `passes: false` (US-008, US-009
   - The count badge (metadata) is in FolderHeader, not in the main FolderTree return
   - Chevron and folder icon are both in FolderHeader component
 ---
+
+## Iteration 8 - Tue Feb 17 23:50:08 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-8.log
+---
+**US-008 complete.** Changes made to `src/sidepanel/FolderTree.tsx`:
+
+- Folder icon: `dark:text-arc-accent-hover` → `dark:text-white/40` (muted)
+- Metadata count: `text-[11px] dark:text-arc-text-secondary` → `text-[10px] dark:text-white/25` (smaller/more muted)
+- Chevron: `dark:text-arc-text-secondary` → `dark:text-white/25` (muted)
+- FolderHeader hover: `dark:hover:bg-arc-surface-hover` → `dark:hover:bg-white/[0.05]`
+- DraggableFolderItem hover: `dark:hover:bg-arc-surface-hover` → `dark:hover:bg-white/[0.05]`
+- Folder name: added `font-normal`
+
+Remaining stories with `passes: false`: **US-009** (footer simplification), **US-010** (micro-animations).
+---
+
+## 2026-02-17 - US-009
+- Simplified footer to single-row workspace switcher with inline settings gear
+- Removed Focus button and Settings gear row from App.tsx footer
+- Removed "X tabs suspended" text line from footer
+- Added `onOpenSettings` prop to WorkspaceSwitcher component
+- Added settings gear icon (w-4 h-4) after the + button in workspace icon strip
+- Cleaned up unused `focusModeEnabled` state and `Settings` type import from App.tsx
+- Focus mode still accessible from SettingsPanel and command palette
+- Files changed: src/sidepanel/App.tsx, src/sidepanel/WorkspaceSwitcher.tsx
+- **Learnings for future iterations:**
+  - When removing UI elements that use state, check if the state variable becomes unused and clean it up to avoid TS6133 errors
+  - Focus mode toggle was in both the footer and command palette; removing from footer still leaves it accessible via command palette and settings panel
+  - Pre-existing lint error (react-hooks/set-state-in-effect at line ~512 in App.tsx) exists for the workspace/pinned-apps effect — not introduced by this change
+---
