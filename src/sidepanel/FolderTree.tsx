@@ -120,6 +120,7 @@ function FolderHeader({
           onChange={(e) => setEditName(e.target.value)}
           onBlur={commitRename}
           onKeyDown={(e) => {
+            e.stopPropagation();
             if (e.key === "Enter") commitRename();
             if (e.key === "Escape") {
               committedRef.current = true;
