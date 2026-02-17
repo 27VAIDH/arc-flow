@@ -8,6 +8,7 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - manifest.json lives in `public/` and is copied to `dist/` by a custom Vite plugin
 - Side panel HTML path in manifest must match Vite's output: `src/sidepanel/index.html`
 - ESLint 9 flat config in `eslint.config.js` (not .eslintrc)
+- CSS theme variables defined in both `src/sidepanel/index.css` (@theme block) AND `tailwind.config.ts` — keep both in sync
 - All data model types in `src/shared/types.ts`
 - Chrome types via `@types/chrome` devDependency
 - Prettier checks only `src/**/*.{ts,tsx,css,html}` to avoid .gitkeep issues
@@ -1633,4 +1634,15 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
 All stories have `passes: true`. All 41 user stories are complete.
 
 <promise>COMPLETE</promise>
+---
+
+## 2026-02-17 - US-001 (UI Visual Overhaul)
+- What was implemented: Updated CSS theme variables to semi-transparent rgba values for frosted glass aesthetic
+- Files changed:
+  - `src/sidepanel/index.css` — Updated @theme block (arc-surface, arc-surface-hover, arc-border, arc-text-secondary to rgba), scrollbar thumb colors to rgba(255,255,255,0.10/0.15), backdrop-frosted blur from 12px to 16px, added `:root` and `body` background: transparent
+  - `tailwind.config.ts` — Updated arc color values to match new rgba values
+- **Learnings for future iterations:**
+  - The @theme block in index.css and the colors in tailwind.config.ts must stay in sync
+  - Scrollbar styles are in index.css under `.dark ::-webkit-scrollbar-thumb`
+  - The `.backdrop-frosted` class is the reusable frosted glass utility
 ---
