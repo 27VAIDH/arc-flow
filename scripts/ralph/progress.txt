@@ -16,6 +16,8 @@ Branch: ralph/v1.1-delight-stickiness
 - All workspace data (pinnedApps, folders, notes) lives inside the Workspace object in workspaceStorage.ts
 - Inline rename inputs MUST call e.stopPropagation() in onKeyDown to prevent parent DnD/keyboard handlers from intercepting Enter/Escape
 - When adding inline edit to a clickable item, guard the onClick handler with `if (!editing)` to prevent navigation during edit
+- Per-workspace auxiliary data (e.g., tabNameOverrides) stored as separate chrome.storage.local keys with `_<workspaceId>` suffix
+- VirtualTabRow passes props via rowProps — any new DraggableTabItem props must also be added to VirtualTabRowProps and VirtualTabRow
 ---
 
 ## 2026-02-17 - US-001
@@ -54,4 +56,73 @@ US-001 is complete. There are still 14 stories with `passes: false` remaining (U
   - The onItemRename prop flows: App.tsx -> FolderTree -> SortableFolder -> DraggableFolderItem
   - When adding inline edit to a clickable item, guard the onClick with `if (!editing)` to prevent clicks during edit
   - The pre-existing eslint error in App.tsx (set-state-in-effect at line 530) is not from our changes
+---
+
+## Iteration 2 - Tue Feb 17 18:11:17 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-180605/iter-2.log
+---
+US-002 is complete. There are still 13 stories with `passes: false` remaining (US-003 through US-015).
+
+**Summary of US-002 completion:**
+- **Feature**: Added inline double-click rename to folder items in `DraggableFolderItem` component
+- **Pattern**: Reused the same `editing`/`editName`/`inputRef`/`committedRef` pattern from `FolderHeader`
+- **Key details**:
+  - `e.stopPropagation()` in `onKeyDown` prevents parent DnD handlers from intercepting Enter/Escape
+  - `e.preventDefault()` + `e.stopPropagation()` on double-click prevents navigation
+  - onClick guarded with `if (!editing)` to prevent clicks during edit mode
+  - Optimistic UI update in App.tsx via `setFolders`, then persisted via `renameItemInFolder()`
+- **Files changed**: `src/sidepanel/FolderTree.tsx`, `src/sidepanel/App.tsx`
+- **Commit**: `38fdfa9` — `feat: US-002 - Add double-click rename to folder items in FolderTree`
+- **Typecheck**: Passes cleanly
+---
+
+## 2026-02-17 - US-003
+- Added double-click rename to pinned apps in PinnedAppsRow.tsx
+- Reused existing editingApp state and handleEditSubmit/handleEditKeyDown from right-click rename
+- Added onDoubleClick prop to SortablePinnedApp component
+- handleDoubleClick calls e.preventDefault() + e.stopPropagation() to prevent app URL opening
+- Added e.stopPropagation() to handleEditKeyDown to prevent parent handler interception
+- Files changed: src/sidepanel/PinnedAppsRow.tsx
+- **Learnings for future iterations:**
+  - PinnedAppsRow already had full inline edit infrastructure (editingApp state, editInputRef, handleEditSubmit, handleEditKeyDown) — only needed to wire up onDoubleClick
+  - The edit input renders above the icon grid (not inline in the icon) — this is a different pattern from FolderTree inline rename
+  - Pre-existing eslint warning about editingApp deps in useEffect (line 150) is not from our changes
+---
+
+## Iteration 3 - Tue Feb 17 18:13:13 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-180605/iter-3.log
+---
+US-003 is complete. There are still 12 stories with `passes: false` remaining (US-004 through US-015).
+
+**Summary of US-003 completion:**
+- **Feature**: Added double-click rename to pinned app icons in `PinnedAppsRow.tsx`
+- **Approach**: Reused the existing `editingApp` state, `handleEditSubmit`, and `handleEditKeyDown` that were already wired for right-click rename
+- **Key changes**:
+  - Added `onDoubleClick` prop to `SortablePinnedApp` component
+  - `handleDoubleClick` calls `e.preventDefault()` + `e.stopPropagation()` to prevent the app URL from opening
+  - Added `e.stopPropagation()` to `handleEditKeyDown` to prevent parent handlers from intercepting Enter/Escape
+- **Files changed**: `src/sidepanel/PinnedAppsRow.tsx`
+- **Commit**: `be585de` — `feat: US-003 - Add double-click rename to pinned apps`
+- **Typecheck & lint**: Pass cleanly
+---
+
+## 2026-02-17 - US-004
+- Added double-click rename to open tabs in the sidebar via DraggableTabItem
+- Added tabNameOverrides state (Record<number, string>) to App.tsx, stored per-workspace in chrome.storage.local as `tabNameOverrides_<workspaceId>`
+- DraggableTabItem now accepts displayName and onTabRename props
+- Double-click enters inline edit mode; Enter/blur saves; Escape cancels
+- onKeyDown calls e.stopPropagation() to prevent parent handler interception
+- e.preventDefault() + e.stopPropagation() on double-click prevents tab switching
+- onClick guarded with `if (editing) return` to prevent clicks during edit mode
+- committedRef guard prevents double-commit on simultaneous blur + Enter
+- Tabs with custom names display in italic with original title in tooltip
+- Empty name input clears the override and reverts to original title
+- Also updated VirtualTabRow to pass through displayName and onTabRename for virtual list rendering
+- Files changed: src/sidepanel/App.tsx
+- **Learnings for future iterations:**
+  - tabNameOverrides stored as separate chrome.storage.local key per workspace (`tabNameOverrides_<wsId>`) rather than inside the Workspace object — keeps workspace storage lean
+  - VirtualTabRow component passes props via rowProps — any new DraggableTabItem props must also be added to VirtualTabRowProps interface and the VirtualTabRow function signature
+  - The RefObject type import from React is needed when using `useRef<HTMLInputElement>(null) as RefObject<HTMLInputElement>` pattern
 ---
