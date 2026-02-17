@@ -1646,3 +1646,32 @@ All stories have `passes: true`. All 41 user stories are complete.
   - Scrollbar styles are in index.css under `.dark ::-webkit-scrollbar-thumb`
   - The `.backdrop-frosted` class is the reusable frosted glass utility
 ---
+
+## Iteration 1 - Tue Feb 17 23:35:42 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-1.log
+---
+**US-001 is complete.** Here's what was done:
+
+**US-001: Update CSS theme variables to semi-transparent values and add frosted glass class**
+
+Files changed:
+- `src/sidepanel/index.css` — Updated @theme block variables (arc-surface, arc-surface-hover, arc-border, arc-text-secondary) to semi-transparent rgba values; updated scrollbar thumb colors; increased backdrop-frosted blur from 12px to 16px; added `:root` and `body` background: transparent
+- `tailwind.config.ts` — Updated arc color values to match new rgba values
+
+Typecheck passes. There are still 9 stories with `passes: false` (US-002 through US-010), so the next iteration will pick up US-002.
+---
+
+## 2026-02-17 - US-002
+- Implemented frosted glass background for main sidebar container
+- Added `backdrop-frosted` class and changed bg from `dark:bg-arc-bg` to `dark:bg-[rgba(15,15,23,0.78)]` in App.tsx
+- Created `applyPanelColor()` function in useTheme.ts that appends `C7` hex alpha to custom panel colors
+- Added `panelColor` field to Settings interface and DEFAULT_SETTINGS
+- Wired up panelColor in useTheme initial load and storage change listener
+- Files changed: `src/sidepanel/App.tsx`, `src/sidepanel/useTheme.ts`, `src/shared/types.ts`, `src/shared/constants.ts`
+- **Learnings for future iterations:**
+  - No panelColor concept existed before; had to add it to Settings type, constants, and useTheme.ts
+  - `applyPanelColor` sets two CSS custom properties: `--color-arc-panel-bg` and `--color-arc-panel-bg-secondary`
+  - Pre-existing lint error in App.tsx (setPinnedApps in useEffect) — not introduced by this change
+  - When adding new Settings fields, update both `types.ts` (interface) and `constants.ts` (DEFAULT_SETTINGS)
+---
