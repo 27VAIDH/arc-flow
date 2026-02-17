@@ -269,3 +269,35 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - SettingsPanel still calls applyPanelColor() directly for immediate feedback when changing global panel color
   - The Default swatch in panel color picker clears the workspace override and falls back to global setting via getSettings()
 ---
+
+## Iteration 8 - Tue Feb 17 18:27:17 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-180605/iter-8.log
+---
+**US-008 is complete.** There are still 7 stories with `passes: false` remaining (US-009 through US-015).
+
+**Summary of US-008 completion:**
+- **Feature**: Added per-workspace panel color with smooth CSS transitions
+- **Key changes**:
+  - `WorkspaceSwitcher.tsx`: Added "Panel Color" to workspace context menu with a color picker popover (12-color palette + Default/Reset swatch)
+  - `App.tsx`: Added `useEffect` at `[activeWorkspaceId, workspaces]` that applies workspace-level `panelColor` or falls back to global settings
+  - `useTheme.ts`: Moved panel color application ownership to App.tsx (removed auto-apply on mount/settings change, kept `applyPanelColor()` export)
+  - `index.css`: Added 200ms CSS transition on `background-color` for `.dark` class for smooth workspace switches
+- **Files changed**: `src/sidepanel/WorkspaceSwitcher.tsx`, `src/sidepanel/App.tsx`, `src/sidepanel/useTheme.ts`, `src/sidepanel/index.css`
+- **Commit**: `25a212a` — `feat: US-008 - Add per-workspace panel color with smooth transitions`
+- **Typecheck**: Passes cleanly
+---
+
+## 2026-02-17 - US-009
+- Fixed pinned apps drag-and-drop with visual feedback
+- Added DragOverlay component showing dragged app icon at 32x32 with shadow and border
+- Added activeDragId state with handleDragStart/onDragCancel handlers
+- Changed source item opacity from 0.5 to 0.3 during drag
+- Added fallback 200ms transition for shift animations when useSortable doesn't provide one
+- Preserved existing PointerSensor distance: 5 activation constraint
+- Files changed: src/sidepanel/PinnedAppsRow.tsx
+- **Learnings for future iterations:**
+  - DragOverlay in @dnd-kit renders a floating copy of the dragged item — source item should be dimmed (not hidden) for spatial awareness
+  - useSortable provides a `transition` prop for sibling shift animations, but a fallback `transform 200ms ease` ensures smooth behavior
+  - onDragCancel must also clear activeDragId to avoid stale overlay state
+---
