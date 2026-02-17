@@ -24,6 +24,8 @@ interface SearchResult {
 interface SearchBarProps {
   tabs: TabInfo[];
   folders: Folder[];
+  allTabs: TabInfo[];
+  tabWorkspaceMap: Record<string, string>;
   onSwitchTab: (tabId: number) => void;
   onOpenUrl: (url: string) => void;
 }
@@ -77,6 +79,10 @@ function buildSearchItems(tabs: TabInfo[], folders: Folder[]): SearchResult[] {
 export default function SearchBar({
   tabs,
   folders,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  allTabs: _allTabs,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  tabWorkspaceMap: _tabWorkspaceMap,
   onSwitchTab,
   onOpenUrl,
 }: SearchBarProps) {

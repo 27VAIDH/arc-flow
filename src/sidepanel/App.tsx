@@ -1120,6 +1120,8 @@ export default function App() {
         <SearchBar
           tabs={tabs}
           folders={folders}
+          allTabs={tabs}
+          tabWorkspaceMap={tabWorkspaceMap}
           onSwitchTab={(tabId) => {
             chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId });
           }}
