@@ -1673,3 +1673,30 @@ US-001 is complete. There are still 8 stories with `passes: false` (US-002 throu
   - Deduplication needs both id-based and tabId-based checks since the same tab can appear in both domain-match and Fuse.js with different ids (e.g., `tab-123` from allTabs vs `tab-123` from searchItems)
   - Pre-existing lint errors in App.tsx (set-state-in-effect) and PinnedAppsRow.tsx (exhaustive-deps) — not introduced by this change
 ---
+
+## Iteration 2 - Tue Feb 17 19:30:17 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-192153/iter-2.log
+---
+US-002 is complete. There are still stories with `passes: false` (US-003 through US-009), so the next iteration will pick up US-003.
+
+**US-002 Summary:**
+- Extended `SearchResult` type with optional `matchType?: "switch-to-tab"` field
+- Added `activeWorkspaceId` prop to `SearchBarProps` and passed it from `App.tsx`
+- Implemented domain-match search pass before Fuse.js: iterates `allTabs`, matches hostname against lowercased query via `new URL(tab.url).hostname`, wrapped in try-catch
+- Current-workspace domain matches appear first, then other-workspace matches, then Fuse.js results
+- Deduplication ensures domain-match wins over Fuse.js for the same tab
+- Typecheck passes; pre-existing lint errors unchanged
+- Committed as `ba3ccbf`
+---
+
+## 2026-02-17 - US-003
+- What was implemented: Rendered visually distinct "Switch to Tab →" badge on search results with matchType === 'switch-to-tab'
+- Files changed: src/sidepanel/SearchBar.tsx
+- Badge uses `bg-arc-accent text-white rounded-full px-2 py-0.5 text-[10px] font-medium` styling
+- Non-switch-to-tab results continue to show existing muted "Tab"/"Link"/"Folder" badges
+- Clicking a Switch-to-Tab result still uses existing onSwitchTab(tabId) flow (no change needed)
+- **Learnings for future iterations:**
+  - The badge rendering is in the result map at the bottom of the SearchBar component; conditional rendering based on matchType is clean
+  - `rounded-full` gives pill shape vs `rounded-md` for regular badges
+---

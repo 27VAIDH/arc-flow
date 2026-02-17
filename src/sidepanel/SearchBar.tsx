@@ -376,13 +376,19 @@ export default function SearchBar({
               </div>
 
               {/* Type badge */}
-              <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary">
-                {result.type === "tab"
-                  ? "Tab"
-                  : result.type === "link"
-                    ? "Link"
-                    : "Folder"}
-              </span>
+              {result.matchType === "switch-to-tab" ? (
+                <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-arc-accent text-white font-medium">
+                  Switch to Tab →
+                </span>
+              ) : (
+                <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary">
+                  {result.type === "tab"
+                    ? "Tab"
+                    : result.type === "link"
+                      ? "Link"
+                      : "Folder"}
+                </span>
+              )}
             </button>
           ))}
         </div>
