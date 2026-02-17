@@ -582,6 +582,111 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
+// --- Chrome Omnibox integration ---
+
+chrome.omnibox.setDefaultSuggestion({
+  description: "Search ArcFlow tabs for: %s",
+});
+
+chrome.omnibox.onInputChanged.addListener(
+  (text: string, suggest: (suggestions: chrome.omnibox.SuggestResult[]) => void) => {
+    (async () => {
+      const settings = await getSettings();
+      if (!settings.omniboxEnabled) {
+        suggest([]);
+        return;
+      }
+
+      const query = text.toLowerCase().trim();
+      if (!query) {
+        suggest([]);
+        return;
+      }
+
+      const allTabs = await chrome.tabs.query({});
+      const tabMap = await getTabWorkspaceMap();
+      const result = await chrome.storage.local.get("activeWorkspaceId");
+      const activeWsId = (result.activeWorkspaceId as string | undefined) ?? "default";
+
+      const currentWsMatches: { tab: chrome.tabs.Tab; hostname: string }[] = [];
+      const otherWsMatches: { tab: chrome.tabs.Tab; hostname: string }[] = [];
+
+      for (const tab of allTabs) {
+        if (!tab.url || tab.id == null) continue;
+        try {
+          const hostname = new URL(tab.url).hostname;
+          if (hostname.includes(query)) {
+            const wsId = tabMap[String(tab.id)] ?? "default";
+            if (wsId === activeWsId) {
+              currentWsMatches.push({ tab, hostname });
+            } else {
+              otherWsMatches.push({ tab, hostname });
+            }
+          }
+        } catch {
+          // Malformed URL, skip
+        }
+      }
+
+      const ordered = [...currentWsMatches, ...otherWsMatches];
+      const suggestions: chrome.omnibox.SuggestResult[] = ordered
+        .slice(0, 5)
+        .map(({ tab, hostname }) => {
+          // Escape XML special characters for omnibox description
+          const title = (tab.title ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          const domain = hostname.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          return {
+            content: String(tab.id),
+            description: `${title} &ndash; <url>${domain}</url> (Switch to Tab)`,
+          };
+        });
+
+      suggest(suggestions);
+    })().catch(() => {
+      suggest([]);
+    });
+  }
+);
+
+chrome.omnibox.onInputEntered.addListener(
+  (text: string) => {
+    (async () => {
+      const tabId = parseInt(text, 10);
+      if (!isNaN(tabId)) {
+        // User selected a tab suggestion — activate it
+        const tabMap = await getTabWorkspaceMap();
+        const result = await chrome.storage.local.get("activeWorkspaceId");
+        const activeWsId = (result.activeWorkspaceId as string | undefined) ?? "default";
+        const tabWsId = tabMap[String(tabId)] ?? "default";
+
+        if (tabWsId !== activeWsId) {
+          // Cross-workspace: switch workspace first
+          await setActiveWorkspace(tabWsId);
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+
+        await chrome.tabs.update(tabId, { active: true });
+        // Focus the tab's window
+        const tab = await chrome.tabs.get(tabId);
+        if (tab.windowId) {
+          await chrome.windows.update(tab.windowId, { focused: true });
+        }
+      } else {
+        // No matching tab — open as URL or Google search
+        let url: string;
+        if (text.includes(".")) {
+          url = text.startsWith("http://") || text.startsWith("https://")
+            ? text
+            : `https://${text}`;
+        } else {
+          url = `https://www.google.com/search?q=${encodeURIComponent(text)}`;
+        }
+        await chrome.tabs.create({ url });
+      }
+    })().catch(() => {});
+  }
+);
+
 // Handle messages from side panel
 chrome.runtime.onMessage.addListener(
   (message: SidePanelMessage, _sender, sendResponse) => {

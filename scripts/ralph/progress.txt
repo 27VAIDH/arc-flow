@@ -7,6 +7,8 @@ Started: Tue Feb 17 22:40:27 IST 2026
 - `tabWorkspaceMap` keys are stringified tab IDs (use `String(tab.id)`)
 - Domain-match results in SearchBar are split into `currentWsMatches` and `otherWsMatches` arrays, concatenated with current-workspace first
 - When injecting extra UI items into the results list (like "Open in New Tab"), use a selectable index mapping to keep keyboard nav working correctly
+- Chrome omnibox descriptions use XML-like formatting (escape `&`, `<`, `>`); use `<url>` tags for URL portions
+- Omnibox `onInputEntered` callback's `disposition` param type can mismatch Chrome types — omit if unused
 - Pre-existing lint error in App.tsx (setState in effect) — not introduced by any US
 ---
 
@@ -82,4 +84,62 @@ US-005 is complete. There are still stories with `passes: false` (US-006 through
   - When injecting non-result items into the dropdown, maintain a mapping between selectable index and result array index to keep keyboard nav consistent
   - The `data-index` attribute on each item must match the selectable index for scroll-into-view to work
   - Variable declarations used by `useCallback` must appear before the callback in the component body (no hoisting for `const`)
+---
+
+## Iteration 3 - Tue Feb 17 22:47:52 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-224027/iter-3.log
+---
+US-006 is complete. There are still stories with `passes: false` (US-007 through US-009), so another iteration will pick up the next story.
+
+**Summary of US-006 implementation:**
+- Added URL-like query detection (`contains '.'` or `starts with 'http'`) combined with Switch-to-Tab results presence check
+- Computed `lastSwitchToTabIndex` to position the "Open in New Tab" action right after the last Switch-to-Tab result
+- Introduced `totalSelectableItems`, `openInNewTabIndex`, and `getResultIndex()` to support keyboard navigation across both regular results and the injected action
+- Added `openQueryInNewTab()` callback that normalizes the query (prepends `https://` if needed) and calls `onOpenUrl`
+- Rendered the action with a plus icon (+), muted background, and "Open [query] in new tab" text
+- Action is fully keyboard-navigable and only appears when conditions are met
+- TypeScript typecheck and lint pass cleanly
+---
+
+## 2026-02-17 - US-007
+- What was implemented: Added omniboxEnabled setting to settings storage and omnibox keyword to manifest
+- Files changed: `src/shared/types.ts`, `src/shared/constants.ts`, `public/manifest.json`
+- Added `omniboxEnabled: boolean` to `Settings` interface
+- Added `omniboxEnabled: true` to `DEFAULT_SETTINGS`
+- Added `"omnibox": { "keyword": "af" }` to manifest.json
+- **Learnings for future iterations:**
+  - `getSettings()` uses spread (`{ ...DEFAULT_SETTINGS, ...stored }`) so new fields are backward-compatible automatically — existing stored settings without `omniboxEnabled` will get the default `true`
+  - The omnibox keyword `af` means users type "af " (with space) in the address bar to trigger omnibox suggestions
+  - Omnibox requires listeners in the service worker (chrome.omnibox.onInputChanged, onInputEntered) — those will be added in US-008
+---
+
+## Iteration 4 - Tue Feb 17 22:49:12 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-224027/iter-4.log
+---
+**US-007 is complete.** Here's what was done:
+
+- Added `omniboxEnabled: boolean` to the `Settings` interface in `types.ts`
+- Added `omniboxEnabled: true` to `DEFAULT_SETTINGS` in `constants.ts`
+- Added `"omnibox": { "keyword": "af" }` to `public/manifest.json`
+- TypeScript typecheck passes
+- Backward compatible — existing settings without `omniboxEnabled` get the default `true` via the spread in `getSettings()`
+
+There are still stories with `passes: false` (US-008, US-009), so another iteration will pick up the next story.
+---
+
+## 2026-02-17 - US-008
+- What was implemented: Chrome Omnibox tab search listeners in service worker
+- Files changed: `src/background/service-worker.ts`
+- Added `chrome.omnibox.setDefaultSuggestion` with "Search ArcFlow tabs for: %s"
+- Added `chrome.omnibox.onInputChanged` listener: queries all tabs, filters by hostname match, checks `omniboxEnabled` setting, returns up to 5 suggestions with current-workspace tabs first
+- Added `chrome.omnibox.onInputEntered` listener: activates matched tab (with cross-workspace switch if needed), or opens URL / Google search if no match
+- Suggestions formatted with tab title, domain in `<url>` tags, and "(Switch to Tab)" suffix
+- Cross-workspace tab activation switches workspace via `setActiveWorkspace()` with 100ms delay before activating
+- **Learnings for future iterations:**
+  - Chrome omnibox suggestion descriptions must use XML escaping (`&amp;`, `&lt;`, `&gt;`) and support `<url>`, `<match>`, `<dim>` tags
+  - The `disposition` parameter in `onInputEntered` has a type mismatch with `@anthropic-types/chrome` — safer to omit if unused
+  - `chrome.tabs.query({})` returns ALL tabs across all windows (not just current window), which is what we need for omnibox cross-workspace search
+  - When activating a tab from omnibox, also focus the window with `chrome.windows.update(windowId, { focused: true })`
 ---
