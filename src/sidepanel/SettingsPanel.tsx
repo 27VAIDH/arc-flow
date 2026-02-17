@@ -508,6 +508,41 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
           </div>
         </section>
 
+        {/* Omnibox */}
+        <section>
+          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
+            Omnibox
+          </h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-4">
+              <label className="text-sm text-gray-700 dark:text-arc-text-primary shrink-0">
+                Enable Omnibox
+              </label>
+              <button
+                onClick={() =>
+                  handleUpdate({ omniboxEnabled: !settings.omniboxEnabled })
+                }
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                  settings.omniboxEnabled
+                    ? "bg-arc-accent"
+                    : "bg-gray-300 dark:bg-arc-surface-hover"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                    settings.omniboxEnabled
+                      ? "translate-x-4"
+                      : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-arc-text-secondary">
+              Type <span className="font-medium">af</span> in address bar to search tabs
+            </p>
+          </div>
+        </section>
+
         {/* Reset */}
         <section className="pt-2">
           <button
