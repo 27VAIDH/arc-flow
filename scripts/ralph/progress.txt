@@ -1822,3 +1822,35 @@ US-006 is complete. There are still stories with `passes: false` (US-007, US-008
   - Pre-existing lint errors exist in App.tsx (line 523 setPinnedApps in effect) — not related to UI changes
   - The close button already had opacity-0 group-hover:opacity-100, just needed duration-150 added
 ---
+
+## Iteration 7 - Tue Feb 17 23:48:13 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-7.log
+---
+US-007 is complete. There are still stories with `passes: false` (US-008, US-009, US-010), so another iteration will pick up the next story.
+
+**Summary of US-007 changes:**
+- Removed heavy left-border active indicator (`border-l-[3px]`) from tab items
+- Added small dot indicator for active tabs, invisible placeholder for inactive (maintains alignment)
+- Active tab gets `font-medium` + `dark:bg-white/[0.08]` for visual prominence
+- Inactive tabs are clean with no special styling
+- Discarded tabs: opacity reduced from 50% to 40%
+- Tab hover: `dark:hover:bg-white/[0.05]` (softer)
+- Tab padding: `px-2` → `px-3`
+- Close button: added `duration-150` for smooth opacity transition
+---
+
+## 2026-02-17 - US-008
+- Softened folder rows with muted icons and metadata in FolderTree.tsx
+- Changed folder icon color from `dark:text-arc-accent-hover` to `dark:text-white/40`
+- Changed metadata count from `text-[11px] dark:text-arc-text-secondary` to `text-[10px] dark:text-white/25`
+- Changed chevron toggle from `dark:text-arc-text-secondary` to `dark:text-white/25`
+- Changed FolderHeader hover from `dark:hover:bg-arc-surface-hover` to `dark:hover:bg-white/[0.05]`
+- Changed DraggableFolderItem hover from `dark:hover:bg-arc-surface-hover` to `dark:hover:bg-white/[0.05]`
+- Added `font-normal` to folder name text span
+- Files changed: `src/sidepanel/FolderTree.tsx`
+- **Learnings for future iterations:**
+  - FolderTree.tsx has three main sub-components: FolderHeader, DraggableFolderItem, SortableFolder — changes to row styling need to cover all three
+  - The count badge (metadata) is in FolderHeader, not in the main FolderTree return
+  - Chevron and folder icon are both in FolderHeader component
+---

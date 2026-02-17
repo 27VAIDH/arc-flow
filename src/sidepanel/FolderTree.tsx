@@ -79,13 +79,13 @@ function FolderHeader({
 
   return (
     <div
-      className="flex-1 flex items-center gap-1 px-2 h-7 text-sm rounded-lg cursor-default hover:bg-gray-100 dark:hover:bg-arc-surface-hover group transition-colors duration-150"
+      className="flex-1 flex items-center gap-1 px-2 h-7 text-sm rounded-lg cursor-default hover:bg-gray-100 dark:hover:bg-white/[0.05] group transition-colors duration-150"
       onContextMenu={(e) => onContextMenu(e, folder)}
     >
       {/* Chevron toggle */}
       <button
         onClick={() => onToggleCollapse(folder.id)}
-        className="shrink-0 w-4 h-4 flex items-center justify-center text-gray-400 dark:text-arc-text-secondary"
+        className="shrink-0 w-4 h-4 flex items-center justify-center text-gray-400 dark:text-white/25"
         aria-label={folder.isCollapsed ? "Expand folder" : "Collapse folder"}
       >
         <svg
@@ -107,7 +107,7 @@ function FolderHeader({
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 20 20"
         fill="currentColor"
-        className="w-4 h-4 shrink-0 text-arc-accent dark:text-arc-accent-hover"
+        className="w-4 h-4 shrink-0 text-arc-accent dark:text-white/40"
       >
         <path d="M3.75 3A1.75 1.75 0 0 0 2 4.75v3.26a3.235 3.235 0 0 1 1.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0 0 16.25 5h-4.836a.25.25 0 0 1-.177-.073L9.823 3.513A1.75 1.75 0 0 0 8.586 3H3.75ZM3.75 9A1.75 1.75 0 0 0 2 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0 0 18 15.25v-4.5A1.75 1.75 0 0 0 16.25 9H3.75Z" />
       </svg>
@@ -132,7 +132,7 @@ function FolderHeader({
         />
       ) : (
         <span
-          className="truncate flex-1 select-none"
+          className="truncate flex-1 select-none font-normal"
           onDoubleClick={() => {
             committedRef.current = false;
             setEditName(folder.name);
@@ -145,7 +145,7 @@ function FolderHeader({
 
       {/* Count badge */}
       {badgeParts.length > 0 && (
-        <span className="text-[11px] text-gray-400 dark:text-arc-text-secondary shrink-0">
+        <span className="text-[10px] text-gray-400 dark:text-white/25 shrink-0">
           ({badgeParts.join(", ")})
         </span>
       )}
@@ -194,7 +194,7 @@ function DraggableFolderItem({
       aria-level={depth + 2}
       aria-label={`${item.type === "link" ? "Saved link: " : ""}${item.title || item.url}`}
       tabIndex={0}
-      className={`group flex items-center gap-2 px-2 h-7 text-sm rounded-lg cursor-default hover:bg-gray-100 dark:hover:bg-arc-surface-hover focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset transition-colors duration-150 ${item.type === "link" ? "cursor-pointer" : ""}`}
+      className={`group flex items-center gap-2 px-2 h-7 text-sm rounded-lg cursor-default hover:bg-gray-100 dark:hover:bg-white/[0.05] focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset transition-colors duration-150 ${item.type === "link" ? "cursor-pointer" : ""}`}
       onClick={() => onClick?.(item, folderId)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
