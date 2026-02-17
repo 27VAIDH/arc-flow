@@ -7,7 +7,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import Fuse from "fuse.js";
-import type { TabInfo, Folder } from "../shared/types";
+import type { TabInfo, Folder, Workspace } from "../shared/types";
 
 interface SearchResult {
   type: "tab" | "folder" | "link";
@@ -28,6 +28,7 @@ interface SearchBarProps {
   allTabs: TabInfo[];
   tabWorkspaceMap: Record<string, string>;
   activeWorkspaceId: string;
+  workspaces: Workspace[];
   onSwitchTab: (tabId: number) => void;
   onOpenUrl: (url: string) => void;
 }
@@ -84,6 +85,7 @@ export default function SearchBar({
   allTabs,
   tabWorkspaceMap,
   activeWorkspaceId,
+  workspaces,
   onSwitchTab,
   onOpenUrl,
 }: SearchBarProps) {
@@ -249,6 +251,34 @@ export default function SearchBar({
     }
   }, [selectedIndex]);
 
+  // Build workspace lookup map for cross-workspace badges
+  const workspaceMap = useMemo(() => {
+    const map: Record<string, { name: string; emoji: string }> = {};
+    for (const ws of workspaces) {
+      map[ws.id] = { name: ws.name, emoji: ws.emoji };
+    }
+    return map;
+  }, [workspaces]);
+
+  // Find the index where other-workspace Switch-to-Tab results start
+  const otherWsDividerIndex = useMemo(() => {
+    if (results.length === 0) return -1;
+    let hasCurrentWs = false;
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (r.matchType !== "switch-to-tab") break;
+      const wsId = r.tabId != null ? (tabWorkspaceMap[String(r.tabId)] || "default") : null;
+      if (wsId === activeWorkspaceId) {
+        hasCurrentWs = true;
+      } else if (wsId !== null && wsId !== activeWorkspaceId) {
+        // First other-workspace result — only show divider if we had current-workspace matches
+        if (hasCurrentWs) return i;
+        return -1; // Only other-workspace results, no divider needed
+      }
+    }
+    return -1;
+  }, [results, tabWorkspaceMap, activeWorkspaceId]);
+
   const showResults = isFocused && debouncedQuery.trim() && results.length > 0;
 
   return (
@@ -325,72 +355,99 @@ export default function SearchBar({
           aria-label="Search results"
           className="absolute left-2 right-2 top-full mt-1 max-h-[320px] overflow-y-auto bg-white dark:bg-arc-surface border border-gray-200 dark:border-arc-border rounded-xl shadow-xl z-50"
         >
-          {results.map((result, index) => (
-            <button
-              key={result.id}
-              id={`search-result-${result.id}`}
-              role="option"
-              aria-selected={index === selectedIndex}
-              data-index={index}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                activateResult(result);
-              }}
-              onMouseEnter={() => setSelectedIndex(index)}
-              className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors duration-100 ${
-                index === selectedIndex
-                  ? "bg-indigo-50 dark:bg-arc-accent/10"
-                  : "hover:bg-gray-50 dark:hover:bg-arc-surface-hover"
-              }`}
-            >
-              {/* Icon based on type */}
-              {result.type === "folder" ? (
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  className="w-4 h-4 shrink-0 text-gray-500 dark:text-gray-400"
-                >
-                  <path d="M3.75 3A1.75 1.75 0 0 0 2 4.75v3.26a3.235 3.235 0 0 1 1.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0 0 16.25 5h-4.836a.25.25 0 0 1-.177-.073L9.823 3.513A1.75 1.75 0 0 0 8.586 3H3.75ZM3.75 9A1.75 1.75 0 0 0 2 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0 0 18 15.25v-4.5A1.75 1.75 0 0 0 16.25 9H3.75Z" />
-                </svg>
-              ) : result.favicon ? (
-                <img
-                  src={result.favicon}
-                  alt=""
-                  className="w-4 h-4 shrink-0"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = "none";
-                  }}
-                />
-              ) : (
-                <span className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600" />
-              )}
+          {results.map((result, index) => {
+            const isOtherWs =
+              result.matchType === "switch-to-tab" &&
+              result.tabId != null &&
+              (tabWorkspaceMap[String(result.tabId)] || "default") !== activeWorkspaceId;
+            const wsInfo = isOtherWs && result.tabId != null
+              ? workspaceMap[tabWorkspaceMap[String(result.tabId)] || "default"]
+              : null;
 
-              <div className="flex-1 min-w-0">
-                <span className="block truncate">{result.title}</span>
-                {result.url && (
-                  <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
-                    {result.url}
-                  </span>
+            return (
+              <div key={result.id}>
+                {/* Divider before first other-workspace result */}
+                {index === otherWsDividerIndex && (
+                  <div className="flex items-center gap-2 px-3 py-1.5">
+                    <div className="flex-1 h-px bg-gray-200 dark:bg-arc-border" />
+                    <span className="text-[10px] text-gray-400 dark:text-arc-text-secondary whitespace-nowrap">
+                      In other workspaces
+                    </span>
+                    <div className="flex-1 h-px bg-gray-200 dark:bg-arc-border" />
+                  </div>
                 )}
-              </div>
+                <button
+                  id={`search-result-${result.id}`}
+                  role="option"
+                  aria-selected={index === selectedIndex}
+                  data-index={index}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    activateResult(result);
+                  }}
+                  onMouseEnter={() => setSelectedIndex(index)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors duration-100 ${
+                    index === selectedIndex
+                      ? "bg-indigo-50 dark:bg-arc-accent/10"
+                      : "hover:bg-gray-50 dark:hover:bg-arc-surface-hover"
+                  }`}
+                >
+                  {/* Icon based on type */}
+                  {result.type === "folder" ? (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="w-4 h-4 shrink-0 text-gray-500 dark:text-gray-400"
+                    >
+                      <path d="M3.75 3A1.75 1.75 0 0 0 2 4.75v3.26a3.235 3.235 0 0 1 1.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0 0 16.25 5h-4.836a.25.25 0 0 1-.177-.073L9.823 3.513A1.75 1.75 0 0 0 8.586 3H3.75ZM3.75 9A1.75 1.75 0 0 0 2 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0 0 18 15.25v-4.5A1.75 1.75 0 0 0 16.25 9H3.75Z" />
+                    </svg>
+                  ) : result.favicon ? (
+                    <img
+                      src={result.favicon}
+                      alt=""
+                      className="w-4 h-4 shrink-0"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <span className="w-4 h-4 shrink-0 rounded bg-gray-300 dark:bg-gray-600" />
+                  )}
 
-              {/* Type badge */}
-              {result.matchType === "switch-to-tab" ? (
-                <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-arc-accent text-white font-medium">
-                  Switch to Tab →
-                </span>
-              ) : (
-                <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary">
-                  {result.type === "tab"
-                    ? "Tab"
-                    : result.type === "link"
-                      ? "Link"
-                      : "Folder"}
-                </span>
-              )}
-            </button>
-          ))}
+                  <div className="flex-1 min-w-0">
+                    <span className="block truncate">{result.title}</span>
+                    {result.url && (
+                      <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
+                        {result.url}
+                      </span>
+                    )}
+                    {/* Cross-workspace badge */}
+                    {wsInfo && (
+                      <span className="block text-[10px] text-gray-400 dark:text-arc-text-secondary mt-0.5">
+                        {wsInfo.emoji} {wsInfo.name}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Type badge */}
+                  {result.matchType === "switch-to-tab" ? (
+                    <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-arc-accent text-white font-medium">
+                      Switch to Tab →
+                    </span>
+                  ) : (
+                    <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary">
+                      {result.type === "tab"
+                        ? "Tab"
+                        : result.type === "link"
+                          ? "Link"
+                          : "Folder"}
+                    </span>
+                  )}
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
