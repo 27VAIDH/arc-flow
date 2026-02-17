@@ -30,6 +30,7 @@ interface SearchBarProps {
   activeWorkspaceId: string;
   workspaces: Workspace[];
   onSwitchTab: (tabId: number) => void;
+  onSwitchWorkspaceAndTab: (workspaceId: string, tabId: number) => void;
   onOpenUrl: (url: string) => void;
 }
 
@@ -87,6 +88,7 @@ export default function SearchBar({
   activeWorkspaceId,
   workspaces,
   onSwitchTab,
+  onSwitchWorkspaceAndTab,
   onOpenUrl,
 }: SearchBarProps) {
   const [query, setQuery] = useState("");
@@ -204,7 +206,17 @@ export default function SearchBar({
   const activateResult = useCallback(
     (result: SearchResult) => {
       if (result.type === "tab" && result.tabId != null) {
-        onSwitchTab(result.tabId);
+        // For Switch-to-Tab results, check if it's a cross-workspace match
+        if (result.matchType === "switch-to-tab") {
+          const tabWsId = tabWorkspaceMap[String(result.tabId)] || "default";
+          if (tabWsId !== activeWorkspaceId) {
+            onSwitchWorkspaceAndTab(tabWsId, result.tabId);
+          } else {
+            onSwitchTab(result.tabId);
+          }
+        } else {
+          onSwitchTab(result.tabId);
+        }
       } else if (result.type === "link" && result.url) {
         onOpenUrl(result.url);
       }
@@ -213,7 +225,7 @@ export default function SearchBar({
       setDebouncedQuery("");
       inputRef.current?.blur();
     },
-    [onSwitchTab, onOpenUrl]
+    [onSwitchTab, onSwitchWorkspaceAndTab, onOpenUrl, tabWorkspaceMap, activeWorkspaceId]
   );
 
   const handleKeyDown = useCallback(

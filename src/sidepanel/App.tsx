@@ -1127,6 +1127,13 @@ export default function App() {
           onSwitchTab={(tabId) => {
             chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId });
           }}
+          onSwitchWorkspaceAndTab={(workspaceId, tabId) => {
+            setActiveWorkspaceStorage(workspaceId);
+            setActiveWorkspaceId(workspaceId);
+            setTimeout(() => {
+              chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId });
+            }, 100);
+          }}
           onOpenUrl={(url) => {
             chrome.runtime.sendMessage({ type: "OPEN_URL", url });
           }}
