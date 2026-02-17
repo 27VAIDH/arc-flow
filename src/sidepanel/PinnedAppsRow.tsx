@@ -46,6 +46,7 @@ interface SortablePinnedAppProps {
   app: PinnedApp;
   hasOpenTab: boolean;
   onClick: () => void;
+  onDoubleClick: (e: React.MouseEvent) => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }
 
@@ -53,6 +54,7 @@ function SortablePinnedApp({
   app,
   hasOpenTab,
   onClick,
+  onDoubleClick,
   onContextMenu,
 }: SortablePinnedAppProps) {
   const {
@@ -77,6 +79,7 @@ function SortablePinnedApp({
       {...attributes}
       {...listeners}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       className="flex flex-col items-center shrink-0 group touch-none"
       title={app.title}
@@ -162,6 +165,12 @@ export default function PinnedAppsRow({
     });
   };
 
+  const handleDoubleClick = (e: React.MouseEvent, app: PinnedApp) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setEditingApp({ id: app.id, field: "title", value: app.title });
+  };
+
   const handlePinnedAppContextMenu = (e: React.MouseEvent, app: PinnedApp) => {
     e.preventDefault();
     e.stopPropagation();
@@ -211,6 +220,7 @@ export default function PinnedAppsRow({
   };
 
   const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
     if (e.key === "Enter") {
       handleEditSubmit();
     } else if (e.key === "Escape") {
@@ -282,6 +292,7 @@ export default function PinnedAppsRow({
                   app={app}
                   hasOpenTab={hasOpenTab}
                   onClick={() => handleClick(app)}
+                  onDoubleClick={(e) => handleDoubleClick(e, app)}
                   onContextMenu={(e) => handlePinnedAppContextMenu(e, app)}
                 />
               );
