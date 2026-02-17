@@ -366,18 +366,63 @@ const DraggableTabItem = memo(function DraggableTabItem({
   );
 });
 
-function TabDragOverlay({ tab }: { tab: TabInfo }) {
+function DragOverlayCard({
+  icon,
+  title,
+}: {
+  icon: React.ReactNode;
+  title: string;
+}) {
   return (
-    <div className="flex items-center gap-2 px-2 h-8 text-sm rounded-lg bg-white dark:bg-arc-surface shadow-lg border border-gray-200 dark:border-arc-border opacity-90">
-      {tab.favIconUrl ? (
-        <img src={tab.favIconUrl} alt="" className="w-4 h-4 shrink-0" />
-      ) : (
-        <span className="w-4 h-4 shrink-0 rounded bg-gray-200 dark:bg-arc-surface-hover" />
-      )}
-      <span className="truncate flex-1 select-none">
-        {tab.title || tab.url}
+    <div className="flex items-center gap-2 px-2 h-8 text-sm rounded-lg bg-white dark:bg-arc-surface shadow-lg border border-gray-200 dark:border-arc-border opacity-90 max-w-[200px]">
+      {icon}
+      <span className="truncate flex-1 select-none text-gray-700 dark:text-arc-text-primary">
+        {title}
       </span>
     </div>
+  );
+}
+
+function TabDragOverlay({ tab }: { tab: TabInfo }) {
+  return (
+    <DragOverlayCard
+      icon={
+        tab.favIconUrl ? (
+          <img src={tab.favIconUrl} alt="" className="w-4 h-4 shrink-0" draggable={false} />
+        ) : (
+          <span className="w-4 h-4 shrink-0 rounded bg-gray-200 dark:bg-arc-surface-hover" />
+        )
+      }
+      title={tab.title || tab.url}
+    />
+  );
+}
+
+function FolderDragOverlay({ folder }: { folder: Folder }) {
+  return (
+    <DragOverlayCard
+      icon={
+        <span className="text-sm shrink-0" aria-hidden="true">
+          {folder.name.match(/^\p{Emoji}/u)?.[0] || "\uD83D\uDCC1"}
+        </span>
+      }
+      title={folder.name}
+    />
+  );
+}
+
+function FolderItemDragOverlay({ item }: { item: FolderItem }) {
+  return (
+    <DragOverlayCard
+      icon={
+        item.favicon ? (
+          <img src={item.favicon} alt="" className="w-4 h-4 shrink-0" draggable={false} />
+        ) : (
+          <span className="w-4 h-4 shrink-0 rounded bg-gray-200 dark:bg-arc-surface-hover" />
+        )
+      }
+      title={item.title || item.url}
+    />
   );
 }
 
@@ -492,6 +537,8 @@ export default function App() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [activeDragTab, setActiveDragTab] = useState<TabInfo | null>(null);
+  const [activeDragFolder, setActiveDragFolder] = useState<Folder | null>(null);
+  const [activeDragFolderItem, setActiveDragFolderItem] = useState<FolderItem | null>(null);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState("default");
   const [tabWorkspaceMap, setTabWorkspaceMap] = useState<
     Record<string, string>
@@ -1161,14 +1208,31 @@ export default function App() {
           setActiveDragTab(tab);
           setIsDraggingTabs(true);
         }
+      } else if (id.startsWith("folder:")) {
+        const folderId = id.replace("folder:", "");
+        const folder = folders.find((f) => f.id === folderId);
+        if (folder) {
+          setActiveDragFolder(folder);
+        }
+      } else if (id.startsWith("folder-item:")) {
+        const itemId = id.replace("folder-item:", "");
+        for (const folder of folders) {
+          const item = folder.items.find((i) => i.id === itemId);
+          if (item) {
+            setActiveDragFolderItem(item);
+            break;
+          }
+        }
       }
     },
-    [tabs]
+    [tabs, folders]
   );
 
   const handleDragEnd = useCallback(
     async (event: DragEndEvent) => {
       setActiveDragTab(null);
+      setActiveDragFolder(null);
+      setActiveDragFolderItem(null);
       setIsDraggingTabs(false);
       const { active, over } = event;
       if (!over) return;
@@ -1336,8 +1400,19 @@ export default function App() {
     [tabs, folders, setFolders, filteredTabs, activeWorkspaceId]
   );
 
+  const activeDragType = activeDragTab
+    ? "tab"
+    : activeDragFolder
+      ? "folder"
+      : activeDragFolderItem
+        ? "folder-item"
+        : undefined;
+
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 dark:bg-[var(--color-arc-panel-bg)] dark:text-arc-text-primary">
+    <div
+      className="flex flex-col min-h-screen bg-gray-50 text-gray-900 dark:bg-[var(--color-arc-panel-bg)] dark:text-arc-text-primary"
+      data-drag-type={activeDragType}
+    >
       {/* Live region for screen reader announcements */}
       <div
         role="status"
@@ -1400,6 +1475,8 @@ export default function App() {
           onDragEnd={handleDragEnd}
           onDragCancel={() => {
             setActiveDragTab(null);
+            setActiveDragFolder(null);
+            setActiveDragFolderItem(null);
             setIsDraggingTabs(false);
           }}
         >
@@ -1423,7 +1500,7 @@ export default function App() {
           />
 
           {/* Tab list */}
-          <section className="flex-1 px-1 border-t border-gray-200/80 dark:border-arc-border" aria-label="Open tabs">
+          <section className="flex-1 px-1 border-t border-gray-200/80 dark:border-arc-border" aria-label="Open tabs" data-drop-section="tabs">
             <div className="flex items-center justify-between px-2 py-1">
               <p
                 className="text-[11px] text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider font-medium"
@@ -1496,7 +1573,13 @@ export default function App() {
           </section>
 
           <DragOverlay>
-            {activeDragTab ? <TabDragOverlay tab={activeDragTab} /> : null}
+            {activeDragTab ? (
+              <TabDragOverlay tab={activeDragTab} />
+            ) : activeDragFolder ? (
+              <FolderDragOverlay folder={activeDragFolder} />
+            ) : activeDragFolderItem ? (
+              <FolderItemDragOverlay item={activeDragFolderItem} />
+            ) : null}
           </DragOverlay>
         </DndContext>
 

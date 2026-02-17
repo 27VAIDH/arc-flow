@@ -63,6 +63,16 @@
   -webkit-backdrop-filter: blur(12px) saturate(180%);
 }
 
+/* Not-allowed cursor for invalid cross-section drops */
+/* Folders dragged over the tab list section */
+[data-drag-type="folder"] [data-drop-section="tabs"] {
+  cursor: not-allowed;
+}
+/* Tabs dragged over folder items (but not folder-drop zones which are valid) */
+[data-drag-type="tab"] [data-drop-section="tabs"] [data-sortable-folder-item] {
+  cursor: not-allowed;
+}
+
 /* Tab preview card fade-in */
 .animate-fade-in {
   animation: fadeIn 100ms ease-out;
