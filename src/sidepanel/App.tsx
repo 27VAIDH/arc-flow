@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, memo, type RefObject } from "react";
 import type {
   TabInfo,
   PinnedApp,
@@ -129,6 +129,8 @@ const TAB_ITEM_HEIGHT = 36; // 32px height + 4px gap
 interface VirtualTabRowProps {
   tabs: TabInfo[];
   onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
+  tabNameOverrides: Record<number, string>;
+  onTabRename: (tabId: number, newName: string) => void;
 }
 
 function VirtualTabRow({
@@ -136,12 +138,16 @@ function VirtualTabRow({
   style,
   tabs,
   onContextMenu,
+  tabNameOverrides,
+  onTabRename,
 }: {
   index: number;
   style: CSSProperties;
   ariaAttributes: Record<string, unknown>;
   tabs: TabInfo[];
   onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
+  tabNameOverrides: Record<number, string>;
+  onTabRename: (tabId: number, newName: string) => void;
 }) {
   const tab = tabs[index];
   if (!tab) return null;
@@ -151,6 +157,8 @@ function VirtualTabRow({
       tab={tab}
       onContextMenu={onContextMenu}
       style={style}
+      displayName={tabNameOverrides[tab.id]}
+      onTabRename={onTabRename}
     />
   );
 }
@@ -161,15 +169,28 @@ const DraggableTabItem = memo(function DraggableTabItem({
   style: outerStyle,
   onMouseEnter,
   onMouseLeave,
+  displayName,
+  onTabRename,
 }: {
   tab: TabInfo;
   onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
   style?: React.CSSProperties;
   onMouseEnter?: (e: React.MouseEvent, tab: TabInfo) => void;
   onMouseLeave?: () => void;
+  displayName?: string;
+  onTabRename?: (tabId: number, newName: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: `tab:${tab.id}` });
+
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null) as RefObject<HTMLInputElement>;
+  const committedRef = useRef(false);
+
+  const hasCustomName = !!displayName;
+  const shownName = displayName || tab.title || tab.url;
+  const originalTitle = tab.title || tab.url;
 
   const style = {
     ...outerStyle,
@@ -179,8 +200,33 @@ const DraggableTabItem = memo(function DraggableTabItem({
     opacity: isDragging ? 0.5 : 1,
   };
 
+  const commitRename = useCallback(() => {
+    if (committedRef.current) return;
+    committedRef.current = true;
+    const trimmed = editName.trim();
+    if (onTabRename) {
+      // Empty name clears the override, reverting to original title
+      onTabRename(tab.id, trimmed);
+    }
+    setEditing(false);
+  }, [editName, onTabRename, tab.id]);
+
   const handleClick = () => {
+    if (editing) return;
     chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: tab.id });
+  };
+
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!onTabRename) return;
+    setEditing(true);
+    setEditName(shownName);
+    committedRef.current = false;
+    setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 0);
   };
 
   const handleClose = (e: React.MouseEvent) => {
@@ -196,7 +242,7 @@ const DraggableTabItem = memo(function DraggableTabItem({
   };
 
   const srLabel = [
-    tab.title || tab.url,
+    originalTitle,
     tab.active ? "active" : "",
     tab.audible ? "playing audio" : "",
     tab.discarded ? "suspended" : "",
@@ -214,8 +260,10 @@ const DraggableTabItem = memo(function DraggableTabItem({
       aria-label={srLabel}
       tabIndex={0}
       onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
       onMouseDown={handleMouseDown}
       onKeyDown={(e) => {
+        if (editing) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           handleClick();
@@ -251,9 +299,32 @@ const DraggableTabItem = memo(function DraggableTabItem({
           aria-hidden="true"
         />
       )}
-      <span className="truncate flex-1 select-none text-gray-700 dark:text-arc-text-primary">
-        {tab.title || tab.url}
-      </span>
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={editName}
+          onChange={(e) => setEditName(e.target.value)}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") {
+              commitRename();
+            } else if (e.key === "Escape") {
+              committedRef.current = true;
+              setEditing(false);
+            }
+          }}
+          onBlur={commitRename}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="flex-1 min-w-0 bg-transparent border border-arc-accent/50 rounded px-1 text-sm text-gray-700 dark:text-arc-text-primary outline-none"
+        />
+      ) : (
+        <span
+          className={`truncate flex-1 select-none text-gray-700 dark:text-arc-text-primary ${hasCustomName ? "italic" : ""}`}
+          title={hasCustomName ? originalTitle : undefined}
+        >
+          {shownName}
+        </span>
+      )}
       {tab.audible && (
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -432,6 +503,7 @@ export default function App() {
   const [showOrganizeTabs, setShowOrganizeTabs] = useState(false);
   const [showSessionManager, setShowSessionManager] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [tabNameOverrides, setTabNameOverrides] = useState<Record<number, string>>({});
   const [tabPreview, setTabPreview] = useState<{
     tab: TabPreviewInfo;
     position: { top: number; left: number };
@@ -535,6 +607,14 @@ export default function App() {
       );
     }
   }, [activeWorkspaceId, workspaces]);
+
+  // Load tabNameOverrides for the active workspace
+  useEffect(() => {
+    const key = `tabNameOverrides_${activeWorkspaceId}`;
+    chrome.storage.local.get(key, (result) => {
+      setTabNameOverrides((result[key] as Record<number, string>) ?? {});
+    });
+  }, [activeWorkspaceId]);
 
   useEffect(() => {
     // Request initial tab list from service worker
@@ -722,6 +802,24 @@ export default function App() {
       notesCollapsed: !activeWorkspace.notesCollapsed,
     });
   }, [activeWorkspaceId, activeWorkspace]);
+
+  // Tab name override handler
+  const handleTabRename = useCallback(
+    (tabId: number, newName: string) => {
+      setTabNameOverrides((prev) => {
+        const next = { ...prev };
+        if (newName) {
+          next[tabId] = newName;
+        } else {
+          delete next[tabId];
+        }
+        const key = `tabNameOverrides_${activeWorkspaceId}`;
+        chrome.storage.local.set({ [key]: next });
+        return next;
+      });
+    },
+    [activeWorkspaceId]
+  );
 
   // Tab hover preview handlers
   const handleTabHoverStart = useCallback(
@@ -1289,6 +1387,8 @@ export default function App() {
                 rowProps={{
                   tabs: filteredTabs,
                   onContextMenu: handleTabContextMenu,
+                  tabNameOverrides,
+                  onTabRename: handleTabRename,
                 }}
                 overscanCount={5}
               />
@@ -1305,6 +1405,8 @@ export default function App() {
                     onContextMenu={handleTabContextMenu}
                     onMouseEnter={handleTabHoverStart}
                     onMouseLeave={handleTabHoverEnd}
+                    displayName={tabNameOverrides[tab.id]}
+                    onTabRename={handleTabRename}
                   />
                 ))}
               </ul>
