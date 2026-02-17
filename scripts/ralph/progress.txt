@@ -1675,3 +1675,29 @@ Typecheck passes. There are still 9 stories with `passes: false` (US-002 through
   - Pre-existing lint error in App.tsx (setPinnedApps in useEffect) — not introduced by this change
   - When adding new Settings fields, update both `types.ts` (interface) and `constants.ts` (DEFAULT_SETTINGS)
 ---
+
+## Iteration 2 - Tue Feb 17 23:38:41 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-2.log
+---
+US-002 is complete. There are still stories with `passes: false` (US-003 through US-010), so the next iteration will pick up US-003.
+
+**Summary of US-002 implementation:**
+- Added `backdrop-frosted` class to the main sidebar container in `App.tsx`
+- Changed background from `dark:bg-arc-bg` to `dark:bg-[rgba(15,15,23,0.78)]` (semi-transparent)
+- Created `applyPanelColor()` in `useTheme.ts` that appends `C7` hex alpha (78% opacity) to custom panel colors
+- Added `panelColor` field to `Settings` interface and `DEFAULT_SETTINGS`
+- Wired up panel color application on initial load and storage changes
+- Typecheck passes, no new lint issues introduced
+---
+
+## 2026-02-17 - US-003
+- What was implemented: Removed all visible section divider borders (border-b, border-t) from header, PinnedAppsRow, FolderTree, and tab list sections. Replaced with spacing-based separation (pt-3/pb-2). Footer retains a barely-visible `border-white/5` separator.
+- Files changed:
+  - `src/sidepanel/App.tsx` — removed header border-b, tab list section border-t, changed footer border to border-white/5
+  - `src/sidepanel/PinnedAppsRow.tsx` — removed border-b from nav container
+  - `src/sidepanel/FolderTree.tsx` — removed border-t, added pt-3 pb-2
+- **Learnings for future iterations:**
+  - Pre-existing lint errors (react-hooks/set-state-in-effect in App.tsx line 517, exhaustive-deps in PinnedAppsRow.tsx) exist and should not block commits
+  - Border removal is straightforward — just swap border classes with padding classes (pt-3/pb-2) for spacing-based separation
+---
