@@ -1,723 +1,161 @@
 {
   "project": "ArcFlow",
-  "branchName": "ralph/arcflow-sidebar",
-  "description": "ArcFlow - Arc Browser-inspired sidebar Chrome extension with pinned apps, folder organization, workspaces, auto-archive, and command palette",
+  "branchName": "ralph/smart-switch-to-tab",
+  "description": "Smart Switch-to-Tab — Surface already-open tabs as 'Switch to Tab' results in the search bar with workspace-aware ranking, cross-workspace matching, and optional Chrome Omnibox integration",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Project scaffolding: Vite + React + TS + Tailwind + MV3",
-      "description": "As a developer, I want a fully configured project with Vite, React 18, TypeScript, Tailwind CSS, and Manifest V3 so that I can begin building extension features immediately.",
+      "title": "Pass allTabs and tabWorkspaceMap props to SearchBar",
+      "description": "As a developer, I need SearchBar to have access to all open tabs across all workspaces (not just the current workspace's filtered tabs) plus the tabWorkspaceMap so it can perform domain matching for Switch-to-Tab. In App.tsx, pass two new props to SearchBar: allTabs (the raw tabs array before workspace filtering) and tabWorkspaceMap (Record<number, string> mapping tabId to workspaceId). Update SearchBar's props interface to accept these.",
       "acceptanceCriteria": [
-        "package.json exists with dependencies: react, react-dom, typescript, tailwindcss, vite",
-        "manifest.json declares MV3 with side_panel, service_worker, permissions: sidePanel, tabs, storage, contextMenus",
-        "tsconfig.json has strict mode enabled",
-        "Tailwind CSS configured with dark mode class strategy in tailwind.config.ts",
-        "Source structure: src/sidepanel/, src/background/, src/shared/, src/content/",
-        "src/shared/types.ts contains all data model interfaces: Workspace, PinnedApp, Folder, FolderItem, ArchiveEntry, Settings",
-        "vite.config.ts configured for Chrome extension build output to dist/",
-        "npm run build produces a dist/ folder loadable as unpacked Chrome extension",
-        "ESLint and Prettier configured with npm run lint command",
+        "SearchBar component props interface in SearchBar.tsx includes allTabs: chrome.tabs.Tab[] and tabWorkspaceMap: Record<number, string>",
+        "App.tsx passes the tabs state (all tabs) as allTabs prop and tabWorkspaceMap state as tabWorkspaceMap prop to SearchBar",
+        "Existing SearchBar functionality (Fuse.js search, result rendering, keyboard nav) is unchanged",
         "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Foundation story. Use @crxjs/vite-plugin or vite-plugin-chrome-extension for HMR. File structure per PRD Section 4.5."
+      "notes": ""
     },
     {
       "id": "US-002",
-      "title": "Side panel registration and basic React rendering",
-      "description": "As a user, I want to open ArcFlow's sidebar by clicking the extension icon so that I see the ArcFlow panel alongside my browsing content.",
+      "title": "Add domain-match search pass for Switch-to-Tab results",
+      "description": "As a user, I want search results to show 'Switch to Tab' matches when I type a domain that's already open. Add a pre-Fuse domain matching step in SearchBar.tsx: before running Fuse.js, iterate over allTabs and match tabs whose hostname includes the lowercased query. Wrap matches as SearchItem objects with a new matchType: 'switch-to-tab' field. Domain extraction via new URL(tab.url).hostname, wrapped in try-catch. These results should appear above the existing Fuse.js results.",
       "acceptanceCriteria": [
-        "src/sidepanel/index.html exists as the side panel entry point",
-        "src/sidepanel/main.tsx renders a React root into the side panel HTML",
-        "src/sidepanel/App.tsx renders a basic layout with ArcFlow header text",
-        "src/background/service-worker.ts registers side panel via chrome.sidePanel.setOptions()",
-        "Service worker calls chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })",
-        "Clicking the toolbar icon toggles the side panel open/closed",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "SearchItem type extended with optional matchType?: 'switch-to-tab' field",
+        "When user types a query, a domain-match pass runs against allTabs before Fuse.js",
+        "Domain matching uses new URL(tab.url).hostname.includes(query.toLowerCase()), wrapped in try-catch for malformed URLs",
+        "Typing 'mail' matches tabs on mail.google.com; typing 'google' matches mail.google.com, docs.google.com, etc.",
+        "Domain-match results are case-insensitive",
+        "Domain-matched tabs from the current workspace (checked via tabWorkspaceMap) are placed first in results",
+        "Domain-matched tabs from other workspaces are placed after current-workspace matches but before Fuse.js results",
+        "Duplicate tabs that appear in both domain-match and Fuse.js results are deduplicated (domain-match wins)",
+        "Existing Fuse.js fuzzy search continues to work for non-domain results (folder items, links)",
+        "Typecheck passes"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Panel persists across tab switches and page navigations. This is Chrome's native behavior for side panels."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Service worker tab event listeners and state broadcasting",
-      "description": "As a developer, I want the service worker to track all tab lifecycle events so that the sidebar always reflects the current state of open tabs.",
+      "title": "Render Switch-to-Tab badge on matching results",
+      "description": "As a user, I want a visually distinct 'Switch to Tab' badge on search results that match open tabs so I can identify them at a glance. In SearchBar.tsx result rendering, when a result has matchType === 'switch-to-tab', render an accent-colored pill badge with an arrow icon (→) on the right side instead of the existing muted 'Tab' badge. Use bg-arc-accent text-white rounded-full px-2 py-0.5 text-xs styling.",
       "acceptanceCriteria": [
-        "Service worker registers listeners for tabs.onCreated, tabs.onRemoved, tabs.onActivated, tabs.onUpdated, tabs.onMoved",
-        "On startup, service worker queries all existing tabs via chrome.tabs.query({ currentWindow: true })",
-        "Tab state changes are broadcast to the side panel via chrome.runtime.sendMessage",
-        "Side panel listens via chrome.runtime.onMessage and updates React state",
-        "Tab events are debounced at 50ms to batch rapid changes",
-        "Service worker persists tab list to chrome.storage.local so it survives termination",
-        "Typecheck passes"
+        "Results with matchType === 'switch-to-tab' show a 'Switch to Tab →' badge on the right side",
+        "Badge uses bg-arc-accent text-white styling to stand out from existing muted 'Tab'/'Link'/'Folder' badges",
+        "Badge includes an arrow icon (→) to suggest navigation action",
+        "Non-switch-to-tab results continue to show existing badge types unchanged",
+        "Clicking a Switch-to-Tab result calls the existing onSwitchTab(tabId) flow",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "MV3 service workers can be terminated at any time. Critical state must be persisted to storage."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Tab list display with favicons and titles",
-      "description": "As a user, I want to see all my open tabs listed in the sidebar with favicons and titles so that I can visually scan and identify my tabs.",
+      "title": "Add cross-workspace badge and divider for other-workspace matches",
+      "description": "As a user, I want to see which workspace a cross-workspace tab match belongs to, with a visual separator between current and other workspace results. In SearchBar.tsx, for Switch-to-Tab results from other workspaces: render a workspace badge (emoji + name) below the URL subtitle, and insert a thin divider with 'In other workspaces' muted text header before the first other-workspace result. Pass workspaces array as a prop to SearchBar so it can look up workspace name/emoji by ID from tabWorkspaceMap.",
       "acceptanceCriteria": [
-        "All open tabs in the current window are listed in the sidebar below a placeholder search bar area",
-        "Each tab entry shows: favicon (16x16), title (truncated with ellipsis), close button (X) on hover",
-        "Tab list updates in real-time when tabs are opened, closed, or change titles",
-        "Tab items are 32px tall with 4px gap between items",
+        "SearchBar props extended with workspaces array (or a workspaceMap for id → {name, emoji} lookup)",
+        "App.tsx passes workspaces data to SearchBar",
+        "Cross-workspace Switch-to-Tab results show a small workspace badge (emoji + name) below the URL line in muted text",
+        "A thin divider with 'In other workspaces' muted header text appears before the first cross-workspace result",
+        "No divider shown if there are no cross-workspace results",
+        "No divider shown if there are only cross-workspace results (no current-workspace matches)",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "Virtual scrolling (react-window) deferred to performance story US-039. Keep it simple for now."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Tab switching and active tab indicator",
-      "description": "As a user, I want to click a tab in the sidebar to switch to it, and see which tab is currently active.",
+      "title": "Handle cross-workspace tab switching on result click",
+      "description": "As a user, I want clicking a cross-workspace Switch-to-Tab result to switch me to that workspace and then activate the tab. In SearchBar.tsx activateResult(), when a Switch-to-Tab result belongs to a different workspace: call a new onSwitchWorkspaceAndTab(workspaceId, tabId) callback prop. In App.tsx, implement this callback to call setActiveWorkspace(workspaceId) followed by a 100ms delayed chrome.runtime.sendMessage({ type: 'SWITCH_TAB', tabId }) to allow the workspace switch to complete.",
       "acceptanceCriteria": [
-        "Clicking a tab entry calls chrome.tabs.update(tabId, { active: true })",
-        "Active tab is highlighted with 3px colored left border (#2E75B6) and bold text",
-        "Active tab highlight updates when switching via native tab bar (listens to tabs.onActivated)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "SearchBar props include onSwitchWorkspaceAndTab: (workspaceId: string, tabId: number) => void callback",
+        "activateResult() checks if a Switch-to-Tab result's workspace differs from activeWorkspaceId and calls onSwitchWorkspaceAndTab instead of onSwitchTab",
+        "App.tsx implements onSwitchWorkspaceAndTab: calls setActiveWorkspace() then setTimeout(100ms) before sending SWITCH_TAB message",
+        "After cross-workspace switch, the sidebar shows the new workspace's content and the target tab is active",
+        "Current-workspace Switch-to-Tab results still use the existing onSwitchTab flow (no workspace switch needed)",
+        "Typecheck passes"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "Bidirectional sync: clicking sidebar switches tab; switching tab via native bar updates sidebar."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Tab close from sidebar",
-      "description": "As a user, I want to close tabs directly from the sidebar so that I can manage tabs without switching to each one.",
+      "title": "Add 'Open in New Tab' action below Switch-to-Tab results",
+      "description": "As a user, I want an 'Open in New Tab' option when Switch-to-Tab results are shown, so I can still open a new tab if I want. When the search query contains '.' or starts with 'http' and Switch-to-Tab results exist, add an 'Open [query] in New Tab' action at the end of the Switch-to-Tab group. Style it differently: muted background, plus icon on the left. Clicking it opens the URL via OPEN_URL message. Normalize the query to a URL (prepend https:// if no protocol).",
       "acceptanceCriteria": [
-        "Each tab entry shows a close button (X icon, 16x16) on hover, right-aligned",
-        "Clicking close calls chrome.tabs.remove(tabId) and removes the tab from the list immediately",
-        "Middle-clicking a tab entry also closes it",
+        "When Switch-to-Tab results are shown AND the query looks like a URL (contains '.' or starts with 'http'), an 'Open in New Tab' action appears after the Switch-to-Tab results",
+        "The action shows a plus icon (+) on the left and text 'Open [query] in new tab'",
+        "The action has a distinct style: muted/lighter background to differentiate from regular results",
+        "Clicking it opens the URL via chrome.runtime.sendMessage({ type: 'OPEN_URL', url }) with https:// prepended if no protocol",
+        "The action is hidden when query is not URL-like (e.g., just typing 'gmail' without a dot)",
+        "Keyboard navigation: user can arrow-down to select the 'Open in New Tab' action",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 6,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-007",
-      "title": "Light/dark theme support",
-      "description": "As a user, I want the sidebar to match my system's light or dark mode preference.",
+      "title": "Add omniboxEnabled setting to settings storage",
+      "description": "As a developer, I need a setting to control whether the Chrome Omnibox integration is active. Add omniboxEnabled: boolean field to the Settings interface in types.ts and DEFAULT_SETTINGS in constants.ts (default: true). Add omnibox keyword registration to manifest.json.",
       "acceptanceCriteria": [
-        "Sidebar defaults to system preference via prefers-color-scheme media query",
-        "Light base: gray-50 background, gray-900 text. Dark base: gray-900 background, gray-100 text",
-        "Theme preference stored in chrome.storage.local under settings.theme ('system' | 'light' | 'dark')",
-        "A manual toggle button in the sidebar footer switches between system/light/dark",
-        "Theme changes apply instantly without sidebar reload",
-        "Theme preference persists across browser restarts",
-        "All UI elements (backgrounds, text, borders, icons) adapt to both themes",
-        "Tailwind dark: variant used with class strategy",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Settings interface in types.ts has omniboxEnabled: boolean field",
+        "DEFAULT_SETTINGS in constants.ts has omniboxEnabled: true",
+        "manifest.json includes '\"omnibox\": { \"keyword\": \"af\" }'",
+        "getSettings() returns omniboxEnabled with stored value or default true",
+        "Existing settings without omniboxEnabled load correctly (backward compatible via default spread)",
+        "Typecheck passes"
       ],
       "priority": 7,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-008",
-      "title": "Chrome storage helpers for pinned apps",
-      "description": "As a developer, I want storage helper functions for pinned apps CRUD so that pinned app features have a reliable persistence layer.",
+      "title": "Add Chrome Omnibox tab search listeners in service worker",
+      "description": "As a user, I want to type 'af' in Chrome's address bar followed by a search term to see matching open tabs. In service-worker.ts, register chrome.omnibox.onInputChanged listener that queries all open tabs, filters by hostname match, and returns up to 5 suggestions. Register chrome.omnibox.onInputEntered to activate the matched tab. Set default suggestion to 'Search ArcFlow tabs for: %s'. Check omniboxEnabled setting — if false, return empty suggestions. Current-workspace matches should appear before other-workspace matches.",
       "acceptanceCriteria": [
-        "src/shared/storage.ts exports: getPinnedApps(), addPinnedApp(app), removePinnedApp(id), updatePinnedApp(id, data), reorderPinnedApps(ids)",
-        "Pinned apps stored in chrome.storage.local under key 'pinnedApps'",
-        "PinnedApp data shape: { id, url, title, favicon, sortOrder }",
-        "All functions return Promises",
-        "Maximum 12 pinned apps enforced; addPinnedApp rejects if limit reached",
+        "chrome.omnibox.setDefaultSuggestion sets description to 'Search ArcFlow tabs for: %s'",
+        "chrome.omnibox.onInputChanged queries all tabs via chrome.tabs.query({}), filters by hostname.includes(text.toLowerCase())",
+        "Suggestions limited to top 5 matches, formatted with tab title + domain + '(Switch to Tab)' using Chrome omnibox XML format",
+        "Current-workspace tabs (from tabWorkspaceMap + activeWorkspaceId) appear before other-workspace tabs in suggestions",
+        "chrome.omnibox.onInputEntered activates the matched tab via chrome.tabs.update(tabId, { active: true })",
+        "If the entered text matches a cross-workspace tab, the handler switches workspace via setActiveWorkspace() before activating the tab",
+        "If no matching tab found, entered text is opened as URL (if contains '.') or as Google search",
+        "If omniboxEnabled setting is false, onInputChanged returns empty suggestions array",
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": true,
-      "notes": "Backend/storage layer before UI."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-009",
-      "title": "Pinned apps row UI: display and click-to-switch",
-      "description": "As a user, I want to see my pinned apps as a horizontal row of favicons at the top of the sidebar and click to switch to them.",
+      "title": "Add Omnibox toggle to SettingsPanel UI",
+      "description": "As a user, I want a toggle in settings to enable/disable the Omnibox integration. Add a toggle in SettingsPanel.tsx under a new 'Omnibox' section: 'Enable Omnibox — type af in address bar to search tabs'. Toggle updates omniboxEnabled via updateSettings(). Note: the omnibox keyword prompt still appears in Chrome when disabled, but no suggestions will be returned.",
       "acceptanceCriteria": [
-        "Horizontal 'Pinned Apps' row displayed below the search bar area (Zone 2)",
-        "Each pinned app renders as a 32x32 favicon circle",
-        "Row scrolls horizontally when more than 8 items",
-        "Clicking a pinned app: if a tab with matching URL origin exists, switch to it; otherwise open new tab",
-        "Active indicator: 6px colored dot below favicon for pinned apps with an open tab",
-        "Active indicator updates in real-time as tabs open/close",
+        "New 'Omnibox' section in SettingsPanel with a toggle switch",
+        "Toggle label: 'Enable Omnibox' with description 'Type af in address bar to search tabs'",
+        "Toggle reflects current omniboxEnabled setting value on load",
+        "Toggling calls updateSettings({ omniboxEnabled: value }) to persist",
+        "Setting change takes effect immediately (service worker reads setting on each onInputChanged call)",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 9,
-      "passes": true,
-      "notes": "Origin matching via new URL(url).origin. Dot uses workspace accent color #2E75B6."
-    },
-    {
-      "id": "US-010",
-      "title": "Pinned apps: add and remove via sidebar context menu",
-      "description": "As a user, I want to pin and unpin sites by right-clicking tabs in the sidebar.",
-      "acceptanceCriteria": [
-        "Right-clicking a tab in the sidebar shows context menu with 'Pin to ArcFlow'",
-        "Selecting it adds the tab's URL, title, and favicon to pinned apps",
-        "If URL is already pinned, menu shows 'Unpin from ArcFlow' instead",
-        "Right-clicking a pinned app icon shows: Rename, Remove, Open in New Tab, Edit URL",
-        "'Remove' unpins the app without closing any associated tab",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 10,
-      "passes": true,
-      "notes": "This is the in-sidebar context menu. Chrome-level context menu is a separate story."
-    },
-    {
-      "id": "US-011",
-      "title": "Pinned apps: drag-and-drop reorder",
-      "description": "As a user, I want to drag pinned apps to rearrange their order.",
-      "acceptanceCriteria": [
-        "Pinned app icons are draggable within the pinned row",
-        "Drop target indicated visually with insertion line or gap",
-        "New order persists immediately to chrome.storage.local",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 11,
-      "passes": true,
-      "notes": "Use @dnd-kit/core for drag-and-drop. Keyboard DnD alternative deferred to accessibility story."
-    },
-    {
-      "id": "US-012",
-      "title": "Chrome context menu: Pin to ArcFlow",
-      "description": "As a user, I want to right-click on any web page and select 'Pin to ArcFlow' so I can pin sites without opening the sidebar.",
-      "acceptanceCriteria": [
-        "chrome.contextMenus.create() registers 'Pin to ArcFlow' with contexts: ['page'] in service worker",
-        "Clicking extracts tab info via chrome.tabs.get(tab.id) and stores as PinnedApp",
-        "If URL is already pinned, menu item shows 'Unpin from ArcFlow'",
-        "Typecheck passes"
-      ],
-      "priority": 12,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-013",
-      "title": "Folder storage helpers and data model",
-      "description": "As a developer, I want storage helper functions for folder CRUD so that folder features have a reliable persistence layer.",
-      "acceptanceCriteria": [
-        "Storage helpers: createFolder(name, parentId?), renameFolder(id, name), deleteFolder(id), getFolders(), moveItemToFolder(itemId, folderId)",
-        "Folder data shape: { id, name, parentId (null=top-level), items: FolderItem[], isCollapsed, sortOrder }",
-        "FolderItem shape: { id, type: 'tab'|'link', tabId, url, title, favicon, isArchived, lastActiveAt }",
-        "Nesting depth validated: reject if depth >= 3 (count ancestors via parentId chain)",
-        "Folder names must be non-empty",
-        "Typecheck passes"
-      ],
-      "priority": 13,
-      "passes": true,
-      "notes": "Storage layer before UI. Folders stored under workspace in chrome.storage.local."
-    },
-    {
-      "id": "US-014",
-      "title": "Folder tree UI: create, rename, delete, collapse",
-      "description": "As a user, I want to create, rename, and delete folders in the sidebar so I can organize my tabs.",
-      "acceptanceCriteria": [
-        "A 'New Folder' button creates a folder with inline editable name",
-        "Double-clicking a folder name enters rename mode",
-        "Right-click folder shows context menu: Rename, Delete",
-        "Deleting a folder with tabs prompts confirmation: 'Close X tabs and delete folder?'",
-        "Folders are collapsible with a chevron toggle; collapse state persists",
-        "Folder header shows count badge: (X tabs, Y links)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 14,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-015",
-      "title": "Nested folders up to 3 levels",
-      "description": "As a user, I want to nest folders inside other folders (up to 3 levels deep) for hierarchical organization.",
-      "acceptanceCriteria": [
-        "Folders can be created inside existing folders via 'New Subfolder' in context menu",
-        "Maximum nesting depth is 3; attempting to nest beyond shows error toast",
-        "Nested folders are visually indented at 16px per level",
-        "Collapsing a parent hides all nested children",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 15,
-      "passes": true,
-      "notes": "Depth validation via parentId chain count."
-    },
-    {
-      "id": "US-016",
-      "title": "Drag-and-drop tabs into folders",
-      "description": "As a user, I want to drag tabs into folders and reorder them to organize my browsing.",
-      "acceptanceCriteria": [
-        "Tabs in the sidebar are draggable",
-        "Dragging a tab over a folder highlights the folder as a drop target",
-        "Dropping a tab into a folder moves it and updates the tree view",
-        "Tabs can be reordered within a folder via drag-and-drop",
-        "Folders can be reordered among siblings via drag-and-drop",
-        "All changes persist to chrome.storage.local",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 16,
-      "passes": true,
-      "notes": "Use @dnd-kit/core with @dnd-kit/sortable. Drop zones: between items, on folder, on root area."
-    },
-    {
-      "id": "US-017",
-      "title": "Saved links in folders",
-      "description": "As a user, I want to save URLs into folders without keeping them as open tabs.",
-      "acceptanceCriteria": [
-        "Right-clicking a tab in sidebar shows 'Save Link to Folder...'",
-        "A folder picker dropdown appears to choose destination folder",
-        "Saved links display with dimmed style to distinguish from active tabs",
-        "Clicking a saved link opens it as a new tab",
-        "Saved links can be deleted via right-click > Remove",
-        "Saved links persist across browser restarts",
-        "Saved links are FolderItem with type:'link' and tabId:null",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 17,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-018",
-      "title": "Tab search with fuzzy matching",
-      "description": "As a user, I want to search across all open tabs and saved links using the search bar at the top of the sidebar.",
-      "acceptanceCriteria": [
-        "Search bar is visible at the top of the sidebar (Zone 1, ~40px)",
-        "Typing filters the tab/folder tree in real-time",
-        "Search matches against tab titles, URLs, folder names, saved link titles",
-        "Fuzzy matching works (e.g., 'gml' matches 'Gmail')",
-        "Enter on top result switches to that tab or opens the saved link",
-        "Escape clears search and restores full tree view",
-        "Search debounced at 150ms",
-        "Results ranked: exact > starts-with > fuzzy > URL match",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 18,
-      "passes": true,
-      "notes": "Use fuse.js for fuzzy matching."
-    },
-    {
-      "id": "US-019",
-      "title": "Visual indicators: active, audio, discarded tabs",
-      "description": "As a user, I want visual indicators for tab states so I can quickly identify what each tab is doing.",
-      "acceptanceCriteria": [
-        "Active tab: bold text + 3px colored left border (already from US-005, ensure consistency)",
-        "Tab playing audio: speaker icon (Lucide Volume2) next to the title, uses tab.audible property",
-        "Discarded/suspended tab: dimmed opacity (0.5) and italic text, uses tab.discarded property",
-        "Indicators update in real-time as tab states change via tabs.onUpdated",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 19,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-020",
-      "title": "Folder-level actions: Open All, Close All, Collapse All",
-      "description": "As a user, I want bulk actions on folders to manage groups of tabs efficiently.",
-      "acceptanceCriteria": [
-        "Folder right-click context menu adds: Open All Tabs, Close All Tabs, Collapse All Subfolders",
-        "'Open All Tabs' opens all saved links (type==='link') as new tabs via chrome.tabs.create",
-        "'Close All Tabs' closes all active tabs (type==='tab') via chrome.tabs.remove; saved links remain",
-        "'Collapse All' collapses the folder and all nested subfolders",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 20,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-021",
-      "title": "Workspace storage model and helpers",
-      "description": "As a developer, I want the workspace data model and storage helpers implemented so workspace features have a reliable persistence layer.",
-      "acceptanceCriteria": [
-        "workspaceStorage module exports: getWorkspaces(), createWorkspace(name), updateWorkspace(id, data), deleteWorkspace(id), getActiveWorkspace(), setActiveWorkspace(id)",
-        "Storage keys: 'workspaces' (Workspace[]), 'activeWorkspaceId' (string), 'schemaVersion' (number, initial: 1)",
-        "A 'Default' workspace is created on first install and cannot be deleted",
-        "Each workspace stores independent pinnedApps[] and folders[]",
-        "Tab-to-workspace mapping stored as 'tabWorkspaceMap': Record<number, string>",
-        "All helpers return Promises and handle quota errors gracefully",
-        "Typecheck passes"
-      ],
-      "priority": 21,
-      "passes": true,
-      "notes": "Storage layer before workspace UI. Migration logic for schema version changes."
-    },
-    {
-      "id": "US-022",
-      "title": "Workspace CRUD UI: create, rename, emoji, color, delete",
-      "description": "As a user, I want to create, rename, customize (emoji/color), and delete workspaces.",
-      "acceptanceCriteria": [
-        "'New Workspace' action creates workspace named 'New Workspace' with inline editable name",
-        "Users can set an emoji icon from a curated list (12-20 common emojis)",
-        "Users can set an accent color from a curated palette of 12 colors",
-        "Deleting a workspace prompts confirmation and offers to move tabs to Default workspace",
-        "Default workspace cannot be deleted or renamed",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 22,
-      "passes": true,
-      "notes": "Keep emoji picker simple (curated list, not full emoji-mart). Color palette from Tailwind extended."
-    },
-    {
-      "id": "US-023",
-      "title": "Workspace switcher UI in sidebar footer",
-      "description": "As a user, I want a workspace switcher in the sidebar footer to quickly switch between browsing contexts.",
-      "acceptanceCriteria": [
-        "Workspace switcher displayed as icon strip in sidebar footer (Zone 5)",
-        "Each workspace shows emoji icon (28x28) with accent color background",
-        "Active workspace has 2px accent-color ring",
-        "Clicking a workspace icon switches sidebar content to that workspace's pinned apps, folders, tabs",
-        "A '+' icon at the end creates a new workspace",
-        "Right-click on workspace icon shows: Rename, Edit Color/Emoji, Delete",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 23,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-024",
-      "title": "Tab-to-workspace assignment and filtering",
-      "description": "As a user, I want each tab assigned to one workspace and only see that workspace's tabs when active.",
-      "acceptanceCriteria": [
-        "New tabs opened within a workspace are auto-assigned to it (tabs.onCreated sets activeWorkspaceId)",
-        "Tabs from external sources go to the active workspace",
-        "Right-click tab > 'Move to Workspace...' shows workspace picker to reassign",
-        "Sidebar filters tab list to only show active workspace's tabs",
-        "On tabs.onRemoved, mapping entry is cleaned up",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 24,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-025",
-      "title": "Workspace isolation: collapse other workspace tabs in Chrome",
-      "description": "As a user, I want tabs from other workspaces optionally hidden in Chrome's native tab bar when I switch workspaces.",
-      "acceptanceCriteria": [
-        "Settings option: 'Workspace isolation' with values 'Sidebar only' (default) and 'Full isolation'",
-        "'Sidebar only' mode only filters the sidebar list; Chrome tabs remain visible",
-        "'Full isolation' groups each workspace's tabs into a Chrome tab group (chrome.tabGroups) named after workspace",
-        "'Full isolation' collapses non-active workspace tab groups via chrome.tabGroups.update(groupId, { collapsed: true })",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 25,
-      "passes": true,
-      "notes": "Requires tabGroups permission."
-    },
-    {
-      "id": "US-026",
-      "title": "Workspace keyboard shortcuts",
-      "description": "As a user, I want keyboard shortcuts to switch between workspaces without using the mouse.",
-      "acceptanceCriteria": [
-        "chrome.commands registered in manifest.json for switching workspaces (up to 4 due to Chrome limit)",
-        "Ctrl+Shift+1 through Ctrl+Shift+4 switch to workspaces 1-4",
-        "Shortcuts work globally even when sidebar is not focused",
-        "Workspaces beyond 4 accessible via command palette",
-        "Typecheck passes"
-      ],
-      "priority": 26,
-      "passes": true,
-      "notes": "Chrome limits extensions to 4 chrome.commands. Command palette (US-033) handles the rest."
-    },
-    {
-      "id": "US-027",
-      "title": "Auto-archive engine: track timestamps and archive stale tabs",
-      "description": "As a user, I want inactive tabs automatically archived after a configurable time period so my browser stays clean.",
-      "acceptanceCriteria": [
-        "lastActiveAt timestamp tracked on every FolderItem with type 'tab', updated on tabs.onActivated",
-        "chrome.alarms registers 'arcflow-auto-archive' alarm every 5 minutes",
-        "Alarm handler checks all tabs: if Date.now() - lastActiveAt > autoArchiveMinutes * 60000, archive the tab",
-        "Archived tabs are discarded via chrome.tabs.discard(tabId) and marked isArchived:true",
-        "Pinned apps are exempt from auto-archiving",
-        "Configurable threshold in settings: 1h, 4h, 12h (default), 24h, 48h, 1 week, never",
-        "Typecheck passes"
-      ],
-      "priority": 27,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-028",
-      "title": "Archive section UI with restore",
-      "description": "As a user, I want to see archived tabs in a dedicated section and restore them with one click.",
-      "acceptanceCriteria": [
-        "Archive section in Zone 4 of sidebar, below the folder tree",
-        "Collapsible header: 'Archive (X)' showing count of archived items",
-        "Shows 10 most recently archived tabs: favicon, title, time since archived",
-        "Clicking an archived tab restores it: chrome.tabs.create({ url }) then removes from archive",
-        "'Clear Archive' action with confirmation removes all entries",
-        "Archive entries stored as ArchiveEntry[] in chrome.storage.local, capped at 100",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 28,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-029",
-      "title": "Tab suspension and memory management",
-      "description": "As a user, I want to suspend inactive tabs to free memory and see how much memory is saved.",
-      "acceptanceCriteria": [
-        "Right-click tab > 'Suspend Tab' calls chrome.tabs.discard(tabId)",
-        "Suspended tabs retain title and favicon; displayed with opacity 0.5 and italic text",
-        "Clicking a suspended tab in sidebar reloads it via chrome.tabs.update(tabId, { active: true })",
-        "Auto-suspension: tabs inactive beyond settings.suspendAfterMinutes are auto-discarded (runs on same alarm as archive)",
-        "Sidebar footer shows 'X tabs suspended | ~Y MB saved' (Y = X * 50)",
-        "Stats update when tabs are suspended or restored",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 29,
-      "passes": true,
-      "notes": "50MB per tab is a conservative memory estimate."
-    },
-    {
-      "id": "US-030",
-      "title": "Settings panel UI",
-      "description": "As a user, I want a settings panel to configure auto-archive duration, theme, suspend threshold, and workspace preferences.",
-      "acceptanceCriteria": [
-        "Settings accessible via gear icon in sidebar footer (Zone 5)",
-        "Settings panel opens as an overlay within the side panel",
-        "Configurable options: theme (system/light/dark), auto-archive threshold, suspend threshold, workspace isolation mode",
-        "Changes save immediately to chrome.storage.local under 'settings' key (no Save button)",
-        "'Reset to Defaults' button with confirmation restores initial values",
-        "Default values defined in src/shared/constants.ts",
-        "Settings persist across browser restarts",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 30,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-031",
-      "title": "Command palette: registry and keyboard shortcut",
-      "description": "As a user, I want a command palette activated by Ctrl+Shift+K to perform sidebar actions via keyboard.",
-      "acceptanceCriteria": [
-        "Ctrl+Shift+K registered via chrome.commands in manifest",
-        "Opens a centered modal overlay: 480px wide, dark semi-transparent backdrop",
-        "Search input with fuzzy matching across command names",
-        "Command registry: array of { id, name, shortcut?, icon, action }",
-        "Available commands: Switch Workspace (per workspace), New Folder, Suspend Others, Toggle Theme, Open Settings, Search Tabs, New Workspace, Toggle Focus Mode",
-        "Arrow keys navigate results (max 8 visible); Enter executes; Escape closes",
-        "Recently used commands appear at top",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 31,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-032",
-      "title": "AI tab grouping with domain heuristics",
-      "description": "As a user, I want to auto-organize open tabs into suggested folders based on domain patterns.",
-      "acceptanceCriteria": [
-        "'Organize Tabs' button in sidebar header",
-        "Clicking it analyzes all ungrouped tabs and shows a preview modal with suggested groupings",
-        "Grouping algorithm clusters by hostname (new URL(tab.url).hostname), merges subdomains to parent",
-        "Folder names generated from domain: strip 'www.', capitalize (e.g., 'GitHub', 'Google Docs')",
-        "Minimum 2 tabs per group to suggest a folder",
-        "Tabs already in folders are excluded",
-        "User can accept all, accept individual groups, or dismiss",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 32,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-033",
-      "title": "Optional LLM integration for smarter grouping",
-      "description": "As a user, I want to opt into AI-powered grouping that understands tab content beyond domains.",
-      "acceptanceCriteria": [
-        "Settings toggle: 'AI-Enhanced Grouping' (disabled by default)",
-        "When enabled, user provides their own API key (Anthropic or OpenAI)",
-        "Privacy notice explains what data is sent (tab titles + URLs only, no page content)",
-        "API payload: { tabs: [{ title, url }] }; timeout 10 seconds",
-        "Falls back to domain heuristics (US-032) on API failure",
-        "Supports Anthropic Claude API and OpenAI API as providers",
-        "API key stored in chrome.storage.local",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 33,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-034",
-      "title": "Split view: side-by-side windows",
-      "description": "As a user, I want to open two tabs side-by-side by triggering split view from the sidebar.",
-      "acceptanceCriteria": [
-        "'Split View' option in tab right-click context menu",
-        "Selecting it prompts to pick a second tab, then opens two Chrome windows side by side",
-        "Windows positioned at left-half and right-half of screen via chrome.windows.create/update",
-        "Split view also available from command palette",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 34,
-      "passes": true,
-      "notes": "True in-window splits not possible via extension API; use side-by-side windows."
-    },
-    {
-      "id": "US-035",
-      "title": "Air Traffic Control: link routing rules",
-      "description": "As a user, I want to define rules that route links to specific workspaces based on URL patterns.",
-      "acceptanceCriteria": [
-        "Settings panel has 'Air Traffic Control' section for managing rules",
-        "Rules format: pattern (glob) -> workspace. E.g., '*slack.com*' -> 'Work'",
-        "Add/edit/delete rules in settings UI",
-        "Default workspace for unmatched links configurable",
-        "Rules evaluated on tabs.onCreated; first match wins; tab assigned to matching workspace",
-        "Pattern matching: glob converted to regex (* -> .*)",
-        "Rules stored as routingRules: { pattern, workspaceId }[] in settings",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 35,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-036",
-      "title": "Session save and restore",
-      "description": "As a user, I want to save my current workspace state as a named session and restore it later.",
-      "acceptanceCriteria": [
-        "'Save Session' in workspace right-click menu and command palette",
-        "Saves all open tab URLs, titles, folder structure, pinned apps for the workspace as snapshot",
-        "Sessions named with timestamp default (editable)",
-        "'Restore Session' reopens all tabs in original folder structure",
-        "Restore prompts: 'Replace current tabs or add alongside?'",
-        "Sessions stored in chrome.storage.local under 'sessions' key; max 20 sessions",
-        "Session data shape: { id, name, savedAt, workspace: Workspace snapshot }",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 36,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-037",
-      "title": "Session import/export as JSON",
-      "description": "As a user, I want to export sessions as JSON files and import them for backup or sharing.",
-      "acceptanceCriteria": [
-        "'Export' button on saved sessions downloads a .json file via URL.createObjectURL + download link",
-        "'Import' button accepts a .json file via <input type='file' accept='.json'>",
-        "Exported JSON includes schema version for forward compatibility",
-        "Imported sessions validated: required fields name, workspace.pinnedApps, workspace.folders",
-        "Invalid imports show clear error message",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 37,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-038",
-      "title": "Focus mode with URL redirect",
-      "description": "As a user, I want a focus mode that redirects distracting websites to productive ones.",
-      "acceptanceCriteria": [
-        "Focus mode toggle in sidebar footer (Zone 5) with visual indicator when active",
-        "When enabled, navigating to a blocked URL redirects to configured productive URL",
-        "Block/redirect list configurable in Settings under focusMode.redirectRules",
-        "Uses chrome.declarativeNetRequest for MV3-compliant URL interception",
-        "Focus mode toggleable from command palette",
-        "Focus mode state persists across browser restarts",
-        "Requires declarativeNetRequest permission in manifest",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 38,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-039",
-      "title": "Onboarding flow for first-time users",
-      "description": "As a first-time user, I want a guided onboarding that helps me set up pinned apps and understand the sidebar.",
-      "acceptanceCriteria": [
-        "On first install, 3-step onboarding overlay appears in the side panel",
-        "Step 1: 'Pin your favorite apps' -- shows top visited sites (via chrome.history.search) to pin",
-        "Step 2: 'Create your first folder' -- guided folder creation",
-        "Step 3: 'Explore features' -- highlights key areas (search, workspaces, settings)",
-        "'Skip' option at every step",
-        "Onboarding tracked via onboardingCompleted:boolean in chrome.storage.local; does not show again",
-        "Step indicator dots, Back/Next/Skip buttons",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 39,
-      "passes": true,
-      "notes": "Top sites via chrome.history.search({ text: '', maxResults: 10, startTime: 30 days ago })."
-    },
-    {
-      "id": "US-040",
-      "title": "Performance optimization pass",
-      "description": "As a developer, I want the extension to meet all performance budget targets.",
-      "acceptanceCriteria": [
-        "Virtual scrolling via react-window active for all lists with 50+ items",
-        "Favicon loading is lazy with IntersectionObserver",
-        "All chrome.tabs.onUpdated handlers debounced at 50ms",
-        "Bundle size: main chunk < 200KB gzipped",
-        "Initial sidebar render < 200ms (measured via Performance API)",
-        "Tab switch latency < 50ms",
-        "Memory overhead < 15MB idle with 50 tabs",
-        "Typecheck passes"
-      ],
-      "priority": 40,
-      "passes": true,
-      "notes": "Use Chrome DevTools Performance panel for measurement."
-    },
-    {
-      "id": "US-041",
-      "title": "Accessibility audit and keyboard navigation",
-      "description": "As a user with accessibility needs, I want the sidebar to be fully keyboard-navigable and screen-reader compatible.",
-      "acceptanceCriteria": [
-        "All interactive elements focusable via Tab key",
-        "Arrow keys navigate folder/tab tree when focused",
-        "All actions have ARIA labels",
-        "Tree view uses ARIA tree pattern (role='tree', role='treeitem')",
-        "Color contrast meets WCAG 2.1 AA (4.5:1 minimum for text)",
-        "Screen reader announces tab states (active, suspended, audio)",
-        "Drag-and-drop has keyboard alternative (arrow keys to move, Enter to confirm)",
-        "Semantic HTML throughout: nav, ul, li, button",
-        "Lighthouse accessibility score >= 95",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 41,
-      "passes": true,
+      "passes": false,
       "notes": ""
     }
   ]

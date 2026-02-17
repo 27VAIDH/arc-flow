@@ -1634,3 +1634,16 @@ All stories have `passes: true`. All 41 user stories are complete.
 
 <promise>COMPLETE</promise>
 ---
+
+## 2026-02-17 - US-001 (Smart Switch-to-Tab feature branch)
+- Added `allTabs: TabInfo[]` and `tabWorkspaceMap: Record<string, string>` props to SearchBar interface
+- App.tsx passes `tabs` (all tabs before workspace filtering) as `allTabs` and `tabWorkspaceMap` state to SearchBar
+- Used underscore prefix (`_allTabs`, `_tabWorkspaceMap`) with eslint-disable comments for unused props (scaffolding for US-002)
+- Files changed: `src/sidepanel/SearchBar.tsx`, `src/sidepanel/App.tsx`
+- **Learnings for future iterations:**
+  - `tabWorkspaceMap` uses string keys (`Record<string, string>`) in the codebase, not number keys as PRD states
+  - `tabs` state in App.tsx is already ALL tabs (not workspace-filtered); `filteredTabs` is the workspace-filtered version
+  - TypeScript `noUnusedParameters: true` in tsconfig requires underscore prefix for intentionally unused params
+  - ESLint `@typescript-eslint/no-unused-vars` does NOT respect underscore prefix by default — need `eslint-disable-next-line` comments
+  - Pre-existing lint error in App.tsx line 515 (`react-hooks/set-state-in-effect`) — not introduced by this PR
+---
