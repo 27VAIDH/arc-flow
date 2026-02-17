@@ -197,7 +197,7 @@ const DraggableTabItem = memo(function DraggableTabItem({
     transform: transform
       ? `translate(${transform.x}px, ${transform.y}px)`
       : undefined,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.3 : 1,
   };
 
   const commitRename = useCallback(() => {

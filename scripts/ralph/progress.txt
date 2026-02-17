@@ -22,6 +22,8 @@ Branch: ralph/v1.1-delight-stickiness
 - VirtualTabRow passes props via rowProps — any new DraggableTabItem props must also be added to VirtualTabRowProps and VirtualTabRow
 - Panel color application is owned by App.tsx (not useTheme) to support per-workspace overrides — useTheme exports applyPanelColor() but doesn't call it
 - Per-workspace panelColor overrides global settings.panelColor; empty/undefined workspace panelColor falls back to global
+- Drop indicators use useDndMonitor from @dnd-kit/core to track hover targets; rendered as 2px accent-colored lines via DropIndicatorLine component
+- Source items during drag should use opacity 0.3 (30%) consistently across all DnD sections
 ---
 
 ## 2026-02-17 - US-001
@@ -300,4 +302,41 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - DragOverlay in @dnd-kit renders a floating copy of the dragged item — source item should be dimmed (not hidden) for spatial awareness
   - useSortable provides a `transition` prop for sibling shift animations, but a fallback `transform 200ms ease` ensures smooth behavior
   - onDragCancel must also clear activeDragId to avoid stale overlay state
+---
+
+## Iteration 9 - Tue Feb 17 18:29:48 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-180605/iter-9.log
+---
+**US-009 is complete.** There are still 6 stories with `passes: false` remaining (US-010 through US-015).
+
+**Summary of US-009 completion:**
+- **Feature**: Fixed pinned apps drag-and-drop with styled DragOverlay and improved visual feedback
+- **Key changes**:
+  - Added `DragOverlay` component showing the dragged app icon at 32x32 with shadow and border
+  - Added `activeDragId` state with `handleDragStart` and `onDragCancel` handlers
+  - Changed source item opacity from 0.5 to 0.3 during drag
+  - Added fallback `transform 200ms ease` transition for smooth sibling shift animations
+  - Preserved existing `PointerSensor` distance: 5 activation constraint
+- **Files changed**: `src/sidepanel/PinnedAppsRow.tsx`
+- **Commit**: `45788a5` — `feat: US-009 - Fix pinned apps drag-and-drop with visual feedback`
+- **Typecheck & lint**: Pass cleanly
+---
+
+## 2026-02-17 - US-010
+- Fixed folder drag-and-drop with drop indicators and expanded hit areas
+- Added DropIndicatorLine component — 2px arc-accent colored horizontal line shown between items at insertion point
+- Added useDndMonitor in SortableFolder to track which folder-item is being hovered for drop indicators
+- Added useDndMonitor in FolderTree to track which folder is being hovered for folder-level drop indicators
+- Changed source item opacity from 0.5 to 0.3 during drag for both folder items and folders
+- Added fallback transition (transform 200ms ease) for smooth sibling shift animations
+- Folder drop zone already covers full header row width via combined setSortableRef + setDroppableRef on wrapper div
+- Folder glow/highlight with arc-accent/10 + ring already present via isOver state
+- Also fixed DraggableTabItem opacity to 0.3 in App.tsx for consistency
+- Files changed: src/sidepanel/FolderTree.tsx, src/sidepanel/App.tsx
+- **Learnings for future iterations:**
+  - useDndMonitor hook from @dnd-kit/core provides onDragOver/onDragEnd/onDragCancel events — useful for tracking hover state for custom drop indicators
+  - Drop indicators are rendered as sibling elements before the hovered item using React fragments
+  - Each SortableFolder tracks its own overItemId for item-level indicators, while FolderTree tracks overFolderId for folder-level indicators
+  - The isOver from useDroppable handles the folder glow highlight, while useSortable handles the positional reorder — these are complementary
 ---

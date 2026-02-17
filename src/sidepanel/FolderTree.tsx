@@ -7,7 +7,7 @@ import {
   updateFolder,
 } from "../shared/folderStorage";
 import type { ContextMenuItem } from "./ContextMenu";
-import { useDroppable } from "@dnd-kit/core";
+import { useDroppable, useDndMonitor } from "@dnd-kit/core";
 import {
   SortableContext,
   verticalListSortingStrategy,
@@ -155,6 +155,15 @@ function FolderHeader({
   );
 }
 
+function DropIndicatorLine({ depth }: { depth: number }) {
+  return (
+    <div
+      className="h-0.5 bg-arc-accent rounded-full"
+      style={{ marginLeft: (depth + 1) * 16 + 8 + 4, marginRight: 8 }}
+    />
+  );
+}
+
 function DraggableFolderItem({
   item,
   depth,
@@ -162,6 +171,7 @@ function DraggableFolderItem({
   onClick,
   onContextMenu,
   onRename,
+  isOverItem,
 }: {
   item: FolderItem;
   depth: number;
@@ -173,6 +183,7 @@ function DraggableFolderItem({
     folderId: string
   ) => void;
   onRename?: (folderId: string, itemId: string, newTitle: string) => void;
+  isOverItem?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(item.title || item.url);
@@ -207,12 +218,14 @@ function DraggableFolderItem({
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
+    transition: transition || "transform 200ms ease",
+    opacity: isDragging ? 0.3 : 1,
     paddingLeft: (depth + 1) * 16 + 8,
   };
 
   return (
+    <>
+    {isOverItem && <DropIndicatorLine depth={depth} />}
     <div
       ref={setNodeRef}
       style={style}
@@ -292,6 +305,7 @@ function DraggableFolderItem({
         </span>
       )}
     </div>
+    </>
   );
 }
 
@@ -306,6 +320,7 @@ function SortableFolder({
   onItemClick,
   onItemContextMenu,
   onItemRename,
+  isOverFolder,
 }: {
   folder: Folder;
   depth: number;
@@ -321,6 +336,7 @@ function SortableFolder({
     folderId: string
   ) => void;
   onItemRename?: (folderId: string, itemId: string, newTitle: string) => void;
+  isOverFolder?: boolean;
 }) {
   const {
     attributes,
@@ -335,15 +351,46 @@ function SortableFolder({
     id: `folder-drop:${folder.id}`,
   });
 
+  // Track which folder-item is being hovered for drop indicators
+  const [overItemId, setOverItemId] = useState<string | null>(null);
+  useDndMonitor({
+    onDragOver(event) {
+      const overId = event.over?.id ? String(event.over.id) : null;
+      if (overId && overId.startsWith("folder-item:")) {
+        const itemId = overId.replace("folder-item:", "");
+        if (folder.items.some((i) => i.id === itemId)) {
+          setOverItemId(itemId);
+        } else {
+          setOverItemId(null);
+        }
+      } else {
+        setOverItemId(null);
+      }
+    },
+    onDragEnd() {
+      setOverItemId(null);
+    },
+    onDragCancel() {
+      setOverItemId(null);
+    },
+  });
+
   const sortableStyle = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
+    transition: transition || "transform 200ms ease",
+    opacity: isDragging ? 0.3 : 1,
   };
 
   const itemIds = folder.items.map((item) => `folder-item:${item.id}`);
 
   return (
+    <>
+    {isOverFolder && (
+      <div
+        className="h-0.5 bg-arc-accent rounded-full"
+        style={{ marginLeft: depth * 16 + 4, marginRight: 8 }}
+      />
+    )}
     <div
       ref={(node) => {
         setSortableRef(node);
@@ -409,6 +456,7 @@ function SortableFolder({
                 onClick={onItemClick}
                 onContextMenu={onItemContextMenu}
                 onRename={onItemRename}
+                isOverItem={overItemId === item.id}
               />
             ))}
           </SortableContext>
@@ -418,6 +466,7 @@ function SortableFolder({
         </div>
       )}
     </div>
+    </>
   );
 }
 
@@ -570,6 +619,25 @@ export default function FolderTree({
     ]
   );
 
+  // Track which folder is being hovered for drop indicator between folders
+  const [overFolderId, setOverFolderId] = useState<string | null>(null);
+  useDndMonitor({
+    onDragOver(event) {
+      const overId = event.over?.id ? String(event.over.id) : null;
+      if (overId && overId.startsWith("folder:")) {
+        setOverFolderId(overId.replace("folder:", ""));
+      } else {
+        setOverFolderId(null);
+      }
+    },
+    onDragEnd() {
+      setOverFolderId(null);
+    },
+    onDragCancel() {
+      setOverFolderId(null);
+    },
+  });
+
   // Build tree structure: top-level folders and their children
   const topLevelFolders = folders.filter((f) => f.parentId === null);
 
@@ -591,6 +659,7 @@ export default function FolderTree({
       onItemClick={onItemClick}
       onItemContextMenu={onItemContextMenu}
       onItemRename={onItemRename}
+      isOverFolder={overFolderId === folder.id}
     />
   );
 
