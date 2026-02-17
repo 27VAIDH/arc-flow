@@ -462,3 +462,39 @@ US-012 is complete. There are still 3 stories with `passes: false` remaining (US
   - Wheel deltaX positive = scroll right = swipe left (next), deltaX negative = scroll left = swipe right (prev) — direction is inverted from touch
   - The angle check (absDy/absDx < 0.577) prevents triggering on diagonal scrolling
 ---
+
+## Iteration 13 - Tue Feb 17 18:44:24 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-180605/iter-13.log
+---
+**US-013 is complete.** There are still 2 stories with `passes: false` remaining (US-014, US-015).
+
+**Summary of US-013 completion:**
+- **Feature**: Created `useSwipeGesture` custom React hook for detecting horizontal swipe gestures
+- **Key details**:
+  - Hook signature: `useSwipeGesture(ref, { onSwipeLeft, onSwipeRight, threshold?, disabled? })`
+  - Touch events: tracks `touchstart` → `touchend` delta for mobile swipe detection
+  - Trackpad: accumulates `wheel` `deltaX` with 150ms debounce timeout for trackpad swipe detection
+  - 50px minimum threshold, angle check (`absDy/absDx < 0.577`) ensures only horizontal swipes trigger
+  - `disabled` flag prevents all gesture detection; cleanup removes all listeners on unmount
+- **Files changed**: `src/sidepanel/useSwipeGesture.ts` (new file)
+- **Commit**: `af98df5` — `feat: US-013 - Create useSwipeGesture hook for workspace navigation`
+- **Typecheck**: Passes cleanly
+---
+
+## 2026-02-17 - US-014
+- Integrated useSwipeGesture hook in App.tsx on the main content area (<main> element)
+- Added mainContentRef and attached it to the <main> element
+- Swipe left → next workspace by sortOrder via setActiveWorkspaceStorage() + setActiveWorkspaceId()
+- Swipe right → previous workspace by sortOrder
+- Rubber-band bounce animation at boundaries: swipeBounce state triggers CSS class (swipe-bounce-left / swipe-bounce-right)
+- Bounce animation uses CSS @keyframes with translateX shift and return within 300ms
+- Swipe disabled when only 1 workspace exists (disabled flag passed to useSwipeGesture)
+- Swipe doesn't interfere with vertical scrolling (useSwipeGesture already checks angle < 30° from horizontal)
+- Files changed: src/sidepanel/App.tsx, src/sidepanel/index.css
+- **Learnings for future iterations:**
+  - sortedWorkspaces memo needed to ensure consistent sortOrder-based navigation (workspaces state may not be sorted)
+  - setActiveWorkspaceStorage() from workspaceStorage.ts persists the active workspace to chrome.storage.local; setActiveWorkspaceId() updates React state — both needed for proper workspace switch
+  - Rubber-band bounce uses CSS animation classes toggled via state + setTimeout(300ms) to remove — simpler than transition-based approach
+  - The <main> element is the right target for swipe gestures — it covers the folder tree, tab list, and DnD area but excludes the footer/workspace switcher
+---
