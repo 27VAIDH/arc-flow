@@ -112,4 +112,5 @@ export interface Settings {
   };
   routingRules: { pattern: string; workspaceId: string }[];
   accentColor: string;
+  omniboxEnabled: boolean;
 }

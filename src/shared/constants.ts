@@ -15,6 +15,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   routingRules: [],
   accentColor: "#6366f1",
+  omniboxEnabled: true,
 };
 
 export const AUTO_ARCHIVE_OPTIONS = [

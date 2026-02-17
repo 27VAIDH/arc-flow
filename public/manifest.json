@@ -50,5 +50,8 @@
       "description": "Toggle ArcFlow sidebar"
     }
   },
+  "omnibox": {
+    "keyword": "af"
+  },
   "icons": {}
 }
