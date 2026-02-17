@@ -558,7 +558,7 @@ export default function FolderTree({
   }
 
   return (
-    <div className="px-1 py-1 border-t border-gray-200/80 dark:border-arc-border">
+    <div className="px-1 pt-3 pb-2">
       <div className="flex items-center justify-between px-2 py-1">
         <span className="text-[11px] text-gray-400 dark:text-arc-text-secondary font-medium uppercase tracking-wider">
           Folders

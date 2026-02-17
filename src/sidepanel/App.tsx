@@ -1101,7 +1101,7 @@ export default function App() {
           `. ${suspendedCount} suspended, ~${estimatedMBSaved} MB saved`}
       </div>
 
-      <header className="flex items-center justify-between px-4 py-3 border-b border-gray-200/80 dark:border-arc-border">
+      <header className="flex items-center justify-between px-4 py-3 pb-2">
         <h1 className="text-sm font-semibold tracking-tight text-gray-800 dark:text-arc-text-primary">
           ArcFlow
         </h1>
@@ -1168,7 +1168,7 @@ export default function App() {
 
           {/* Tab list */}
           <section
-            className="flex-1 px-1 border-t border-gray-200/80 dark:border-arc-border"
+            className="flex-1 px-1 pt-3"
             aria-label="Open tabs"
           >
             <div className="flex items-center justify-between px-2 py-1">
@@ -1241,7 +1241,7 @@ export default function App() {
       </main>
 
       {/* Footer (Zone 5) */}
-      <footer className="border-t border-gray-200/80 dark:border-arc-border">
+      <footer className="border-t border-gray-200/10 dark:border-white/5">
         <WorkspaceSwitcher
           activeWorkspaceId={activeWorkspaceId}
           onWorkspaceChange={handleWorkspaceChange}

@@ -234,7 +234,7 @@ export default function PinnedAppsRow({
   return (
     <nav
       aria-label="Pinned apps"
-      className="px-3 py-2 border-b border-gray-200/80 dark:border-arc-border"
+      className="px-3 py-2 pb-2"
     >
       <span className="text-[11px] text-gray-400 dark:text-arc-text-secondary font-medium uppercase tracking-wider px-1 mb-1 block">
         Pinned Apps
