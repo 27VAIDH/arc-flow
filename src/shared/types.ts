@@ -78,7 +78,7 @@ export type SidePanelMessage =
   | { type: "OPEN_URL"; url: string }
   | { type: "GET_TAB_WORKSPACE_MAP" }
   | { type: "MOVE_TAB_TO_WORKSPACE"; tabId: number; workspaceId: string }
-  |{ type: "SUSPEND_TAB"; tabId: number }
+  | { type: "SUSPEND_TAB"; tabId: number }
   | { type: "SPLIT_VIEW"; tabId: number }
   | {
       type: "UPDATE_FOCUS_MODE";
@@ -112,4 +112,5 @@ export interface Settings {
   };
   routingRules: { pattern: string; workspaceId: string }[];
   accentColor: string;
+  panelColor: string;
 }

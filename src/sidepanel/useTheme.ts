@@ -18,9 +18,35 @@ function lightenColor(hex: string): string {
   return `#${lighten(r).toString(16).padStart(2, "0")}${lighten(g).toString(16).padStart(2, "0")}${lighten(b).toString(16).padStart(2, "0")}`;
 }
 
+const DEFAULT_PANEL_BG = "rgba(15,15,23,0.78)";
+
+function applyPanelColor(color: string): void {
+  if (!color) {
+    document.documentElement.style.setProperty(
+      "--color-arc-panel-bg",
+      DEFAULT_PANEL_BG
+    );
+    document.documentElement.style.setProperty(
+      "--color-arc-panel-bg-secondary",
+      DEFAULT_PANEL_BG
+    );
+    return;
+  }
+  // Append C7 hex alpha (78% opacity) to custom panel colors
+  const withAlpha = color.length === 7 ? color + "C7" : color;
+  document.documentElement.style.setProperty("--color-arc-panel-bg", withAlpha);
+  document.documentElement.style.setProperty(
+    "--color-arc-panel-bg-secondary",
+    withAlpha
+  );
+}
+
 function applyAccentColor(color: string): void {
   document.documentElement.style.setProperty("--color-arc-accent", color);
-  document.documentElement.style.setProperty("--color-arc-accent-hover", lightenColor(color));
+  document.documentElement.style.setProperty(
+    "--color-arc-accent-hover",
+    lightenColor(color)
+  );
 }
 
 function applyTheme(preference: ThemePreference): void {
@@ -42,6 +68,7 @@ export function useTheme() {
       if (s.accentColor) {
         applyAccentColor(s.accentColor);
       }
+      applyPanelColor(s.panelColor ?? "");
     });
   }, []);
 
@@ -59,6 +86,9 @@ export function useTheme() {
         }
         if (newSettings?.accentColor) {
           applyAccentColor(newSettings.accentColor);
+        }
+        if (newSettings) {
+          applyPanelColor(newSettings.panelColor ?? "");
         }
       }
     };

@@ -10,10 +10,7 @@ import type {
 } from "../shared/types";
 import { useTheme } from "./useTheme";
 import type { Settings } from "../shared/types";
-import {
-  addPinnedApp,
-  removePinnedApp,
-} from "../shared/storage";
+import { addPinnedApp, removePinnedApp } from "../shared/storage";
 import { getSettings, updateSettings } from "../shared/settingsStorage";
 import {
   createFolder,
@@ -229,7 +226,12 @@ const DraggableTabItem = memo(function DraggableTabItem({
         className="shrink-0 flex items-center cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 touch-none opacity-0 group-hover:opacity-100 transition-opacity"
         aria-label="Drag to reorder"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 16 16"
+          fill="currentColor"
+          className="w-3 h-3"
+        >
           <path d="M6 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm5-9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
         </svg>
       </span>
@@ -580,7 +582,9 @@ export default function App() {
       // Show tabs assigned to the active workspace.
       // Unmapped tabs default to "default" workspace (not shown everywhere).
       const effectiveWsId = wsId || "default";
-      return effectiveWsId === activeWorkspaceId && !tabIdsInFolders.has(tab.id);
+      return (
+        effectiveWsId === activeWorkspaceId && !tabIdsInFolders.has(tab.id)
+      );
     });
   }, [tabs, tabWorkspaceMap, activeWorkspaceId, folders]);
 
@@ -852,20 +856,23 @@ export default function App() {
     }
   }, []);
 
-  const handleFolderItemClick = useCallback((item: FolderItem) => {
-    if (item.type === "tab" && item.tabId != null) {
-      // Check if the tab still exists in our known tabs list
-      const tabStillOpen = tabs.some((t) => t.id === item.tabId);
-      if (tabStillOpen) {
-        chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: item.tabId });
+  const handleFolderItemClick = useCallback(
+    (item: FolderItem) => {
+      if (item.type === "tab" && item.tabId != null) {
+        // Check if the tab still exists in our known tabs list
+        const tabStillOpen = tabs.some((t) => t.id === item.tabId);
+        if (tabStillOpen) {
+          chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: item.tabId });
+        } else {
+          // Tab was closed — open the URL instead
+          chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
+        }
       } else {
-        // Tab was closed — open the URL instead
         chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
       }
-    } else {
-      chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
-    }
-  }, [tabs]);
+    },
+    [tabs]
+  );
 
   const handleFolderItemContextMenu = useCallback(
     (e: React.MouseEvent, item: FolderItem, folderId: string) => {
@@ -885,7 +892,10 @@ export default function App() {
           label: "Switch to Tab",
           onClick: () => {
             if (item.tabId != null) {
-              chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: item.tabId });
+              chrome.runtime.sendMessage({
+                type: "SWITCH_TAB",
+                tabId: item.tabId,
+              });
             } else {
               chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
             }
@@ -1077,7 +1087,7 @@ export default function App() {
   );
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 dark:bg-arc-bg dark:text-arc-text-primary">
+    <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 dark:bg-[rgba(15,15,23,0.78)] dark:text-arc-text-primary backdrop-frosted">
       {/* Live region for screen reader announcements */}
       <div
         role="status"
@@ -1092,7 +1102,9 @@ export default function App() {
       </div>
 
       <header className="flex items-center justify-between px-4 py-3 border-b border-gray-200/80 dark:border-arc-border">
-        <h1 className="text-sm font-semibold tracking-tight text-gray-800 dark:text-arc-text-primary">ArcFlow</h1>
+        <h1 className="text-sm font-semibold tracking-tight text-gray-800 dark:text-arc-text-primary">
+          ArcFlow
+        </h1>
         <button
           onClick={() => setShowOrganizeTabs(true)}
           className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-150"
@@ -1130,7 +1142,11 @@ export default function App() {
       </nav>
 
       {/* Pinned Apps Row (Zone 2) */}
-      <PinnedAppsRow tabs={tabs} pinnedApps={pinnedApps} onContextMenu={setContextMenu} />
+      <PinnedAppsRow
+        tabs={tabs}
+        pinnedApps={pinnedApps}
+        onContextMenu={setContextMenu}
+      />
 
       <main className="flex-1 flex flex-col" aria-label="Tab management">
         <DndContext
@@ -1151,7 +1167,10 @@ export default function App() {
           />
 
           {/* Tab list */}
-          <section className="flex-1 px-1 border-t border-gray-200/80 dark:border-arc-border" aria-label="Open tabs">
+          <section
+            className="flex-1 px-1 border-t border-gray-200/80 dark:border-arc-border"
+            aria-label="Open tabs"
+          >
             <div className="flex items-center justify-between px-2 py-1">
               <p
                 className="text-[11px] text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider font-medium"
