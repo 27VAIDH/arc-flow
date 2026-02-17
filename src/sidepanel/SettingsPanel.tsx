@@ -95,7 +95,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="absolute inset-0 z-50 flex flex-col bg-gray-50 dark:bg-arc-bg"
+      className="absolute inset-0 z-50 flex flex-col bg-gray-50 dark:bg-[var(--color-arc-panel-bg)]"
       role="dialog"
       aria-modal="true"
       aria-label="Settings"

@@ -1264,7 +1264,7 @@ export default function App() {
   );
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 dark:bg-arc-bg dark:text-arc-text-primary">
+    <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 dark:bg-[var(--color-arc-panel-bg)] dark:text-arc-text-primary">
       {/* Live region for screen reader announcements */}
       <div
         role="status"

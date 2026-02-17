@@ -17,6 +17,8 @@ Branch: ralph/v1.1-delight-stickiness
 - Inline rename inputs MUST call e.stopPropagation() in onKeyDown to prevent parent DnD/keyboard handlers from intercepting Enter/Escape
 - When adding inline edit to a clickable item, guard the onClick handler with `if (!editing)` to prevent navigation during edit
 - Per-workspace auxiliary data (e.g., tabNameOverrides) stored as separate chrome.storage.local keys with `_<workspaceId>` suffix
+- Panel background color applied via CSS variables (--color-arc-panel-bg, --color-arc-panel-bg-secondary) set in useTheme.ts applyPanelColor()
+- applyPanelColor() is exported from useTheme.ts for direct use by SettingsPanel
 - VirtualTabRow passes props via rowProps — any new DraggableTabItem props must also be added to VirtualTabRowProps and VirtualTabRow
 ---
 
@@ -125,4 +127,72 @@ US-003 is complete. There are still 12 stories with `passes: false` remaining (U
   - tabNameOverrides stored as separate chrome.storage.local key per workspace (`tabNameOverrides_<wsId>`) rather than inside the Workspace object — keeps workspace storage lean
   - VirtualTabRow component passes props via rowProps — any new DraggableTabItem props must also be added to VirtualTabRowProps interface and the VirtualTabRow function signature
   - The RefObject type import from React is needed when using `useRef<HTMLInputElement>(null) as RefObject<HTMLInputElement>` pattern
+---
+
+## Iteration 4 - Tue Feb 17 18:16:52 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-180605/iter-4.log
+---
+US-004 is complete. There are still 11 stories with `passes: false` remaining (US-005 through US-015).
+
+**Summary of US-004 completion:**
+- **Feature**: Added double-click rename to open tabs in the sidebar via `DraggableTabItem`
+- **Storage**: `tabNameOverrides` stored per-workspace in `chrome.storage.local` as `tabNameOverrides_<workspaceId>` (Record<number, string>)
+- **Key changes**:
+  - `DraggableTabItem` now accepts `displayName` and `onTabRename` props
+  - Double-click enters inline edit mode with `e.preventDefault()` + `e.stopPropagation()` to prevent tab switching
+  - `onKeyDown` calls `e.stopPropagation()` to prevent parent DnD handlers from intercepting Enter/Escape
+  - onClick guarded with `if (editing) return`
+  - Tabs with custom names display in italic with original title in tooltip
+  - Empty name input clears the override
+  - Updated `VirtualTabRow` and `VirtualTabRowProps` to pass through the new props
+- **Files changed**: `src/sidepanel/App.tsx`
+- **Commit**: `e80eb47` — `feat: US-004 - Add double-click rename to open tabs in sidebar`
+- **Typecheck**: Passes cleanly
+---
+
+## 2026-02-17 - US-005
+- Added panelColor field to Settings interface (string) and Workspace interface (optional string) in types.ts
+- Added panelColor: '' default to DEFAULT_SETTINGS in constants.ts
+- No schema migration needed — panelColor is optional on Workspace and getSettings() spreads defaults over stored values
+- Files changed: src/shared/types.ts, src/shared/constants.ts
+- **Learnings for future iterations:**
+  - Settings defaults are in constants.ts (DEFAULT_SETTINGS), not in settingsStorage.ts — getSettings() merges stored values over defaults via spread
+  - Adding an optional field to Workspace requires no migration since existing workspaces without the field will just have it as undefined
+  - updateSettings() and updateWorkspace() both use Partial spread, so new fields "just work" for persistence
+---
+
+## Iteration 5 - Tue Feb 17 18:18:26 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-180605/iter-5.log
+---
+**US-005 is complete.** There are still 10 stories with `passes: false` remaining (US-006 through US-015).
+
+**Summary of US-005 completion:**
+- **Feature**: Added `panelColor` data model support for panel background color customization
+- **Changes**:
+  - `Settings` interface: added `panelColor: string` field
+  - `Workspace` interface: added optional `panelColor?: string` field
+  - `DEFAULT_SETTINGS`: added `panelColor: ""` (empty string = use default dark theme background)
+- **Storage**: No migration needed — `panelColor` is optional on Workspace (undefined for existing workspaces) and `getSettings()` merges defaults via spread
+- **Files changed**: `src/shared/types.ts`, `src/shared/constants.ts`
+- **Commit**: `136d27f` — `feat: US-005 - Add panelColor to Settings and Workspace types with storage support`
+- **Typecheck & lint**: Pass cleanly
+---
+
+## 2026-02-17 - US-006
+- Added applyPanelColor() function to useTheme.ts that sets --color-arc-panel-bg and --color-arc-panel-bg-secondary CSS variables
+- Secondary variant auto-computed as 10% lighter using lightenColorByPercent()
+- Added getLuminance() function for relative luminance calculation — adds 'light-panel' class when luminance > 0.5
+- Empty color string removes CSS variables (falls back to CSS defaults defined in @theme block)
+- useTheme hook calls applyPanelColor on mount with stored settings.panelColor
+- useTheme hook listens to chrome.storage.onChanged for settings.panelColor updates
+- Added --color-arc-panel-bg and --color-arc-panel-bg-secondary to index.css @theme block with default dark values
+- Updated App.tsx main container and SettingsPanel.tsx to use dark:bg-[var(--color-arc-panel-bg)] instead of dark:bg-arc-bg
+- Files changed: src/sidepanel/useTheme.ts, src/sidepanel/index.css, src/sidepanel/App.tsx, src/sidepanel/SettingsPanel.tsx
+- **Learnings for future iterations:**
+  - applyPanelColor is exported (not just internal) so SettingsPanel can call it directly for immediate feedback when user picks a color
+  - The dark:bg-[var(--color-arc-panel-bg)] Tailwind arbitrary value syntax works for referencing CSS variables in dark mode
+  - Default panel bg values in @theme block match the original arc-bg (#0f0f17) so no visual change until user customizes
+  - lightenColorByPercent() is a more flexible version of lightenColor() — takes a percent parameter (0.1 = 10%, 0.2 = 20%)
 ---

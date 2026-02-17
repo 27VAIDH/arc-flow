@@ -11,6 +11,8 @@
   --color-arc-text-secondary: #8888a0;
   --color-arc-accent: #6366f1;
   --color-arc-accent-hover: #818cf8;
+  --color-arc-panel-bg: #0f0f17;
+  --color-arc-panel-bg-secondary: #1e1e2a;
 }
 
 /* System font stack with Inter preference */
