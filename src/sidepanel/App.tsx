@@ -60,9 +60,15 @@ import {
   pointerWithin,
   rectIntersection,
   type CollisionDetection,
-  useDraggable,
 } from "@dnd-kit/core";
-import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import {
+  arrayMove,
+  sortableKeyboardCoordinates,
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { List } from "react-window";
 import type { CSSProperties } from "react";
 
@@ -180,8 +186,8 @@ const DraggableTabItem = memo(function DraggableTabItem({
   displayName?: string;
   onTabRename?: (tabId: number, newName: string) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: `tab:${tab.id}` });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: `tab:${tab.id}` });
 
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
@@ -194,9 +200,8 @@ const DraggableTabItem = memo(function DraggableTabItem({
 
   const style = {
     ...outerStyle,
-    transform: transform
-      ? `translate(${transform.x}px, ${transform.y}px)`
-      : undefined,
+    transform: CSS.Transform.toString(transform),
+    transition: transition || "transform 200ms ease",
     opacity: isDragging ? 0.3 : 1,
   };
 
@@ -504,6 +509,8 @@ export default function App() {
   const [showSessionManager, setShowSessionManager] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [tabNameOverrides, setTabNameOverrides] = useState<Record<number, string>>({});
+  const [tabOrderOverrides, setTabOrderOverrides] = useState<number[]>([]);
+  const [isDraggingTabs, setIsDraggingTabs] = useState(false);
   const [tabPreview, setTabPreview] = useState<{
     tab: TabPreviewInfo;
     position: { top: number; left: number };
@@ -630,6 +637,14 @@ export default function App() {
     });
   }, [activeWorkspaceId]);
 
+  // Load tabOrderOverrides for the active workspace
+  useEffect(() => {
+    const key = `tabOrderOverrides_${activeWorkspaceId}`;
+    chrome.storage.local.get(key, (result) => {
+      setTabOrderOverrides((result[key] as number[]) ?? []);
+    });
+  }, [activeWorkspaceId]);
+
   useEffect(() => {
     // Request initial tab list from service worker
     chrome.runtime.sendMessage({ type: "GET_TABS" }, (response: TabInfo[]) => {
@@ -684,14 +699,32 @@ export default function App() {
         .map((item) => item.tabId as number)
     );
 
-    return tabs.filter((tab) => {
+    const filtered = tabs.filter((tab) => {
       const wsId = tabWorkspaceMap[String(tab.id)];
       // Show tabs assigned to the active workspace.
       // Unmapped tabs default to "default" workspace (not shown everywhere).
       const effectiveWsId = wsId || "default";
       return effectiveWsId === activeWorkspaceId && !tabIdsInFolders.has(tab.id);
     });
-  }, [tabs, tabWorkspaceMap, activeWorkspaceId, folders]);
+
+    // Apply custom tab order if available
+    if (tabOrderOverrides.length > 0) {
+      const orderMap = new Map(tabOrderOverrides.map((id, idx) => [id, idx]));
+      const ordered: TabInfo[] = [];
+      const unordered: TabInfo[] = [];
+      for (const tab of filtered) {
+        if (orderMap.has(tab.id)) {
+          ordered.push(tab);
+        } else {
+          unordered.push(tab);
+        }
+      }
+      ordered.sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
+      return [...ordered, ...unordered];
+    }
+
+    return filtered;
+  }, [tabs, tabWorkspaceMap, activeWorkspaceId, folders, tabOrderOverrides]);
 
   const { cycleTheme } = useTheme();
 
@@ -1124,7 +1157,10 @@ export default function App() {
       if (id.startsWith("tab:")) {
         const tabId = parseInt(id.replace("tab:", ""), 10);
         const tab = tabs.find((t) => t.id === tabId);
-        if (tab) setActiveDragTab(tab);
+        if (tab) {
+          setActiveDragTab(tab);
+          setIsDraggingTabs(true);
+        }
       }
     },
     [tabs]
@@ -1133,6 +1169,7 @@ export default function App() {
   const handleDragEnd = useCallback(
     async (event: DragEndEvent) => {
       setActiveDragTab(null);
+      setIsDraggingTabs(false);
       const { active, over } = event;
       if (!over) return;
 
@@ -1230,7 +1267,29 @@ export default function App() {
         return;
       }
 
-      // Case 4: Reorder folders among siblings
+      // Case 4: Reorder tabs within the tab list
+      if (activeId.startsWith("tab:") && overId.startsWith("tab:")) {
+        const activeTabId = parseInt(activeId.replace("tab:", ""), 10);
+        const overTabId = parseInt(overId.replace("tab:", ""), 10);
+
+        const oldIndex = filteredTabs.findIndex((t) => t.id === activeTabId);
+        const newIndex = filteredTabs.findIndex((t) => t.id === overTabId);
+
+        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+          const reordered = arrayMove(filteredTabs, oldIndex, newIndex);
+          const newOrder = reordered.map((t) => t.id);
+
+          // Optimistic update
+          setTabOrderOverrides(newOrder);
+
+          // Persist to storage
+          const key = `tabOrderOverrides_${activeWorkspaceId}`;
+          chrome.storage.local.set({ [key]: newOrder });
+        }
+        return;
+      }
+
+      // Case 5: Reorder folders among siblings
       if (activeId.startsWith("folder:") && overId.startsWith("folder:")) {
         const activeFolderId = activeId.replace("folder:", "");
         const overFolderId = overId.replace("folder:", "");
@@ -1274,7 +1333,7 @@ export default function App() {
         return;
       }
     },
-    [tabs, folders, setFolders]
+    [tabs, folders, setFolders, filteredTabs, activeWorkspaceId]
   );
 
   return (
@@ -1339,6 +1398,10 @@ export default function App() {
           collisionDetection={customCollisionDetection}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
+          onDragCancel={() => {
+            setActiveDragTab(null);
+            setIsDraggingTabs(false);
+          }}
         >
           {/* Folder Tree (Zone 3) */}
           <FolderTree
@@ -1390,41 +1453,46 @@ export default function App() {
                 </button>
               )}
             </div>
-            {filteredTabs.length >= VIRTUAL_LIST_THRESHOLD ? (
-              <List<VirtualTabRowProps>
-                style={{
-                  height: Math.min(filteredTabs.length * TAB_ITEM_HEIGHT, 400),
-                }}
-                rowComponent={VirtualTabRow}
-                rowCount={filteredTabs.length}
-                rowHeight={TAB_ITEM_HEIGHT}
-                rowProps={{
-                  tabs: filteredTabs,
-                  onContextMenu: handleTabContextMenu,
-                  tabNameOverrides,
-                  onTabRename: handleTabRename,
-                }}
-                overscanCount={5}
-              />
-            ) : (
-              <ul
-                className="flex flex-col gap-1"
-                role="listbox"
-                aria-label="Open tabs"
-              >
-                {filteredTabs.map((tab) => (
-                  <DraggableTabItem
-                    key={tab.id}
-                    tab={tab}
-                    onContextMenu={handleTabContextMenu}
-                    onMouseEnter={handleTabHoverStart}
-                    onMouseLeave={handleTabHoverEnd}
-                    displayName={tabNameOverrides[tab.id]}
-                    onTabRename={handleTabRename}
-                  />
-                ))}
-              </ul>
-            )}
+            <SortableContext
+              items={filteredTabs.map((t) => `tab:${t.id}`)}
+              strategy={verticalListSortingStrategy}
+            >
+              {filteredTabs.length >= VIRTUAL_LIST_THRESHOLD && !isDraggingTabs ? (
+                <List<VirtualTabRowProps>
+                  style={{
+                    height: Math.min(filteredTabs.length * TAB_ITEM_HEIGHT, 400),
+                  }}
+                  rowComponent={VirtualTabRow}
+                  rowCount={filteredTabs.length}
+                  rowHeight={TAB_ITEM_HEIGHT}
+                  rowProps={{
+                    tabs: filteredTabs,
+                    onContextMenu: handleTabContextMenu,
+                    tabNameOverrides,
+                    onTabRename: handleTabRename,
+                  }}
+                  overscanCount={5}
+                />
+              ) : (
+                <ul
+                  className="flex flex-col gap-1"
+                  role="listbox"
+                  aria-label="Open tabs"
+                >
+                  {filteredTabs.map((tab) => (
+                    <DraggableTabItem
+                      key={tab.id}
+                      tab={tab}
+                      onContextMenu={handleTabContextMenu}
+                      onMouseEnter={handleTabHoverStart}
+                      onMouseLeave={handleTabHoverEnd}
+                      displayName={tabNameOverrides[tab.id]}
+                      onTabRename={handleTabRename}
+                    />
+                  ))}
+                </ul>
+              )}
+            </SortableContext>
           </section>
 
           <DragOverlay>

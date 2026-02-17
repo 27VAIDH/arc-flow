@@ -24,6 +24,9 @@ Branch: ralph/v1.1-delight-stickiness
 - Per-workspace panelColor overrides global settings.panelColor; empty/undefined workspace panelColor falls back to global
 - Drop indicators use useDndMonitor from @dnd-kit/core to track hover targets; rendered as 2px accent-colored lines via DropIndicatorLine component
 - Source items during drag should use opacity 0.3 (30%) consistently across all DnD sections
+- Tab reorder uses SortableContext + useSortable (not useDraggable) with verticalListSortingStrategy — tabOrderOverrides stored per-workspace as `tabOrderOverrides_<wsId>`
+- Virtual scrolling (react-window) must be disabled during active drag (isDraggingTabs flag) to prevent un-droppable items
+- CSS.Transform.toString() from @dnd-kit/utilities is the canonical way to apply sortable transforms
 ---
 
 ## 2026-02-17 - US-001
@@ -339,4 +342,44 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - Drop indicators are rendered as sibling elements before the hovered item using React fragments
   - Each SortableFolder tracks its own overItemId for item-level indicators, while FolderTree tracks overFolderId for folder-level indicators
   - The isOver from useDroppable handles the folder glow highlight, while useSortable handles the positional reorder — these are complementary
+---
+
+## Iteration 10 - Tue Feb 17 18:33:42 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-180605/iter-10.log
+---
+**US-010 is complete.** There are still 5 stories with `passes: false` remaining (US-011 through US-015).
+
+**Summary of US-010 completion:**
+- **Feature**: Fixed folder drag-and-drop with drop indicators, expanded hit areas, and consistent visual feedback
+- **Key changes**:
+  - Added `DropIndicatorLine` component — a 2px `arc-accent` colored horizontal line shown at the insertion point between items
+  - Added `useDndMonitor` in `SortableFolder` to track which folder-item is being hovered for item-level drop indicators
+  - Added `useDndMonitor` in `FolderTree` to track which folder is being hovered for folder-level drop indicators
+  - Changed source item opacity from 0.5 to 0.3 during drag for folders, folder items, and tabs
+  - Added fallback `transform 200ms ease` transition for smooth sibling shift animations
+  - Folder drop zone already covers full header row width (combined `setSortableRef` + `setDroppableRef`)
+  - Folder glow/highlight with `arc-accent/10` + ring already present via `isOver` state
+- **Files changed**: `src/sidepanel/FolderTree.tsx`, `src/sidepanel/App.tsx`
+- **Commit**: `7428a63` — `feat: US-010 - Fix folder drag-and-drop with drop indicators and expanded hit areas`
+- **Typecheck & lint**: Pass cleanly
+---
+
+## 2026-02-17 - US-011
+- Added open tabs reorder via drag-and-drop with persistence
+- Converted DraggableTabItem from useDraggable to useSortable for both drag and drop capability
+- Wrapped tab list in SortableContext with verticalListSortingStrategy
+- Added tabOrderOverrides state (number[]) stored per-workspace in chrome.storage.local as `tabOrderOverrides_<wsId>`
+- Added isDraggingTabs flag to disable react-window virtualization during active drag
+- Tab reorder handled in handleDragEnd Case 4 (tab: to tab:) with optimistic UI update
+- Custom tab order applied in filteredTabs useMemo — ordered tabs appear first, unordered tabs appended
+- onDragCancel handler added to DndContext to clear activeDragTab and isDraggingTabs
+- CSS.Transform.toString() from @dnd-kit/utilities used for canonical sortable transform handling
+- Files changed: src/sidepanel/App.tsx
+- **Learnings for future iterations:**
+  - useSortable provides both drag and drop in one hook — no need for separate useDraggable + useDroppable
+  - CSS.Transform.toString() from @dnd-kit/utilities handles the transform consistently (includes scale, not just translate)
+  - Virtual scrolling (react-window) conflicts with DnD because off-screen items are unmounted — disabling during drag via isDraggingTabs flag is the simplest solution
+  - tabOrderOverrides stores tab IDs in display order — tabs not in the list are appended at the end (handles new tabs gracefully)
+  - The transition from useSortable includes animation timing; fallback `transform 200ms ease` provides smooth sibling shifts
 ---
