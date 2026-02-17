@@ -31,6 +31,7 @@ interface FolderTreeProps {
     item: FolderItem,
     folderId: string
   ) => void;
+  onItemRename?: (folderId: string, itemId: string, newTitle: string) => void;
   onOpenAllTabs?: (folder: Folder) => void;
   onCloseAllTabs?: (folder: Folder) => void;
 }
@@ -160,6 +161,7 @@ function DraggableFolderItem({
   folderId,
   onClick,
   onContextMenu,
+  onRename,
 }: {
   item: FolderItem;
   depth: number;
@@ -170,7 +172,13 @@ function DraggableFolderItem({
     item: FolderItem,
     folderId: string
   ) => void;
+  onRename?: (folderId: string, itemId: string, newTitle: string) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(item.title || item.url);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const committedRef = useRef(false);
+
   const {
     attributes,
     listeners,
@@ -179,6 +187,23 @@ function DraggableFolderItem({
     transition,
     isDragging,
   } = useSortable({ id: `folder-item:${item.id}` });
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  const commitRename = () => {
+    if (committedRef.current) return;
+    committedRef.current = true;
+    const trimmed = editName.trim();
+    if (trimmed && trimmed !== (item.title || item.url)) {
+      onRename?.(folderId, item.id, trimmed);
+    }
+    setEditing(false);
+  };
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -196,9 +221,11 @@ function DraggableFolderItem({
       aria-label={`${item.type === "link" ? "Saved link: " : ""}${item.title || item.url}`}
       tabIndex={0}
       className={`group flex items-center gap-2 px-2 h-7 text-sm rounded-lg cursor-default hover:bg-gray-100 dark:hover:bg-arc-surface-hover focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset transition-colors duration-150 ${item.type === "link" ? "cursor-pointer" : ""}`}
-      onClick={() => onClick?.(item, folderId)}
+      onClick={() => {
+        if (!editing) onClick?.(item, folderId);
+      }}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (!editing && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
           onClick?.(item, folderId);
         }
@@ -232,11 +259,38 @@ function DraggableFolderItem({
           aria-hidden="true"
         />
       )}
-      <span
-        className="truncate flex-1 select-none"
-      >
-        {item.title || item.url}
-      </span>
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={editName}
+          onChange={(e) => setEditName(e.target.value)}
+          onBlur={commitRename}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") commitRename();
+            if (e.key === "Escape") {
+              committedRef.current = true;
+              setEditing(false);
+              setEditName(item.title || item.url);
+            }
+          }}
+          className="flex-1 text-sm bg-white dark:bg-arc-surface border border-arc-accent/50 rounded-md px-1 py-0 outline-none"
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <span
+          className="truncate flex-1 select-none"
+          onDoubleClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            committedRef.current = false;
+            setEditName(item.title || item.url);
+            setEditing(true);
+          }}
+        >
+          {item.title || item.url}
+        </span>
+      )}
     </div>
   );
 }
@@ -251,6 +305,7 @@ function SortableFolder({
   renderFolder,
   onItemClick,
   onItemContextMenu,
+  onItemRename,
 }: {
   folder: Folder;
   depth: number;
@@ -265,6 +320,7 @@ function SortableFolder({
     item: FolderItem,
     folderId: string
   ) => void;
+  onItemRename?: (folderId: string, itemId: string, newTitle: string) => void;
 }) {
   const {
     attributes,
@@ -352,6 +408,7 @@ function SortableFolder({
                 folderId={folder.id}
                 onClick={onItemClick}
                 onContextMenu={onItemContextMenu}
+                onRename={onItemRename}
               />
             ))}
           </SortableContext>
@@ -370,6 +427,7 @@ export default function FolderTree({
   setFolders,
   onItemClick,
   onItemContextMenu,
+  onItemRename,
   onOpenAllTabs,
   onCloseAllTabs,
 }: FolderTreeProps) {
@@ -532,6 +590,7 @@ export default function FolderTree({
       renderFolder={renderFolder}
       onItemClick={onItemClick}
       onItemContextMenu={onItemContextMenu}
+      onItemRename={onItemRename}
     />
   );
 

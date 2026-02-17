@@ -1,42 +1,57 @@
 # Ralph Progress Log
-Started: Mon Feb 16 18:20:53 IST 2026
+Feature: ArcFlow v1.1 — Delight & Stickiness (Swipe, Panel Color, DnD, Rename)
+Branch: ralph/v1.1-delight-stickiness
 ---
 
-## Iteration 1 - Mon Feb 16 18:20:54 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260216-182053/iter-1.log
----
-Error: Claude Code cannot be launched inside another Claude Code session.
-Nested sessions share runtime resources and will crash all active sessions.
-To bypass this check, unset the CLAUDECODE environment variable.
-⚠️  timeout failed with ITER_TIMEOUT='1200'. Running without timeout.
-Error: Claude Code cannot be launched inside another Claude Code session.
-Nested sessions share runtime resources and will crash all active sessions.
-To bypass this check, unset the CLAUDECODE environment variable.
----
-
-## Iteration 2 - Mon Feb 16 18:20:56 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260216-182053/iter-2.log
----
-Error: Claude Code cannot be launched inside another Claude Code session.
-Nested sessions share runtime resources and will crash all active sessions.
-To bypass this check, unset the CLAUDECODE environment variable.
-⚠️  timeout failed with ITER_TIMEOUT='1200'. Running without timeout.
-Error: Claude Code cannot be launched inside another Claude Code session.
-Nested sessions share runtime resources and will crash all active sessions.
-To bypass this check, unset the CLAUDECODE environment variable.
+## Codebase Patterns
+- Accent color applied via CSS variables (--color-arc-accent) set in useTheme.ts applyAccentColor()
+- COLOR_PALETTE array (12 colors) shared between SettingsPanel.tsx and WorkspaceSwitcher.tsx
+- lightenColor() in useTheme.ts lightens a hex color by 20% for hover variants
+- Workspace data stored via chrome.storage.local with schema versioning in workspaceStorage.ts
+- Inline rename pattern: editing state + editName + inputRef + committedRef guard (see FolderHeader in FolderTree.tsx)
+- DnD uses @dnd-kit/core + @dnd-kit/sortable with custom collision detection in App.tsx
+- DnD ID prefixes: tab:, folder-item:, folder:, folder-drop: — pinned apps use raw UUIDs
+- Tab list uses react-window (FixedSizeList) for >50 tabs with TAB_ITEM_HEIGHT = 36px
+- Storage changes propagated via chrome.storage.onChanged listeners
+- All workspace data (pinnedApps, folders, notes) lives inside the Workspace object in workspaceStorage.ts
+- Inline rename inputs MUST call e.stopPropagation() in onKeyDown to prevent parent DnD/keyboard handlers from intercepting Enter/Escape
+- When adding inline edit to a clickable item, guard the onClick handler with `if (!editing)` to prevent navigation during edit
 ---
 
-## Iteration 3 - Mon Feb 16 18:20:58 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260216-182053/iter-3.log
+## 2026-02-17 - US-001
+- Fixed folder double-click rename Enter key bug
+- Added e.stopPropagation() to FolderHeader rename input's onKeyDown handler
+- Files changed: src/sidepanel/FolderTree.tsx (line 123)
+- **Learnings for future iterations:**
+  - The SortableFolder component (parent of FolderHeader) has an onKeyDown handler on its wrapper div that intercepts Enter to toggle collapse — any inline input inside it MUST stopPropagation
+  - Same pattern will apply to US-002 (folder item rename) — the DraggableFolderItem also has an onKeyDown handler that intercepts Enter
+  - The committedRef guard + editing state + inputRef + editName pattern is the standard inline rename pattern in this codebase
 ---
-Error: Claude Code cannot be launched inside another Claude Code session.
-Nested sessions share runtime resources and will crash all active sessions.
-To bypass this check, unset the CLAUDECODE environment variable.
-⚠️  timeout failed with ITER_TIMEOUT='1200'. Running without timeout.
-Error: Claude Code cannot be launched inside another Claude Code session.
-Nested sessions share runtime resources and will crash all active sessions.
-To bypass this check, unset the CLAUDECODE environment variable.
+
+## Iteration 1 - Tue Feb 17 18:07:26 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-180605/iter-1.log
+---
+US-001 is complete. There are still 14 stories with `passes: false` remaining (US-002 through US-015).
+
+**Summary of US-001 completion:**
+- **Bug**: The Enter key in the folder rename input was being intercepted by the parent `SortableFolder`'s `onKeyDown` handler (which toggles folder collapse on Enter), preventing `commitRename()` from firing.
+- **Fix**: Added `e.stopPropagation()` as the first line of the rename input's `onKeyDown` handler in `FolderHeader` (FolderTree.tsx:123).
+- **Commit**: `c3baee4` — `feat: US-001 - Fix folder double-click rename Enter key bug`
+- **Typecheck & lint**: Pass cleanly.
+---
+
+## 2026-02-17 - US-002
+- Added inline double-click rename to folder items in FolderTree.tsx
+- Added editing/editName/inputRef/committedRef state to DraggableFolderItem component
+- Double-click on item title enters edit mode; Enter/blur saves; Escape cancels
+- onKeyDown calls e.stopPropagation() to prevent parent DnD handlers from intercepting
+- e.preventDefault() + e.stopPropagation() on double-click prevents navigation
+- Empty names rejected and revert to original
+- Optimistic UI update via setFolders in App.tsx, then persists via renameItemInFolder()
+- Files changed: src/sidepanel/FolderTree.tsx, src/sidepanel/App.tsx
+- **Learnings for future iterations:**
+  - The onItemRename prop flows: App.tsx -> FolderTree -> SortableFolder -> DraggableFolderItem
+  - When adding inline edit to a clickable item, guard the onClick with `if (!editing)` to prevent clicks during edit
+  - The pre-existing eslint error in App.tsx (set-state-in-effect at line 530) is not from our changes
 ---

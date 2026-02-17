@@ -1235,6 +1235,14 @@ export default function App() {
             setFolders={setFolders}
             onItemClick={handleFolderItemClick}
             onItemContextMenu={handleFolderItemContextMenu}
+            onItemRename={(folderId, itemId, newTitle) => {
+              setFolders(prev => prev.map(f =>
+                f.id === folderId
+                  ? { ...f, items: f.items.map(i => i.id === itemId ? { ...i, title: newTitle } : i) }
+                  : f
+              ));
+              renameItemInFolder(folderId, itemId, newTitle);
+            }}
             onOpenAllTabs={handleOpenAllTabs}
             onCloseAllTabs={handleCloseAllTabs}
           />
