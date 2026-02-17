@@ -1760,3 +1760,32 @@ US-004 is complete. There are still stories with `passes: false` (US-005 through
   - Pre-existing lint warning about react-hooks/exhaustive-deps for editingApp in useEffect — not related to visual changes
   - The active indicator dot is separate from the icon container, placed below it with mt-0.5
 ---
+
+## Iteration 5 - Tue Feb 17 23:44:42 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-5.log
+---
+US-005 is complete. There are still stories with `passes: false` (US-006 through US-010), so another iteration will pick up the next story.
+
+**Summary of US-005 changes:**
+- Icon container: `w-9 h-9 rounded-full bg-arc-surface` → `w-10 h-10 rounded-xl bg-white/[0.06]`
+- Removed heavy active ring (`ring-2 ring-arc-accent/40 shadow-sm`)
+- Hover: `scale-105` → `bg-white/[0.10]` (subtle bg, no scale)
+- Active dot: `w-1 h-1` → `w-[3px] h-[3px]`
+- Favicon: removed `rounded-full` for natural shape
+- Grid gap: `gap-3` → `gap-2`
+- Typecheck passes, committed as `c2dfa94`
+---
+
+## 2026-02-17 - US-006
+- Refined search bar to borderless blended style
+- Removed border, ring, and shadow-inner classes from search input
+- Changed search input background from dark:bg-arc-surface to dark:bg-white/[0.06]
+- Added dark:focus:bg-white/[0.08] for subtle focus state background change
+- Changed placeholder color to dark:placeholder-white/20
+- Changed search icon color to dark:text-white/25
+- Files changed: src/sidepanel/SearchBar.tsx
+- **Learnings for future iterations:**
+  - SearchBar.tsx input had border, ring, shadow-inner, and placeholder classes all on one long className string — careful not to miss any when removing
+  - The search icon color class was on the SVG element above the input, not on the input itself
+---

@@ -62,7 +62,8 @@ function buildSearchItems(tabs: TabInfo[], folders: Folder[]): SearchResult[] {
           title: item.title || item.url,
           url: item.url,
           favicon: item.favicon,
-          tabId: item.type === "tab" && item.tabId != null ? item.tabId : undefined,
+          tabId:
+            item.type === "tab" && item.tabId != null ? item.tabId : undefined,
           folderId: folder.id,
           folderName: folder.name,
           score: 0,
@@ -206,7 +207,7 @@ export default function SearchBar({
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 20 20"
           fill="currentColor"
-          className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-arc-text-secondary pointer-events-none"
+          className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-white/25 pointer-events-none"
         >
           <path
             fillRule="evenodd"
@@ -227,7 +228,7 @@ export default function SearchBar({
             setTimeout(() => setIsFocused(false), 150);
           }}
           placeholder="Search tabs..."
-          className="w-full h-8 pl-8 pr-8 rounded-lg bg-gray-100 dark:bg-arc-surface text-gray-900 dark:text-arc-text-primary text-sm placeholder-gray-400 dark:placeholder-arc-text-secondary outline-none border border-transparent focus:border-arc-accent/50 focus:ring-1 focus:ring-arc-accent/30 shadow-inner dark:shadow-none transition-all duration-150"
+          className="w-full h-8 pl-8 pr-8 rounded-lg bg-gray-100 dark:bg-white/[0.06] dark:focus:bg-white/[0.08] text-gray-900 dark:text-arc-text-primary text-sm placeholder-gray-400 dark:placeholder-white/20 outline-none transition-all duration-150"
           role="combobox"
           aria-expanded={showResults || undefined}
           aria-controls="search-results"
