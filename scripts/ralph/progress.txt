@@ -1730,3 +1730,33 @@ US-003 is complete. There are still stories with `passes: false` (US-004 through
   - The tab count header in App.tsx already used lowercase text content; removing `uppercase` CSS class was sufficient
   - Pre-existing ESLint errors exist (react-hooks/set-state-in-effect in App.tsx, exhaustive-deps in PinnedAppsRow.tsx) — not introduced by this change
 ---
+
+## Iteration 4 - Tue Feb 17 23:43:09 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-4.log
+---
+US-004 is complete. There are still stories with `passes: false` (US-005 through US-010), so another iteration will pick up the next story.
+
+**Summary of US-004 implementation:**
+- **PinnedAppsRow.tsx**: Changed header text from "Pinned Apps" to "Pinned apps", removed `uppercase tracking-wider`
+- **FolderTree.tsx**: Removed `uppercase tracking-wider` from "Folders" header
+- **App.tsx**: Removed `uppercase tracking-wider` from tab count header
+- **SettingsPanel.tsx**: Changed all 4 section `<h3>` headers from `font-semibold uppercase tracking-wider` to `font-medium` (no uppercase, no tracking)
+- All headers now use `text-[11px] font-medium` with `dark:text-arc-text-secondary` color
+- Typecheck passes, no new lint issues
+---
+
+## 2026-02-17 - US-005
+- Refined pinned app icons to rounded-rect with subtle backgrounds
+- Changed icon container from w-9 h-9 rounded-full bg-arc-surface to w-10 h-10 rounded-xl bg-white/[0.06]
+- Removed heavy active ring (ring-2 ring-arc-accent/40 shadow-sm shadow-arc-accent/20)
+- Changed hover from scale-105 to bg-white/[0.10] (subtle bg change, no scale)
+- Changed active indicator dot from w-1 h-1 to w-[3px] h-[3px]
+- Removed rounded-full from favicon img so favicons display in natural shape
+- Changed grid gap from gap-3 to gap-2
+- Files changed: src/sidepanel/PinnedAppsRow.tsx
+- **Learnings for future iterations:**
+  - The SortablePinnedApp component in PinnedAppsRow.tsx contains all the icon styling logic
+  - Pre-existing lint warning about react-hooks/exhaustive-deps for editingApp in useEffect — not related to visual changes
+  - The active indicator dot is separate from the icon container, placed below it with mt-0.5
+---

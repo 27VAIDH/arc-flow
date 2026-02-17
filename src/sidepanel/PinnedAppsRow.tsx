@@ -82,14 +82,12 @@ function SortablePinnedApp({
       title={app.title}
       aria-label={`${app.title}${hasOpenTab ? " (open)" : ""}`}
     >
-      <div className={`w-9 h-9 rounded-full bg-gray-100 dark:bg-arc-surface flex items-center justify-center transition-all duration-150 group-hover:scale-105 ${
-        hasOpenTab ? "ring-2 ring-arc-accent/40 shadow-sm shadow-arc-accent/20" : ""
-      }`}>
+      <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-white/[0.06] flex items-center justify-center transition-all duration-150 group-hover:bg-gray-200 dark:group-hover:bg-white/[0.10]">
         {app.favicon ? (
           <img
             src={app.favicon}
             alt=""
-            className="w-5 h-5 rounded-full"
+            className="w-5 h-5"
             draggable={false}
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = "none";
@@ -103,7 +101,7 @@ function SortablePinnedApp({
       </div>
       {/* Active indicator */}
       <div
-        className={`w-1 h-1 rounded-full mt-0.5 transition-colors duration-150 ${
+        className={`w-[3px] h-[3px] rounded-full mt-0.5 transition-colors duration-150 ${
           hasOpenTab ? "bg-arc-accent" : "bg-transparent"
         }`}
         aria-hidden="true"
@@ -268,7 +266,7 @@ export default function PinnedAppsRow({
         >
           <div
             ref={scrollRef}
-            className="flex flex-wrap gap-3 py-0.5"
+            className="flex flex-wrap gap-2 py-0.5"
             role="toolbar"
             aria-label="Pinned applications"
           >
