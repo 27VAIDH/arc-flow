@@ -236,8 +236,8 @@ export default function PinnedAppsRow({
       aria-label="Pinned apps"
       className="px-3 py-2 pb-2"
     >
-      <span className="text-[11px] text-gray-400 dark:text-arc-text-secondary font-medium uppercase tracking-wider px-1 mb-1 block">
-        Pinned Apps
+      <span className="text-[11px] text-gray-400 dark:text-arc-text-secondary font-medium px-1 mb-1 block">
+        Pinned apps
       </span>
       {editingApp && (
         <div className="mb-1.5">

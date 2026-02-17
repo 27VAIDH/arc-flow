@@ -1701,3 +1701,32 @@ US-002 is complete. There are still stories with `passes: false` (US-003 through
   - Pre-existing lint errors (react-hooks/set-state-in-effect in App.tsx line 517, exhaustive-deps in PinnedAppsRow.tsx) exist and should not block commits
   - Border removal is straightforward — just swap border classes with padding classes (pt-3/pb-2) for spacing-based separation
 ---
+
+## Iteration 3 - Tue Feb 17 23:40:55 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-3.log
+---
+US-003 is complete. There are still stories with `passes: false` (US-004 through US-010), so another iteration will pick up the next story.
+
+**Summary of US-003:**
+- Removed `border-b border-gray-200/80 dark:border-arc-border` from header in App.tsx
+- Removed `border-b border-gray-200/80 dark:border-arc-border` from PinnedAppsRow nav container
+- Removed `border-t border-gray-200/80 dark:border-arc-border` from FolderTree container
+- Removed `border-t border-gray-200/80 dark:border-arc-border` from tab list section in App.tsx
+- Changed footer border to `border-t border-gray-200/10 dark:border-white/5` (barely visible)
+- Added `pt-3`/`pb-2` padding where borders were removed for spacing-based separation
+- Typecheck passes, no new lint issues introduced
+---
+
+## 2026-02-17 - US-004
+- What was implemented: Replaced ALL-CAPS section headers with sentence case across all components
+- Files changed:
+  - `src/sidepanel/PinnedAppsRow.tsx` — Changed "Pinned Apps" header text to "Pinned apps", removed `uppercase tracking-wider`
+  - `src/sidepanel/FolderTree.tsx` — Removed `uppercase tracking-wider` from "Folders" header
+  - `src/sidepanel/App.tsx` — Removed `uppercase tracking-wider` from tab count header (now renders "6 tabs open" not "6 TABS OPEN")
+  - `src/sidepanel/SettingsPanel.tsx` — Changed all 4 section headers (Appearance, Tab Management, Focus Mode, AI-Enhanced Grouping, Air Traffic Control) from `font-semibold uppercase tracking-wider` to `font-medium`
+- **Learnings for future iterations:**
+  - SettingsPanel has 4 section `<h3>` headers all sharing the same class pattern — used `replace_all` for efficient batch edit
+  - The tab count header in App.tsx already used lowercase text content; removing `uppercase` CSS class was sufficient
+  - Pre-existing ESLint errors exist (react-hooks/set-state-in-effect in App.tsx, exhaustive-deps in PinnedAppsRow.tsx) — not introduced by this change
+---

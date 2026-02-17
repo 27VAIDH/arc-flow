@@ -1173,7 +1173,7 @@ export default function App() {
           >
             <div className="flex items-center justify-between px-2 py-1">
               <p
-                className="text-[11px] text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider font-medium"
+                className="text-[11px] text-gray-400 dark:text-arc-text-secondary font-medium"
                 aria-live="polite"
               >
                 {filteredTabs.length} tab{filteredTabs.length !== 1 ? "s" : ""}{" "}

@@ -125,7 +125,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
         {/* Appearance */}
         <section>
-          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
+          <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
             Appearance
           </h3>
           <div className="space-y-3">
@@ -179,7 +179,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         {/* Tab Management */}
         <section>
-          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
+          <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
             Tab Management
           </h3>
           <div className="space-y-3">
@@ -204,7 +204,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         {/* Focus Mode */}
         <section>
-          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
+          <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
             Focus Mode
           </h3>
           <div className="space-y-3">
@@ -344,7 +344,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         {/* AI Grouping */}
         <section>
-          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
+          <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
             AI-Enhanced Grouping
           </h3>
           <div className="space-y-3">
@@ -430,7 +430,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         {/* Air Traffic Control */}
         <section>
-          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
+          <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
             Air Traffic Control
           </h3>
           <div className="space-y-3">
