@@ -8,11 +8,11 @@ const config: Config = {
       colors: {
         arc: {
           bg: "#0f0f17",
-          surface: "#1a1a2e",
-          "surface-hover": "#252540",
-          border: "#2a2a45",
+          surface: "rgba(255, 255, 255, 0.06)",
+          "surface-hover": "rgba(255, 255, 255, 0.10)",
+          border: "rgba(255, 255, 255, 0.06)",
           "text-primary": "#e8e8ed",
-          "text-secondary": "#8888a0",
+          "text-secondary": "rgba(255, 255, 255, 0.40)",
           accent: "#6366f1",
           "accent-hover": "#818cf8",
         },
