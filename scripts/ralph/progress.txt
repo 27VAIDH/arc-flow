@@ -27,6 +27,9 @@ Branch: ralph/v1.1-delight-stickiness
 - Tab reorder uses SortableContext + useSortable (not useDraggable) with verticalListSortingStrategy — tabOrderOverrides stored per-workspace as `tabOrderOverrides_<wsId>`
 - Virtual scrolling (react-window) must be disabled during active drag (isDraggingTabs flag) to prevent un-droppable items
 - CSS.Transform.toString() from @dnd-kit/utilities is the canonical way to apply sortable transforms
+- Unified DragOverlay in App.tsx renders styled cards for tabs, folders, and folder items — PinnedAppsRow has its own isolated DndContext/DragOverlay
+- Invalid cross-section drop feedback uses CSS data-attribute selectors: data-drag-type on container + data-drop-section on sections
+- useSwipeGesture hook in useSwipeGesture.ts handles both touch and trackpad (wheel deltaX) gestures with configurable threshold and disabled flag
 ---
 
 ## 2026-02-17 - US-001
@@ -382,4 +385,80 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - Virtual scrolling (react-window) conflicts with DnD because off-screen items are unmounted — disabling during drag via isDraggingTabs flag is the simplest solution
   - tabOrderOverrides stores tab IDs in display order — tabs not in the list are appended at the end (handles new tabs gracefully)
   - The transition from useSortable includes animation timing; fallback `transform 200ms ease` provides smooth sibling shifts
+---
+
+## Iteration 11 - Tue Feb 17 18:37:48 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-180605/iter-11.log
+---
+**US-011 is complete.** There are still 4 stories with `passes: false` remaining (US-012 through US-015).
+
+**Summary of US-011 completion:**
+- **Feature**: Added open tabs reorder via drag-and-drop with persistence
+- **Key changes**:
+  - Converted `DraggableTabItem` from `useDraggable` to `useSortable` for both drag and drop capability
+  - Wrapped tab list in `SortableContext` with `verticalListSortingStrategy`
+  - Added `tabOrderOverrides` state (number[]) stored per-workspace in `chrome.storage.local` as `tabOrderOverrides_<wsId>`
+  - Added `isDraggingTabs` flag to disable `react-window` virtualization during active drag
+  - Tab reorder handled in `handleDragEnd` (new Case 4: tab-to-tab) with optimistic UI update
+  - Custom tab order applied in `filteredTabs` memo — ordered tabs first, new/unordered tabs appended
+  - Added `onDragCancel` handler to `DndContext` to clear drag state
+  - Used `CSS.Transform.toString()` from `@dnd-kit/utilities` for canonical sortable transform handling
+- **Files changed**: `src/sidepanel/App.tsx`
+- **Commit**: `7c0713c` — `feat: US-011 - Add open tabs reorder via drag-and-drop with persistence`
+- **Typecheck**: Passes cleanly
+---
+
+## 2026-02-17 - US-012
+- Added unified DragOverlay for all dragged item types in App.tsx (tabs, folders, folder items)
+- Created shared DragOverlayCard component with favicon (16x16) + truncated title text in dark card style
+- Added FolderDragOverlay showing folder emoji + name
+- Added FolderItemDragOverlay showing item favicon + title
+- Expanded handleDragStart to track activeDragFolder and activeDragFolderItem state
+- Added not-allowed cursor styling for invalid cross-section drops via CSS data attributes
+- Added data-drag-type attribute to main container and data-drop-section="tabs" to tab list section
+- customCollisionDetection already correctly prioritizes folder-drop targets over sortable siblings
+- PinnedAppsRow already has its own DndContext with its own DragOverlay (32x32 icon), so no changes needed there
+- Files changed: src/sidepanel/App.tsx, src/sidepanel/index.css
+- **Learnings for future iterations:**
+  - PinnedAppsRow has its own isolated DndContext — pinned app DragOverlay is self-contained and doesn't need to be in the unified overlay
+  - CSS data-attribute selectors ([data-drag-type="folder"]) are a clean way to add conditional cursor styling without JS
+  - DragOverlayCard base component allows consistent styling across all drag types while varying icon content
+  - Folder emoji extraction: `folder.name.match(/^\p{Emoji}/u)?.[0]` extracts leading emoji from folder name
+---
+
+## Iteration 12 - Tue Feb 17 18:42:13 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-180605/iter-12.log
+---
+US-012 is complete. There are still 3 stories with `passes: false` remaining (US-013, US-014, US-015).
+
+**Summary of US-012 completion:**
+- **Feature**: Added consistent drag overlays and cross-section drop validation
+- **Key changes**:
+  - Created shared `DragOverlayCard` component for unified overlay styling (dark card, rounded, shadow, favicon + truncated title)
+  - Added `FolderDragOverlay` (folder emoji + name) and `FolderItemDragOverlay` (favicon + title)
+  - Expanded `handleDragStart` to track `activeDragFolder` and `activeDragFolderItem` state
+  - Updated `DragOverlay` in App.tsx to render the appropriate overlay based on drag type
+  - Added CSS-based not-allowed cursor for invalid cross-section drops via `data-drag-type` and `data-drop-section` attributes
+  - `customCollisionDetection` already correctly prioritizes `folder-drop:` targets
+  - PinnedAppsRow has its own isolated DndContext/DragOverlay (32x32 icon) — no changes needed
+- **Files changed**: `src/sidepanel/App.tsx`, `src/sidepanel/index.css`
+- **Commit**: `e49c635` — `feat: US-012 - Add consistent drag overlays and cross-section drop validation`
+- **Typecheck**: Passes cleanly
+---
+
+## 2026-02-17 - US-013
+- Created useSwipeGesture custom React hook for detecting horizontal swipe gestures
+- Handles touch events (touchstart/touchmove/touchend) for mobile swipe detection
+- Handles trackpad wheel events with deltaX accumulation and 150ms debounce timeout
+- 50px minimum threshold enforced, angle check ensures < 30° from horizontal (tan(30°) ≈ 0.577)
+- disabled flag prevents all gesture detection when true
+- Cleans up all event listeners and timeouts on unmount
+- Files changed: src/sidepanel/useSwipeGesture.ts (new file)
+- **Learnings for future iterations:**
+  - Trackpad wheel events use deltaX accumulation with a debounce — individual wheel events are too granular to detect a full swipe
+  - Touch events use start/end delta — simpler since touch gives discrete gesture boundaries
+  - Wheel deltaX positive = scroll right = swipe left (next), deltaX negative = scroll left = swipe right (prev) — direction is inverted from touch
+  - The angle check (absDy/absDx < 0.577) prevents triggering on diagonal scrolling
 ---
