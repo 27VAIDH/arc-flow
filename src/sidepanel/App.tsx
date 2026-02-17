@@ -9,7 +9,6 @@ import type {
   Session,
 } from "../shared/types";
 import { useTheme } from "./useTheme";
-import type { Settings } from "../shared/types";
 import { addPinnedApp, removePinnedApp } from "../shared/storage";
 import { getSettings, updateSettings } from "../shared/settingsStorage";
 import {
@@ -424,7 +423,6 @@ export default function App() {
     x: number;
     y: number;
   } | null>(null);
-  const [focusModeEnabled, setFocusModeEnabled] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showOrganizeTabs, setShowOrganizeTabs] = useState(false);
@@ -469,9 +467,6 @@ export default function App() {
       setActiveWorkspaceId(ws.id);
     });
     getWorkspaces().then(setWorkspaces);
-    getSettings().then((s) => {
-      setFocusModeEnabled(s.focusMode.enabled);
-    });
 
     // Request initial tab-workspace map from service worker
     chrome.runtime.sendMessage(
@@ -500,12 +495,6 @@ export default function App() {
         if (changes.workspaces) {
           const updated = (changes.workspaces.newValue as Workspace[]) ?? [];
           setWorkspaces(updated.sort((a, b) => a.sortOrder - b.sortOrder));
-        }
-        if (changes.settings) {
-          const newSettings = changes.settings.newValue as Settings | undefined;
-          if (newSettings) {
-            setFocusModeEnabled(newSettings.focusMode.enabled);
-          }
         }
       }
     };
@@ -1253,61 +1242,8 @@ export default function App() {
           onWorkspaceChange={handleWorkspaceChange}
           onContextMenu={setContextMenu}
           onSaveSession={handleSaveSession}
+          onOpenSettings={openSettings}
         />
-        {suspendedCount > 0 && (
-          <div className="px-3 py-1 text-[11px] text-gray-400 dark:text-arc-text-secondary text-center">
-            {suspendedCount} tab{suspendedCount !== 1 ? "s" : ""} suspended | ~
-            {estimatedMBSaved} MB saved
-          </div>
-        )}
-        <div className="flex items-center justify-end px-3 pb-2">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={toggleFocusMode}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-full transition-colors duration-150 hover:bg-gray-100 dark:hover:bg-arc-surface-hover ${
-                focusModeEnabled
-                  ? "text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-500/10"
-                  : "text-gray-500 dark:text-arc-text-secondary"
-              }`}
-              aria-label={`Focus mode: ${focusModeEnabled ? "On" : "Off"}`}
-              title={`Focus mode: ${focusModeEnabled ? "On" : "Off"}`}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                className="w-4 h-4"
-              >
-                <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
-                <path
-                  fillRule="evenodd"
-                  d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41ZM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              {focusModeEnabled ? "Focus" : ""}
-            </button>
-            <button
-              onClick={() => setShowSettings(true)}
-              className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-150"
-              aria-label="Open settings"
-              title="Settings"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                className="w-4 h-4"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M7.84 1.804A1 1 0 0 1 8.82 1h2.36a1 1 0 0 1 .98.804l.331 1.652a6.993 6.993 0 0 1 1.929 1.115l1.598-.54a1 1 0 0 1 1.186.447l1.18 2.044a1 1 0 0 1-.205 1.251l-1.267 1.113a7.047 7.047 0 0 1 0 2.228l1.267 1.113a1 1 0 0 1 .206 1.25l-1.18 2.045a1 1 0 0 1-1.187.447l-1.598-.54a6.993 6.993 0 0 1-1.929 1.115l-.33 1.652a1 1 0 0 1-.98.804H8.82a1 1 0 0 1-.98-.804l-.331-1.652a6.993 6.993 0 0 1-1.929-1.115l-1.598.54a1 1 0 0 1-1.186-.447l-1.18-2.044a1 1 0 0 1 .205-1.251l1.267-1.114a7.05 7.05 0 0 1 0-2.227L1.821 7.773a1 1 0 0 1-.206-1.25l1.18-2.045a1 1 0 0 1 1.187-.447l1.598.54A6.992 6.992 0 0 1 7.51 3.456l.33-1.652ZM10 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
-          </div>
-        </div>
       </footer>
 
       {/* Folder Picker Dropdown */}
