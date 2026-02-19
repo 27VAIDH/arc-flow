@@ -8,7 +8,6 @@ Started: Sun Feb 15 15:44:51 IST 2026
 - manifest.json lives in `public/` and is copied to `dist/` by a custom Vite plugin
 - Side panel HTML path in manifest must match Vite's output: `src/sidepanel/index.html`
 - ESLint 9 flat config in `eslint.config.js` (not .eslintrc)
-- CSS theme variables defined in both `src/sidepanel/index.css` (@theme block) AND `tailwind.config.ts` — keep both in sync
 - All data model types in `src/shared/types.ts`
 - Chrome types via `@types/chrome` devDependency
 - Prettier checks only `src/**/*.{ts,tsx,css,html}` to avoid .gitkeep issues
@@ -1636,310 +1635,68 @@ All stories have `passes: true`. All 41 user stories are complete.
 <promise>COMPLETE</promise>
 ---
 
-## 2026-02-17 - US-001 (UI Visual Overhaul)
-- What was implemented: Updated CSS theme variables to semi-transparent rgba values for frosted glass aesthetic
-- Files changed:
-  - `src/sidepanel/index.css` — Updated @theme block (arc-surface, arc-surface-hover, arc-border, arc-text-secondary to rgba), scrollbar thumb colors to rgba(255,255,255,0.10/0.15), backdrop-frosted blur from 12px to 16px, added `:root` and `body` background: transparent
-  - `tailwind.config.ts` — Updated arc color values to match new rgba values
+## 2026-02-17 - US-001 (Smart Switch-to-Tab feature branch)
+- Added `allTabs: TabInfo[]` and `tabWorkspaceMap: Record<string, string>` props to SearchBar interface
+- App.tsx passes `tabs` (all tabs before workspace filtering) as `allTabs` and `tabWorkspaceMap` state to SearchBar
+- Used underscore prefix (`_allTabs`, `_tabWorkspaceMap`) with eslint-disable comments for unused props (scaffolding for US-002)
+- Files changed: `src/sidepanel/SearchBar.tsx`, `src/sidepanel/App.tsx`
 - **Learnings for future iterations:**
-  - The @theme block in index.css and the colors in tailwind.config.ts must stay in sync
-  - Scrollbar styles are in index.css under `.dark ::-webkit-scrollbar-thumb`
-  - The `.backdrop-frosted` class is the reusable frosted glass utility
+  - `tabWorkspaceMap` uses string keys (`Record<string, string>`) in the codebase, not number keys as PRD states
+  - `tabs` state in App.tsx is already ALL tabs (not workspace-filtered); `filteredTabs` is the workspace-filtered version
+  - TypeScript `noUnusedParameters: true` in tsconfig requires underscore prefix for intentionally unused params
+  - ESLint `@typescript-eslint/no-unused-vars` does NOT respect underscore prefix by default — need `eslint-disable-next-line` comments
+  - Pre-existing lint error in App.tsx line 515 (`react-hooks/set-state-in-effect`) — not introduced by this PR
 ---
 
-## Iteration 1 - Tue Feb 17 23:35:42 IST 2026
+## Iteration 1 - Tue Feb 17 19:27:20 IST 2026
 Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-1.log
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-192153/iter-1.log
 ---
-**US-001 is complete.** Here's what was done:
+US-001 is complete. There are still 8 stories with `passes: false` (US-002 through US-009), so the work continues.
 
-**US-001: Update CSS theme variables to semi-transparent values and add frosted glass class**
-
-Files changed:
-- `src/sidepanel/index.css` — Updated @theme block variables (arc-surface, arc-surface-hover, arc-border, arc-text-secondary) to semi-transparent rgba values; updated scrollbar thumb colors; increased backdrop-frosted blur from 12px to 16px; added `:root` and `body` background: transparent
-- `tailwind.config.ts` — Updated arc color values to match new rgba values
-
-Typecheck passes. There are still 9 stories with `passes: false` (US-002 through US-010), so the next iteration will pick up US-002.
+**US-001 Summary:**
+- Added `allTabs: TabInfo[]` and `tabWorkspaceMap: Record<string, string>` to SearchBar's props interface
+- App.tsx now passes both props to SearchBar
+- Typecheck and lint pass
+- Committed as `feat: US-001 - Pass allTabs and tabWorkspaceMap props to SearchBar`
 ---
 
 ## 2026-02-17 - US-002
-- Implemented frosted glass background for main sidebar container
-- Added `backdrop-frosted` class and changed bg from `dark:bg-arc-bg` to `dark:bg-[rgba(15,15,23,0.78)]` in App.tsx
-- Created `applyPanelColor()` function in useTheme.ts that appends `C7` hex alpha to custom panel colors
-- Added `panelColor` field to Settings interface and DEFAULT_SETTINGS
-- Wired up panelColor in useTheme initial load and storage change listener
-- Files changed: `src/sidepanel/App.tsx`, `src/sidepanel/useTheme.ts`, `src/shared/types.ts`, `src/shared/constants.ts`
+- Implemented domain-match search pass for Switch-to-Tab results
+- Files changed:
+  - src/sidepanel/SearchBar.tsx (added matchType to SearchResult, domain-match pass before Fuse.js, workspace-aware ordering, deduplication)
+  - src/sidepanel/App.tsx (pass activeWorkspaceId prop to SearchBar)
+  - scripts/ralph/prd.json (marked US-002 as passes: true)
 - **Learnings for future iterations:**
-  - No panelColor concept existed before; had to add it to Settings type, constants, and useTheme.ts
-  - `applyPanelColor` sets two CSS custom properties: `--color-arc-panel-bg` and `--color-arc-panel-bg-secondary`
-  - Pre-existing lint error in App.tsx (setPinnedApps in useEffect) — not introduced by this change
-  - When adding new Settings fields, update both `types.ts` (interface) and `constants.ts` (DEFAULT_SETTINGS)
+  - Domain matching uses `new URL(tab.url).hostname` wrapped in try-catch for malformed URLs
+  - Tab workspace lookup: `tabWorkspaceMap[String(tab.id)]` — keys are string-typed tabIds
+  - Deduplication needs both id-based and tabId-based checks since the same tab can appear in both domain-match and Fuse.js with different ids (e.g., `tab-123` from allTabs vs `tab-123` from searchItems)
+  - Pre-existing lint errors in App.tsx (set-state-in-effect) and PinnedAppsRow.tsx (exhaustive-deps) — not introduced by this change
 ---
 
-## Iteration 2 - Tue Feb 17 23:38:41 IST 2026
+## Iteration 2 - Tue Feb 17 19:30:17 IST 2026
 Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-2.log
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-192153/iter-2.log
 ---
-US-002 is complete. There are still stories with `passes: false` (US-003 through US-010), so the next iteration will pick up US-003.
+US-002 is complete. There are still stories with `passes: false` (US-003 through US-009), so the next iteration will pick up US-003.
 
-**Summary of US-002 implementation:**
-- Added `backdrop-frosted` class to the main sidebar container in `App.tsx`
-- Changed background from `dark:bg-arc-bg` to `dark:bg-[rgba(15,15,23,0.78)]` (semi-transparent)
-- Created `applyPanelColor()` in `useTheme.ts` that appends `C7` hex alpha (78% opacity) to custom panel colors
-- Added `panelColor` field to `Settings` interface and `DEFAULT_SETTINGS`
-- Wired up panel color application on initial load and storage changes
-- Typecheck passes, no new lint issues introduced
+**US-002 Summary:**
+- Extended `SearchResult` type with optional `matchType?: "switch-to-tab"` field
+- Added `activeWorkspaceId` prop to `SearchBarProps` and passed it from `App.tsx`
+- Implemented domain-match search pass before Fuse.js: iterates `allTabs`, matches hostname against lowercased query via `new URL(tab.url).hostname`, wrapped in try-catch
+- Current-workspace domain matches appear first, then other-workspace matches, then Fuse.js results
+- Deduplication ensures domain-match wins over Fuse.js for the same tab
+- Typecheck passes; pre-existing lint errors unchanged
+- Committed as `ba3ccbf`
 ---
 
 ## 2026-02-17 - US-003
-- What was implemented: Removed all visible section divider borders (border-b, border-t) from header, PinnedAppsRow, FolderTree, and tab list sections. Replaced with spacing-based separation (pt-3/pb-2). Footer retains a barely-visible `border-white/5` separator.
-- Files changed:
-  - `src/sidepanel/App.tsx` — removed header border-b, tab list section border-t, changed footer border to border-white/5
-  - `src/sidepanel/PinnedAppsRow.tsx` — removed border-b from nav container
-  - `src/sidepanel/FolderTree.tsx` — removed border-t, added pt-3 pb-2
-- **Learnings for future iterations:**
-  - Pre-existing lint errors (react-hooks/set-state-in-effect in App.tsx line 517, exhaustive-deps in PinnedAppsRow.tsx) exist and should not block commits
-  - Border removal is straightforward — just swap border classes with padding classes (pt-3/pb-2) for spacing-based separation
----
-
-## Iteration 3 - Tue Feb 17 23:40:55 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-3.log
----
-US-003 is complete. There are still stories with `passes: false` (US-004 through US-010), so another iteration will pick up the next story.
-
-**Summary of US-003:**
-- Removed `border-b border-gray-200/80 dark:border-arc-border` from header in App.tsx
-- Removed `border-b border-gray-200/80 dark:border-arc-border` from PinnedAppsRow nav container
-- Removed `border-t border-gray-200/80 dark:border-arc-border` from FolderTree container
-- Removed `border-t border-gray-200/80 dark:border-arc-border` from tab list section in App.tsx
-- Changed footer border to `border-t border-gray-200/10 dark:border-white/5` (barely visible)
-- Added `pt-3`/`pb-2` padding where borders were removed for spacing-based separation
-- Typecheck passes, no new lint issues introduced
----
-
-## 2026-02-17 - US-004
-- What was implemented: Replaced ALL-CAPS section headers with sentence case across all components
-- Files changed:
-  - `src/sidepanel/PinnedAppsRow.tsx` — Changed "Pinned Apps" header text to "Pinned apps", removed `uppercase tracking-wider`
-  - `src/sidepanel/FolderTree.tsx` — Removed `uppercase tracking-wider` from "Folders" header
-  - `src/sidepanel/App.tsx` — Removed `uppercase tracking-wider` from tab count header (now renders "6 tabs open" not "6 TABS OPEN")
-  - `src/sidepanel/SettingsPanel.tsx` — Changed all 4 section headers (Appearance, Tab Management, Focus Mode, AI-Enhanced Grouping, Air Traffic Control) from `font-semibold uppercase tracking-wider` to `font-medium`
-- **Learnings for future iterations:**
-  - SettingsPanel has 4 section `<h3>` headers all sharing the same class pattern — used `replace_all` for efficient batch edit
-  - The tab count header in App.tsx already used lowercase text content; removing `uppercase` CSS class was sufficient
-  - Pre-existing ESLint errors exist (react-hooks/set-state-in-effect in App.tsx, exhaustive-deps in PinnedAppsRow.tsx) — not introduced by this change
----
-
-## Iteration 4 - Tue Feb 17 23:43:09 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-4.log
----
-US-004 is complete. There are still stories with `passes: false` (US-005 through US-010), so another iteration will pick up the next story.
-
-**Summary of US-004 implementation:**
-- **PinnedAppsRow.tsx**: Changed header text from "Pinned Apps" to "Pinned apps", removed `uppercase tracking-wider`
-- **FolderTree.tsx**: Removed `uppercase tracking-wider` from "Folders" header
-- **App.tsx**: Removed `uppercase tracking-wider` from tab count header
-- **SettingsPanel.tsx**: Changed all 4 section `<h3>` headers from `font-semibold uppercase tracking-wider` to `font-medium` (no uppercase, no tracking)
-- All headers now use `text-[11px] font-medium` with `dark:text-arc-text-secondary` color
-- Typecheck passes, no new lint issues
----
-
-## 2026-02-17 - US-005
-- Refined pinned app icons to rounded-rect with subtle backgrounds
-- Changed icon container from w-9 h-9 rounded-full bg-arc-surface to w-10 h-10 rounded-xl bg-white/[0.06]
-- Removed heavy active ring (ring-2 ring-arc-accent/40 shadow-sm shadow-arc-accent/20)
-- Changed hover from scale-105 to bg-white/[0.10] (subtle bg change, no scale)
-- Changed active indicator dot from w-1 h-1 to w-[3px] h-[3px]
-- Removed rounded-full from favicon img so favicons display in natural shape
-- Changed grid gap from gap-3 to gap-2
-- Files changed: src/sidepanel/PinnedAppsRow.tsx
-- **Learnings for future iterations:**
-  - The SortablePinnedApp component in PinnedAppsRow.tsx contains all the icon styling logic
-  - Pre-existing lint warning about react-hooks/exhaustive-deps for editingApp in useEffect — not related to visual changes
-  - The active indicator dot is separate from the icon container, placed below it with mt-0.5
----
-
-## Iteration 5 - Tue Feb 17 23:44:42 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-5.log
----
-US-005 is complete. There are still stories with `passes: false` (US-006 through US-010), so another iteration will pick up the next story.
-
-**Summary of US-005 changes:**
-- Icon container: `w-9 h-9 rounded-full bg-arc-surface` → `w-10 h-10 rounded-xl bg-white/[0.06]`
-- Removed heavy active ring (`ring-2 ring-arc-accent/40 shadow-sm`)
-- Hover: `scale-105` → `bg-white/[0.10]` (subtle bg, no scale)
-- Active dot: `w-1 h-1` → `w-[3px] h-[3px]`
-- Favicon: removed `rounded-full` for natural shape
-- Grid gap: `gap-3` → `gap-2`
-- Typecheck passes, committed as `c2dfa94`
----
-
-## 2026-02-17 - US-006
-- Refined search bar to borderless blended style
-- Removed border, ring, and shadow-inner classes from search input
-- Changed search input background from dark:bg-arc-surface to dark:bg-white/[0.06]
-- Added dark:focus:bg-white/[0.08] for subtle focus state background change
-- Changed placeholder color to dark:placeholder-white/20
-- Changed search icon color to dark:text-white/25
+- What was implemented: Rendered visually distinct "Switch to Tab →" badge on search results with matchType === 'switch-to-tab'
 - Files changed: src/sidepanel/SearchBar.tsx
+- Badge uses `bg-arc-accent text-white rounded-full px-2 py-0.5 text-[10px] font-medium` styling
+- Non-switch-to-tab results continue to show existing muted "Tab"/"Link"/"Folder" badges
+- Clicking a Switch-to-Tab result still uses existing onSwitchTab(tabId) flow (no change needed)
 - **Learnings for future iterations:**
-  - SearchBar.tsx input had border, ring, shadow-inner, and placeholder classes all on one long className string — careful not to miss any when removing
-  - The search icon color class was on the SVG element above the input, not on the input itself
----
-
-## Iteration 6 - Tue Feb 17 23:46:21 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-6.log
----
-US-006 is complete. There are still stories with `passes: false` (US-007, US-008, US-009, US-010), so the next iteration will pick up US-007.
-
-**Summary of US-006 changes:**
-- Removed `border border-transparent focus:border-arc-accent/50 focus:ring-1 focus:ring-arc-accent/30` from search input
-- Removed `shadow-inner dark:shadow-none` from search input
-- Changed background from `dark:bg-arc-surface` to `dark:bg-white/[0.06]`
-- Added `dark:focus:bg-white/[0.08]` for subtle focus background change
-- Changed placeholder to `dark:placeholder-white/20`
-- Changed search icon to `dark:text-white/25`
-- All checks pass, committed as `5cc49e2`
----
-
-## 2026-02-17 - US-007
-- Implemented typographic hierarchy for tab list items in DraggableTabItem (App.tsx)
-- Removed heavy border-l-[3px] border-l-arc-accent active indicator and border-l-transparent for inactive tabs
-- Added small dot indicator (w-1 h-1 rounded-full bg-arc-accent) for active tabs, invisible placeholder for inactive
-- Active tab: font-medium dark:text-arc-text-primary dark:bg-white/[0.08]
-- Inactive tabs: no special styling (clean default)
-- Discarded/suspended opacity changed from opacity-50 to opacity-40
-- Close button (X): added duration-150 to transition-opacity for smooth reveal
-- Tab hover background: dark:hover:bg-white/[0.05] (was dark:hover:bg-arc-surface-hover)
-- Tab row padding: px-2 → px-3
-- Files changed: src/sidepanel/App.tsx
-- **Learnings for future iterations:**
-  - DraggableTabItem is a memo'd component at the top of App.tsx (line ~151)
-  - Pre-existing lint errors exist in App.tsx (line 523 setPinnedApps in effect) — not related to UI changes
-  - The close button already had opacity-0 group-hover:opacity-100, just needed duration-150 added
----
-
-## Iteration 7 - Tue Feb 17 23:48:13 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-7.log
----
-US-007 is complete. There are still stories with `passes: false` (US-008, US-009, US-010), so another iteration will pick up the next story.
-
-**Summary of US-007 changes:**
-- Removed heavy left-border active indicator (`border-l-[3px]`) from tab items
-- Added small dot indicator for active tabs, invisible placeholder for inactive (maintains alignment)
-- Active tab gets `font-medium` + `dark:bg-white/[0.08]` for visual prominence
-- Inactive tabs are clean with no special styling
-- Discarded tabs: opacity reduced from 50% to 40%
-- Tab hover: `dark:hover:bg-white/[0.05]` (softer)
-- Tab padding: `px-2` → `px-3`
-- Close button: added `duration-150` for smooth opacity transition
----
-
-## 2026-02-17 - US-008
-- Softened folder rows with muted icons and metadata in FolderTree.tsx
-- Changed folder icon color from `dark:text-arc-accent-hover` to `dark:text-white/40`
-- Changed metadata count from `text-[11px] dark:text-arc-text-secondary` to `text-[10px] dark:text-white/25`
-- Changed chevron toggle from `dark:text-arc-text-secondary` to `dark:text-white/25`
-- Changed FolderHeader hover from `dark:hover:bg-arc-surface-hover` to `dark:hover:bg-white/[0.05]`
-- Changed DraggableFolderItem hover from `dark:hover:bg-arc-surface-hover` to `dark:hover:bg-white/[0.05]`
-- Added `font-normal` to folder name text span
-- Files changed: `src/sidepanel/FolderTree.tsx`
-- **Learnings for future iterations:**
-  - FolderTree.tsx has three main sub-components: FolderHeader, DraggableFolderItem, SortableFolder — changes to row styling need to cover all three
-  - The count badge (metadata) is in FolderHeader, not in the main FolderTree return
-  - Chevron and folder icon are both in FolderHeader component
----
-
-## Iteration 8 - Tue Feb 17 23:50:08 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-8.log
----
-**US-008 complete.** Changes made to `src/sidepanel/FolderTree.tsx`:
-
-- Folder icon: `dark:text-arc-accent-hover` → `dark:text-white/40` (muted)
-- Metadata count: `text-[11px] dark:text-arc-text-secondary` → `text-[10px] dark:text-white/25` (smaller/more muted)
-- Chevron: `dark:text-arc-text-secondary` → `dark:text-white/25` (muted)
-- FolderHeader hover: `dark:hover:bg-arc-surface-hover` → `dark:hover:bg-white/[0.05]`
-- DraggableFolderItem hover: `dark:hover:bg-arc-surface-hover` → `dark:hover:bg-white/[0.05]`
-- Folder name: added `font-normal`
-
-Remaining stories with `passes: false`: **US-009** (footer simplification), **US-010** (micro-animations).
----
-
-## 2026-02-17 - US-009
-- Simplified footer to single-row workspace switcher with inline settings gear
-- Removed Focus button and Settings gear row from App.tsx footer
-- Removed "X tabs suspended" text line from footer
-- Added `onOpenSettings` prop to WorkspaceSwitcher component
-- Added settings gear icon (w-4 h-4) after the + button in workspace icon strip
-- Cleaned up unused `focusModeEnabled` state and `Settings` type import from App.tsx
-- Focus mode still accessible from SettingsPanel and command palette
-- Files changed: src/sidepanel/App.tsx, src/sidepanel/WorkspaceSwitcher.tsx
-- **Learnings for future iterations:**
-  - When removing UI elements that use state, check if the state variable becomes unused and clean it up to avoid TS6133 errors
-  - Focus mode toggle was in both the footer and command palette; removing from footer still leaves it accessible via command palette and settings panel
-  - Pre-existing lint error (react-hooks/set-state-in-effect at line ~512 in App.tsx) exists for the workspace/pinned-apps effect — not introduced by this change
----
-
-## Iteration 9 - Tue Feb 17 23:53:36 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-9.log
----
-US-009 is complete. There is still US-010 with `passes: false`, so another iteration will pick it up.
-
-**Summary of US-009 changes:**
-- Removed the Focus button + Settings gear row from the App.tsx footer
-- Removed the "X tabs suspended" text line from the footer
-- Added a settings gear icon (w-4 h-4) to WorkspaceSwitcher, placed after the + button in the workspace icon strip
-- Clicking the gear calls the same `onOpenSettings` callback
-- Cleaned up unused `focusModeEnabled` state and `Settings` import
-- Footer is now a single clean row: `[workspace emojis] [+] [gear]`
-- Focus mode remains accessible via SettingsPanel and command palette
-- Typecheck passes, no new lint errors introduced
----
-
-## 2026-02-17 - US-010
-- What was implemented: Added subtle micro-animations for hover states and popover entries
-  - Changed all `transition-colors duration-150` and `transition-all duration-150` classes to `duration-200` across all components (App.tsx, SearchBar.tsx, ContextMenu.tsx, WorkspaceSwitcher.tsx, PinnedAppsRow.tsx, FolderTree.tsx, SettingsPanel.tsx)
-  - Updated `.transition-arc` CSS class from 0.15s to 0.2s in index.css
-  - Added `@keyframes slideUp` and `.animate-slide-up` CSS class to index.css (opacity 0→1, translateY(4px)→0 over 150ms ease-out)
-  - Applied `animate-slide-up` to SearchBar results dropdown
-  - Applied `animate-slide-up` to ContextMenu container
-  - Applied `animate-slide-up` to WorkspaceSwitcher emoji picker and color picker popovers
-- Files changed:
-  - src/sidepanel/index.css (added animation keyframes + class, updated transition-arc)
-  - src/sidepanel/App.tsx (duration-150 → duration-200)
-  - src/sidepanel/SearchBar.tsx (duration-150 → duration-200, added animate-slide-up)
-  - src/sidepanel/ContextMenu.tsx (duration-100 → duration-200, added animate-slide-up)
-  - src/sidepanel/WorkspaceSwitcher.tsx (duration-150 → duration-200, added animate-slide-up to popovers)
-  - src/sidepanel/PinnedAppsRow.tsx (duration-150 → duration-200)
-  - src/sidepanel/FolderTree.tsx (duration-150 → duration-200)
-  - src/sidepanel/SettingsPanel.tsx (duration-150 → duration-200)
-  - scripts/ralph/prd.json (US-010 passes: true)
-- **Learnings for future iterations:**
-  - ContextMenu.tsx used duration-100 (not duration-150) — AC specifically says duration-150 but updating ContextMenu's duration-100 to duration-200 was necessary for global consistency
-  - Some components (WorkspaceSwitcher emoji/color pickers, SettingsPanel accent color buttons) also use duration-100 for transform animations — these were left as-is since the AC only specifies changing duration-150
-  - Pre-existing ESLint errors exist (react-hooks/set-state-in-effect in App.tsx, missing dep warning in PinnedAppsRow.tsx) — not introduced by this story
----
-
-## Iteration 10 - Tue Feb 17 23:57:22 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260217-233147/iter-10.log
----
-<promise>COMPLETE</promise>
-
-All 10 user stories (US-001 through US-010) are now complete and passing. Here's a summary of what was done for US-010:
-
-**US-010: Add subtle micro-animations for hover states and popover entries**
-
-- Changed all `duration-150` transition classes to `duration-200` across 8 components (App.tsx, SearchBar.tsx, ContextMenu.tsx, WorkspaceSwitcher.tsx, PinnedAppsRow.tsx, FolderTree.tsx, SettingsPanel.tsx)
-- Updated `.transition-arc` CSS class from `0.15s` to `0.2s`
-- Added `@keyframes slideUp` animation and `.animate-slide-up` CSS class to index.css
-- Applied `animate-slide-up` to SearchBar results dropdown, ContextMenu container, and WorkspaceSwitcher emoji/color picker popovers
-- Typecheck passes, no new lint issues introduced
+  - The badge rendering is in the result map at the bottom of the SearchBar component; conditional rendering based on matchType is clean
+  - `rounded-full` gives pill shape vs `rounded-md` for regular badges
 ---

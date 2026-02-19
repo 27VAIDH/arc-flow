@@ -1,0 +1,16 @@
+# Ralph Progress Log
+Feature: Smart Switch-to-Tab
+Branch: ralph/smart-switch-to-tab
+---
+
+## Codebase Patterns
+- SearchBar.tsx uses Fuse.js for fuzzy search with weighted keys (title: 0.6, url: 0.3, folderName: 0.1) and threshold 0.4
+- SearchBar.buildSearchItems() creates searchable items from tabs, folders, and folder items
+- SearchBar.activateResult() handles selection: tabs call onSwitchTab(tabId), links call onOpenUrl(url)
+- Tab switching via chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId }) handled in service-worker.ts
+- Pinned apps already do origin-matching in service worker (OPEN_PINNED_APP) — find existing tab by origin before creating new
+- Settings defaults are in constants.ts (DEFAULT_SETTINGS), getSettings() spreads defaults over stored values
+- Workspace switching: setActiveWorkspace() persists to chrome.storage.local, React state updates via chrome.storage.onChanged listener
+- tabWorkspaceMap: Record<tabId, workspaceId> stored in chrome.storage.local, used for workspace isolation
+- Inline rename inputs MUST call e.stopPropagation() in onKeyDown to prevent parent DnD/keyboard handlers from intercepting Enter/Escape
+---

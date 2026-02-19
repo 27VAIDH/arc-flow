@@ -107,7 +107,8 @@ async function reconcileTabWorkspaceMap(): Promise<Record<string, string>> {
   const tabs = await queryCurrentWindowTabs();
   const tabMap = await getTabWorkspaceMap();
   const result = await chrome.storage.local.get("activeWorkspaceId");
-  const activeWsId = (result.activeWorkspaceId as string | undefined) ?? "default";
+  const activeWsId =
+    (result.activeWorkspaceId as string | undefined) ?? "default";
   const currentTabIds = new Set(tabs.map((t) => String(t.id)));
   let changed = false;
 

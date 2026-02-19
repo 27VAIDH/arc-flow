@@ -122,7 +122,7 @@ export async function createWorkspace(
         ...folder,
         id: folderIdMap.get(folder.id)!,
         parentId: folder.parentId
-          ? folderIdMap.get(folder.parentId) ?? null
+          ? (folderIdMap.get(folder.parentId) ?? null)
           : null,
         items: folder.items.map((item) => ({
           ...item,
