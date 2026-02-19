@@ -12,6 +12,13 @@ import {
   THEME_OPTIONS,
   AI_PROVIDER_OPTIONS,
 } from "../shared/constants";
+import { applyPanelColor } from "./useTheme";
+
+const COLOR_PALETTE = [
+  "#2E75B6", "#EF4444", "#F97316", "#EAB308",
+  "#22C55E", "#14B8A6", "#06B6D4", "#6366f1",
+  "#A855F7", "#EC4899", "#78716C", "#64748B",
+];
 
 function SelectField({
   label,
@@ -32,7 +39,7 @@ function SelectField({
       <select
         value={String(value)}
         onChange={(e) => onChange(e.target.value)}
-        className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary min-w-[120px] transition-colors duration-150"
+        className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary min-w-[120px] transition-colors duration-200"
       >
         {options.map((opt) => (
           <option key={String(opt.value)} value={String(opt.value)}>
@@ -95,7 +102,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="absolute inset-0 z-50 flex flex-col bg-gray-50 dark:bg-arc-bg"
+      className="absolute inset-0 z-50 flex flex-col bg-gray-50 dark:bg-[var(--color-arc-panel-bg)]"
       role="dialog"
       aria-modal="true"
       aria-label="Settings"
@@ -107,7 +114,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
         </h2>
         <button
           onClick={onClose}
-          className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-arc-text-secondary dark:hover:text-gray-200 rounded-lg transition-colors duration-150"
+          className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-arc-text-secondary dark:hover:text-gray-200 rounded-lg transition-colors duration-200"
           aria-label="Close settings"
         >
           <svg
@@ -125,7 +132,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
         {/* Appearance */}
         <section>
-          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
+          <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
             Appearance
           </h3>
           <div className="space-y-3">
@@ -144,26 +151,30 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                 Accent Color
               </label>
               <div className="flex flex-wrap gap-2">
-                {[
-                  "#2E75B6", "#EF4444", "#F97316", "#EAB308",
-                  "#22C55E", "#14B8A6", "#06B6D4", "#6366f1",
-                  "#A855F7", "#EC4899", "#78716C", "#64748B",
-                ].map((color) => (
+                {COLOR_PALETTE.map((color) => (
                   <button
                     key={color}
                     onClick={() => {
                       handleUpdate({ accentColor: color });
                       // Apply immediately without waiting for storage roundtrip
-                      document.documentElement.style.setProperty("--color-arc-accent", color);
+                      document.documentElement.style.setProperty(
+                        "--color-arc-accent",
+                        color
+                      );
                       const r = parseInt(color.slice(1, 3), 16);
                       const g = parseInt(color.slice(3, 5), 16);
                       const b = parseInt(color.slice(5, 7), 16);
-                      const lighten = (c: number) => Math.min(255, Math.round(c + (255 - c) * 0.2));
+                      const lighten = (c: number) =>
+                        Math.min(255, Math.round(c + (255 - c) * 0.2));
                       const hover = `#${lighten(r).toString(16).padStart(2, "0")}${lighten(g).toString(16).padStart(2, "0")}${lighten(b).toString(16).padStart(2, "0")}`;
-                      document.documentElement.style.setProperty("--color-arc-accent-hover", hover);
+                      document.documentElement.style.setProperty(
+                        "--color-arc-accent-hover",
+                        hover
+                      );
                     }}
                     className={`w-6 h-6 rounded-full focus:outline-none focus:ring-2 focus:ring-arc-accent/50 transition-transform duration-100 hover:scale-110 ${
-                      settings.accentColor?.toLowerCase() === color.toLowerCase()
+                      settings.accentColor?.toLowerCase() ===
+                      color.toLowerCase()
                         ? "ring-2 ring-offset-1 ring-gray-400 dark:ring-offset-arc-surface"
                         : ""
                     }`}
@@ -174,12 +185,76 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
             </div>
+            <div>
+              <label className="text-sm text-gray-700 dark:text-arc-text-primary block mb-2">
+                Panel Color
+              </label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                <button
+                  onClick={() => {
+                    handleUpdate({ panelColor: "" });
+                    applyPanelColor("");
+                  }}
+                  className={`w-6 h-6 rounded-full border border-gray-300 dark:border-arc-border focus:outline-none focus:ring-2 focus:ring-arc-accent/50 transition-transform duration-100 hover:scale-110 flex items-center justify-center ${
+                    !settings.panelColor
+                      ? "ring-2 ring-offset-1 ring-gray-400 dark:ring-offset-arc-surface"
+                      : ""
+                  }`}
+                  style={{ background: "linear-gradient(135deg, #1a1a2e 50%, #3a3a5e 50%)" }}
+                  title="Default"
+                  aria-label={`Reset to default panel color${!settings.panelColor ? " (selected)" : ""}`}
+                />
+                {COLOR_PALETTE.map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => {
+                      handleUpdate({ panelColor: color });
+                      applyPanelColor(color);
+                    }}
+                    className={`w-6 h-6 rounded-full focus:outline-none focus:ring-2 focus:ring-arc-accent/50 transition-transform duration-100 hover:scale-110 ${
+                      settings.panelColor?.toLowerCase() === color.toLowerCase()
+                        ? "ring-2 ring-offset-1 ring-gray-400 dark:ring-offset-arc-surface"
+                        : ""
+                    }`}
+                    style={{ backgroundColor: color }}
+                    title={color}
+                    aria-label={`Select panel color ${color}${settings.panelColor === color ? " (selected)" : ""}`}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={settings.panelColor || ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    handleUpdate({ panelColor: v });
+                    if (/^#[0-9A-Fa-f]{6}$/.test(v)) {
+                      applyPanelColor(v);
+                    }
+                  }}
+                  placeholder="#000000"
+                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-150 w-24"
+                />
+                {settings.panelColor && (
+                  <button
+                    onClick={() => {
+                      handleUpdate({ panelColor: "" });
+                      applyPanelColor("");
+                    }}
+                    className="text-xs text-gray-500 dark:text-arc-text-secondary hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </section>
 
         {/* Tab Management */}
         <section>
-          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
+          <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
             Tab Management
           </h3>
           <div className="space-y-3">
@@ -204,7 +279,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         {/* Focus Mode */}
         <section>
-          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
+          <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
             Focus Mode
           </h3>
           <div className="space-y-3">
@@ -273,7 +348,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                     handleUpdate({ focusMode: updated });
                   }}
                   placeholder="*twitter.com*"
-                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-150 flex-1 min-w-0"
+                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 flex-1 min-w-0"
                 />
                 <input
                   type="text"
@@ -291,7 +366,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                     handleUpdate({ focusMode: updated });
                   }}
                   placeholder="https://notion.so"
-                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-150 flex-1 min-w-0"
+                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 flex-1 min-w-0"
                 />
                 <button
                   onClick={() => {
@@ -344,7 +419,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         {/* AI Grouping */}
         <section>
-          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
+          <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
             AI-Enhanced Grouping
           </h3>
           <div className="space-y-3">
@@ -399,29 +474,34 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                   }
                 />
                 {settings.aiGrouping.provider && (
-                  <div className="flex items-center justify-between gap-4">
-                    <label className="text-sm text-gray-700 dark:text-arc-text-primary shrink-0">
-                      API Key
-                    </label>
-                    <input
-                      type="password"
-                      value={settings.aiGrouping.apiKey}
-                      onChange={(e) =>
-                        handleUpdate({
-                          aiGrouping: {
-                            ...settings.aiGrouping,
-                            apiKey: e.target.value,
-                          },
-                        })
-                      }
-                      placeholder={
-                        settings.aiGrouping.provider === "anthropic"
-                          ? "sk-ant-..."
-                          : "sk-..."
-                      }
-                      className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-150 min-w-[120px] w-full max-w-[180px]"
-                    />
-                  </div>
+                  <>
+                    <div className="flex items-center justify-between gap-4">
+                      <label className="text-sm text-gray-700 dark:text-arc-text-primary shrink-0">
+                        API Key
+                      </label>
+                      <input
+                        type="password"
+                        value={settings.aiGrouping.apiKey}
+                        onChange={(e) =>
+                          handleUpdate({
+                            aiGrouping: {
+                              ...settings.aiGrouping,
+                              apiKey: e.target.value,
+                            },
+                          })
+                        }
+                        placeholder={
+                          settings.aiGrouping.provider === "anthropic"
+                            ? "sk-ant-..."
+                            : "sk-..."
+                        }
+                        className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 min-w-[120px] w-full max-w-[180px]"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-400 dark:text-arc-text-secondary">
+                      Your API key is stored locally on your device without encryption. It is never sent anywhere except the selected AI provider.
+                    </p>
+                  </>
                 )}
               </>
             )}
@@ -430,7 +510,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         {/* Air Traffic Control */}
         <section>
-          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
+          <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
             Air Traffic Control
           </h3>
           <div className="space-y-3">
@@ -449,7 +529,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                     handleUpdate({ routingRules: rules });
                   }}
                   placeholder="*example.com*"
-                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-150 flex-1 min-w-0"
+                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 flex-1 min-w-0"
                 />
                 <select
                   value={rule.workspaceId}
@@ -461,7 +541,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                     };
                     handleUpdate({ routingRules: rules });
                   }}
-                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-150 min-w-[100px]"
+                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 min-w-[100px]"
                 >
                   {workspaces.map((ws) => (
                     <option key={ws.id} value={ws.id}>
@@ -508,11 +588,46 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
           </div>
         </section>
 
+        {/* Omnibox */}
+        <section>
+          <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
+            Omnibox
+          </h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-4">
+              <label className="text-sm text-gray-700 dark:text-arc-text-primary shrink-0">
+                Enable Omnibox
+              </label>
+              <button
+                onClick={() =>
+                  handleUpdate({ omniboxEnabled: !settings.omniboxEnabled })
+                }
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                  settings.omniboxEnabled
+                    ? "bg-arc-accent"
+                    : "bg-gray-300 dark:bg-arc-surface-hover"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                    settings.omniboxEnabled
+                      ? "translate-x-4"
+                      : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-arc-text-secondary">
+              Type <span className="font-medium">af</span> in address bar to search tabs
+            </p>
+          </div>
+        </section>
+
         {/* Reset */}
         <section className="pt-2">
           <button
             onClick={handleReset}
-            className="w-full text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg px-3 py-2 text-center transition-colors duration-150"
+            className="w-full text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg px-3 py-2 text-center transition-colors duration-200"
           >
             Reset to Defaults
           </button>

@@ -401,12 +401,15 @@ export default function OrganizeTabsModal({
             No grouping suggestions available.
           </p>
           <div className="text-xs text-gray-400 dark:text-gray-500 space-y-1 mb-4">
-            <p>{tabs.length} total tab{tabs.length !== 1 ? "s" : ""}</p>
-            {inFolderCount > 0 && (
-              <p>{inFolderCount} already in folders</p>
-            )}
+            <p>
+              {tabs.length} total tab{tabs.length !== 1 ? "s" : ""}
+            </p>
+            {inFolderCount > 0 && <p>{inFolderCount} already in folders</p>}
             {internalCount > 0 && (
-              <p>{internalCount} internal (chrome://) tab{internalCount !== 1 ? "s" : ""}</p>
+              <p>
+                {internalCount} internal (chrome://) tab
+                {internalCount !== 1 ? "s" : ""}
+              </p>
             )}
             <p>{ungroupedCount} ungrouped — each from a different domain</p>
           </div>

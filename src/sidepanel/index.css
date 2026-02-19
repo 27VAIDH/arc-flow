@@ -4,21 +4,36 @@
 
 @theme {
   --color-arc-bg: #0f0f17;
-  --color-arc-surface: #1a1a2e;
-  --color-arc-surface-hover: #252540;
-  --color-arc-border: #2a2a45;
+  --color-arc-surface: rgba(255, 255, 255, 0.06);
+  --color-arc-surface-hover: rgba(255, 255, 255, 0.1);
+  --color-arc-border: rgba(255, 255, 255, 0.06);
   --color-arc-text-primary: #e8e8ed;
-  --color-arc-text-secondary: #8888a0;
+  --color-arc-text-secondary: rgba(255, 255, 255, 0.4);
   --color-arc-accent: #6366f1;
   --color-arc-accent-hover: #818cf8;
+  --color-arc-panel-bg: #0f0f17;
+  --color-arc-panel-bg-secondary: #1e1e2a;
 }
 
 /* System font stack with Inter preference */
 :root {
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: transparent;
+}
+
+body {
+  background: transparent;
 }
 
 /* Hide scrollbar for horizontal scroll areas */
@@ -38,20 +53,79 @@
   background: transparent;
 }
 .dark ::-webkit-scrollbar-thumb {
-  background: #2a2a45;
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 3px;
 }
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: #3a3a55;
+  background: rgba(255, 255, 255, 0.15);
 }
 
 /* Smooth transitions for interactive elements */
 .transition-arc {
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
+}
+
+/* Smooth panel color transition for workspace switches */
+.dark {
+  transition: background-color 200ms ease;
 }
 
 /* Frosted glass backdrop */
 .backdrop-frosted {
-  backdrop-filter: blur(12px) saturate(180%);
-  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+}
+
+/* Slide-up fade-in animation for popovers/dropdowns */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-slide-up {
+  animation: slideUp 150ms ease-out;
+}
+
+/* Not-allowed cursor for invalid cross-section drops */
+/* Folders dragged over the tab list section */
+[data-drag-type="folder"] [data-drop-section="tabs"] {
+  cursor: not-allowed;
+}
+/* Tabs dragged over folder items (but not folder-drop zones which are valid) */
+[data-drag-type="tab"] [data-drop-section="tabs"] [data-sortable-folder-item] {
+  cursor: not-allowed;
+}
+
+/* Swipe boundary rubber-band bounce animations */
+.swipe-bounce-left {
+  animation: bounceLeft 300ms ease-out;
+}
+.swipe-bounce-right {
+  animation: bounceRight 300ms ease-out;
+}
+@keyframes bounceLeft {
+  0% { transform: translateX(0); }
+  30% { transform: translateX(-12px); }
+  60% { transform: translateX(4px); }
+  100% { transform: translateX(0); }
+}
+@keyframes bounceRight {
+  0% { transform: translateX(0); }
+  30% { transform: translateX(12px); }
+  60% { transform: translateX(-4px); }
+  100% { transform: translateX(0); }
+}
+
+/* Tab preview card fade-in */
+.animate-fade-in {
+  animation: fadeIn 100ms ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }

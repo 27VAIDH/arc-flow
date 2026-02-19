@@ -20,7 +20,7 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
@@ -37,7 +37,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
@@ -56,7 +56,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
@@ -74,7 +74,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
@@ -92,7 +92,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
@@ -111,7 +111,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 6,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
@@ -124,6 +124,7 @@
         "Active tab: classes include 'font-medium dark:text-arc-text-primary dark:bg-white/[0.08]'",
         "Inactive tabs: 'border-l-[3px] border-l-transparent' removed entirely",
         "Inactive tab: add invisible placeholder dot 'w-1 h-1 shrink-0' (same space, no color) to maintain alignment",
+        "Inactive tabs: classes include 'font-normal dark:text-white/50'",
         "Discarded/suspended tabs: opacity changed from 'opacity-50' to 'opacity-40'",
         "Close button (X): changed to 'opacity-0 group-hover:opacity-100 transition-opacity duration-150'",
         "Tab hover background: changed from 'dark:hover:bg-arc-surface-hover' to 'dark:hover:bg-white/[0.05]'",
@@ -132,7 +133,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 7,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
@@ -150,7 +151,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 8,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
@@ -170,7 +171,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 9,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
@@ -189,7 +190,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 10,
-      "passes": true,
+      "passes": false,
       "notes": ""
     }
   ]

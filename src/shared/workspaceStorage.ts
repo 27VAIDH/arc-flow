@@ -1,11 +1,12 @@
 import { Workspace, PinnedApp, Folder, FolderItem } from "./types";
+import { WORKSPACE_TEMPLATES } from "./templates";
 
 const WORKSPACES_KEY = "workspaces";
 const ACTIVE_WORKSPACE_KEY = "activeWorkspaceId";
 const SCHEMA_VERSION_KEY = "schemaVersion";
 const TAB_WORKSPACE_MAP_KEY = "tabWorkspaceMap";
 
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 
 const DEFAULT_WORKSPACE_ID = "default";
 const MAX_PINNED_APPS = 12;
@@ -19,6 +20,9 @@ function createDefaultWorkspace(): Workspace {
     pinnedApps: [],
     folders: [],
     sortOrder: 0,
+    notes: "",
+    notesCollapsed: true,
+    notesLastEditedAt: 0,
   };
 }
 
@@ -57,6 +61,25 @@ async function migrateToV2(): Promise<void> {
   await chrome.storage.local.remove(["pinnedApps", "folders"]);
 }
 
+/**
+ * Migrate from V2 to V3: add notes fields to each workspace.
+ */
+async function migrateToV3(): Promise<void> {
+  const result = await chrome.storage.local.get(WORKSPACES_KEY);
+  const workspaces = (result[WORKSPACES_KEY] as Workspace[]) ?? [];
+
+  for (const ws of workspaces) {
+    if (ws.notes === undefined) ws.notes = "";
+    if (ws.notesCollapsed === undefined) ws.notesCollapsed = true;
+    if (ws.notesLastEditedAt === undefined) ws.notesLastEditedAt = 0;
+  }
+
+  await chrome.storage.local.set({
+    [WORKSPACES_KEY]: workspaces,
+    [SCHEMA_VERSION_KEY]: CURRENT_SCHEMA_VERSION,
+  });
+}
+
 async function ensureInitialized(): Promise<void> {
   const result = await chrome.storage.local.get([
     WORKSPACES_KEY,
@@ -76,6 +99,9 @@ async function ensureInitialized(): Promise<void> {
   const version = (result[SCHEMA_VERSION_KEY] as number) ?? 1;
   if (version < 2) {
     await migrateToV2();
+  }
+  if (version < 3) {
+    await migrateToV3();
   }
 }
 
@@ -122,7 +148,7 @@ export async function createWorkspace(
         ...folder,
         id: folderIdMap.get(folder.id)!,
         parentId: folder.parentId
-          ? folderIdMap.get(folder.parentId) ?? null
+          ? (folderIdMap.get(folder.parentId) ?? null)
           : null,
         items: folder.items.map((item) => ({
           ...item,
@@ -140,10 +166,73 @@ export async function createWorkspace(
     pinnedApps,
     folders,
     sortOrder: maxOrder + 1,
+    notes: "",
+    notesCollapsed: true,
+    notesLastEditedAt: 0,
   };
 
   workspaces.push(newWorkspace);
   await saveWorkspaces(workspaces);
+  return newWorkspace;
+}
+
+export async function createWorkspaceFromTemplate(
+  templateId: string
+): Promise<Workspace> {
+  const template = WORKSPACE_TEMPLATES.find((t) => t.id === templateId);
+  if (!template) {
+    throw new Error(`Template "${templateId}" not found.`);
+  }
+
+  const workspaces = await getWorkspaces();
+
+  // Deduplicate name
+  let name = template.name;
+  const existingNames = new Set(workspaces.map((w) => w.name));
+  if (existingNames.has(name)) {
+    let suffix = 2;
+    while (existingNames.has(`${template.name} (${suffix})`)) suffix++;
+    name = `${template.name} (${suffix})`;
+  }
+
+  const maxOrder = workspaces.reduce(
+    (max, w) => Math.max(max, w.sortOrder),
+    -1
+  );
+
+  const pinnedApps: PinnedApp[] = template.pinnedApps.map((app, i) => ({
+    id: crypto.randomUUID(),
+    url: app.url,
+    title: app.title,
+    favicon: "",
+    sortOrder: i,
+  }));
+
+  const folders: Folder[] = template.folders.map((name, i) => ({
+    id: crypto.randomUUID(),
+    name,
+    parentId: null,
+    items: [],
+    isCollapsed: false,
+    sortOrder: i,
+  }));
+
+  const newWorkspace: Workspace = {
+    id: crypto.randomUUID(),
+    name,
+    emoji: template.emoji,
+    accentColor: template.accentColor,
+    pinnedApps,
+    folders,
+    sortOrder: maxOrder + 1,
+    notes: "",
+    notesCollapsed: true,
+    notesLastEditedAt: 0,
+  };
+
+  workspaces.push(newWorkspace);
+  await saveWorkspaces(workspaces);
+  await setActiveWorkspace(newWorkspace.id);
   return newWorkspace;
 }
 

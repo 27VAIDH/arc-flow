@@ -1,0 +1,162 @@
+{
+  "project": "ArcFlow",
+  "branchName": "ralph/smart-switch-to-tab",
+  "description": "Smart Switch-to-Tab — Surface already-open tabs as 'Switch to Tab' results in the search bar with workspace-aware ranking, cross-workspace matching, and optional Chrome Omnibox integration",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Pass allTabs and tabWorkspaceMap props to SearchBar",
+      "description": "As a developer, I need SearchBar to have access to all open tabs across all workspaces (not just the current workspace's filtered tabs) plus the tabWorkspaceMap so it can perform domain matching for Switch-to-Tab. In App.tsx, pass two new props to SearchBar: allTabs (the raw tabs array before workspace filtering) and tabWorkspaceMap (Record<number, string> mapping tabId to workspaceId). Update SearchBar's props interface to accept these.",
+      "acceptanceCriteria": [
+        "SearchBar component props interface in SearchBar.tsx includes allTabs: chrome.tabs.Tab[] and tabWorkspaceMap: Record<number, string>",
+        "App.tsx passes the tabs state (all tabs) as allTabs prop and tabWorkspaceMap state as tabWorkspaceMap prop to SearchBar",
+        "Existing SearchBar functionality (Fuse.js search, result rendering, keyboard nav) is unchanged",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Add domain-match search pass for Switch-to-Tab results",
+      "description": "As a user, I want search results to show 'Switch to Tab' matches when I type a domain that's already open. Add a pre-Fuse domain matching step in SearchBar.tsx: before running Fuse.js, iterate over allTabs and match tabs whose hostname includes the lowercased query. Wrap matches as SearchItem objects with a new matchType: 'switch-to-tab' field. Domain extraction via new URL(tab.url).hostname, wrapped in try-catch. These results should appear above the existing Fuse.js results.",
+      "acceptanceCriteria": [
+        "SearchItem type extended with optional matchType?: 'switch-to-tab' field",
+        "When user types a query, a domain-match pass runs against allTabs before Fuse.js",
+        "Domain matching uses new URL(tab.url).hostname.includes(query.toLowerCase()), wrapped in try-catch for malformed URLs",
+        "Typing 'mail' matches tabs on mail.google.com; typing 'google' matches mail.google.com, docs.google.com, etc.",
+        "Domain-match results are case-insensitive",
+        "Domain-matched tabs from the current workspace (checked via tabWorkspaceMap) are placed first in results",
+        "Domain-matched tabs from other workspaces are placed after current-workspace matches but before Fuse.js results",
+        "Duplicate tabs that appear in both domain-match and Fuse.js results are deduplicated (domain-match wins)",
+        "Existing Fuse.js fuzzy search continues to work for non-domain results (folder items, links)",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Render Switch-to-Tab badge on matching results",
+      "description": "As a user, I want a visually distinct 'Switch to Tab' badge on search results that match open tabs so I can identify them at a glance. In SearchBar.tsx result rendering, when a result has matchType === 'switch-to-tab', render an accent-colored pill badge with an arrow icon (→) on the right side instead of the existing muted 'Tab' badge. Use bg-arc-accent text-white rounded-full px-2 py-0.5 text-xs styling.",
+      "acceptanceCriteria": [
+        "Results with matchType === 'switch-to-tab' show a 'Switch to Tab →' badge on the right side",
+        "Badge uses bg-arc-accent text-white styling to stand out from existing muted 'Tab'/'Link'/'Folder' badges",
+        "Badge includes an arrow icon (→) to suggest navigation action",
+        "Non-switch-to-tab results continue to show existing badge types unchanged",
+        "Clicking a Switch-to-Tab result calls the existing onSwitchTab(tabId) flow",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Add cross-workspace badge and divider for other-workspace matches",
+      "description": "As a user, I want to see which workspace a cross-workspace tab match belongs to, with a visual separator between current and other workspace results. In SearchBar.tsx, for Switch-to-Tab results from other workspaces: render a workspace badge (emoji + name) below the URL subtitle, and insert a thin divider with 'In other workspaces' muted text header before the first other-workspace result. Pass workspaces array as a prop to SearchBar so it can look up workspace name/emoji by ID from tabWorkspaceMap.",
+      "acceptanceCriteria": [
+        "SearchBar props extended with workspaces array (or a workspaceMap for id → {name, emoji} lookup)",
+        "App.tsx passes workspaces data to SearchBar",
+        "Cross-workspace Switch-to-Tab results show a small workspace badge (emoji + name) below the URL line in muted text",
+        "A thin divider with 'In other workspaces' muted header text appears before the first cross-workspace result",
+        "No divider shown if there are no cross-workspace results",
+        "No divider shown if there are only cross-workspace results (no current-workspace matches)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Handle cross-workspace tab switching on result click",
+      "description": "As a user, I want clicking a cross-workspace Switch-to-Tab result to switch me to that workspace and then activate the tab. In SearchBar.tsx activateResult(), when a Switch-to-Tab result belongs to a different workspace: call a new onSwitchWorkspaceAndTab(workspaceId, tabId) callback prop. In App.tsx, implement this callback to call setActiveWorkspace(workspaceId) followed by a 100ms delayed chrome.runtime.sendMessage({ type: 'SWITCH_TAB', tabId }) to allow the workspace switch to complete.",
+      "acceptanceCriteria": [
+        "SearchBar props include onSwitchWorkspaceAndTab: (workspaceId: string, tabId: number) => void callback",
+        "activateResult() checks if a Switch-to-Tab result's workspace differs from activeWorkspaceId and calls onSwitchWorkspaceAndTab instead of onSwitchTab",
+        "App.tsx implements onSwitchWorkspaceAndTab: calls setActiveWorkspace() then setTimeout(100ms) before sending SWITCH_TAB message",
+        "After cross-workspace switch, the sidebar shows the new workspace's content and the target tab is active",
+        "Current-workspace Switch-to-Tab results still use the existing onSwitchTab flow (no workspace switch needed)",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Add 'Open in New Tab' action below Switch-to-Tab results",
+      "description": "As a user, I want an 'Open in New Tab' option when Switch-to-Tab results are shown, so I can still open a new tab if I want. When the search query contains '.' or starts with 'http' and Switch-to-Tab results exist, add an 'Open [query] in New Tab' action at the end of the Switch-to-Tab group. Style it differently: muted background, plus icon on the left. Clicking it opens the URL via OPEN_URL message. Normalize the query to a URL (prepend https:// if no protocol).",
+      "acceptanceCriteria": [
+        "When Switch-to-Tab results are shown AND the query looks like a URL (contains '.' or starts with 'http'), an 'Open in New Tab' action appears after the Switch-to-Tab results",
+        "The action shows a plus icon (+) on the left and text 'Open [query] in new tab'",
+        "The action has a distinct style: muted/lighter background to differentiate from regular results",
+        "Clicking it opens the URL via chrome.runtime.sendMessage({ type: 'OPEN_URL', url }) with https:// prepended if no protocol",
+        "The action is hidden when query is not URL-like (e.g., just typing 'gmail' without a dot)",
+        "Keyboard navigation: user can arrow-down to select the 'Open in New Tab' action",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Add omniboxEnabled setting to settings storage",
+      "description": "As a developer, I need a setting to control whether the Chrome Omnibox integration is active. Add omniboxEnabled: boolean field to the Settings interface in types.ts and DEFAULT_SETTINGS in constants.ts (default: true). Add omnibox keyword registration to manifest.json.",
+      "acceptanceCriteria": [
+        "Settings interface in types.ts has omniboxEnabled: boolean field",
+        "DEFAULT_SETTINGS in constants.ts has omniboxEnabled: true",
+        "manifest.json includes '\"omnibox\": { \"keyword\": \"af\" }'",
+        "getSettings() returns omniboxEnabled with stored value or default true",
+        "Existing settings without omniboxEnabled load correctly (backward compatible via default spread)",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Add Chrome Omnibox tab search listeners in service worker",
+      "description": "As a user, I want to type 'af' in Chrome's address bar followed by a search term to see matching open tabs. In service-worker.ts, register chrome.omnibox.onInputChanged listener that queries all open tabs, filters by hostname match, and returns up to 5 suggestions. Register chrome.omnibox.onInputEntered to activate the matched tab. Set default suggestion to 'Search ArcFlow tabs for: %s'. Check omniboxEnabled setting — if false, return empty suggestions. Current-workspace matches should appear before other-workspace matches.",
+      "acceptanceCriteria": [
+        "chrome.omnibox.setDefaultSuggestion sets description to 'Search ArcFlow tabs for: %s'",
+        "chrome.omnibox.onInputChanged queries all tabs via chrome.tabs.query({}), filters by hostname.includes(text.toLowerCase())",
+        "Suggestions limited to top 5 matches, formatted with tab title + domain + '(Switch to Tab)' using Chrome omnibox XML format",
+        "Current-workspace tabs (from tabWorkspaceMap + activeWorkspaceId) appear before other-workspace tabs in suggestions",
+        "chrome.omnibox.onInputEntered activates the matched tab via chrome.tabs.update(tabId, { active: true })",
+        "If the entered text matches a cross-workspace tab, the handler switches workspace via setActiveWorkspace() before activating the tab",
+        "If no matching tab found, entered text is opened as URL (if contains '.') or as Google search",
+        "If omniboxEnabled setting is false, onInputChanged returns empty suggestions array",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Add Omnibox toggle to SettingsPanel UI",
+      "description": "As a user, I want a toggle in settings to enable/disable the Omnibox integration. Add a toggle in SettingsPanel.tsx under a new 'Omnibox' section: 'Enable Omnibox — type af in address bar to search tabs'. Toggle updates omniboxEnabled via updateSettings(). Note: the omnibox keyword prompt still appears in Chrome when disabled, but no suggestions will be returned.",
+      "acceptanceCriteria": [
+        "New 'Omnibox' section in SettingsPanel with a toggle switch",
+        "Toggle label: 'Enable Omnibox' with description 'Type af in address bar to search tabs'",
+        "Toggle reflects current omniboxEnabled setting value on load",
+        "Toggling calls updateSettings({ omniboxEnabled: value }) to persist",
+        "Setting change takes effect immediately (service worker reads setting on each onInputChanged call)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

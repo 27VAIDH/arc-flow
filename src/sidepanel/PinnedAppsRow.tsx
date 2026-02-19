@@ -9,10 +9,12 @@ import type { ContextMenuItem } from "./ContextMenu";
 import {
   DndContext,
   closestCenter,
+  DragOverlay,
   PointerSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -46,6 +48,7 @@ interface SortablePinnedAppProps {
   app: PinnedApp;
   hasOpenTab: boolean;
   onClick: () => void;
+  onDoubleClick: (e: React.MouseEvent) => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }
 
@@ -53,6 +56,7 @@ function SortablePinnedApp({
   app,
   hasOpenTab,
   onClick,
+  onDoubleClick,
   onContextMenu,
 }: SortablePinnedAppProps) {
   const {
@@ -66,8 +70,8 @@ function SortablePinnedApp({
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
+    transition: transition || "transform 200ms ease",
+    opacity: isDragging ? 0.3 : 1,
   };
 
   return (
@@ -77,19 +81,18 @@ function SortablePinnedApp({
       {...attributes}
       {...listeners}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       className="flex flex-col items-center shrink-0 group touch-none"
       title={app.title}
       aria-label={`${app.title}${hasOpenTab ? " (open)" : ""}`}
     >
-      <div className={`w-9 h-9 rounded-full bg-gray-100 dark:bg-arc-surface flex items-center justify-center transition-all duration-150 group-hover:scale-105 ${
-        hasOpenTab ? "ring-2 ring-arc-accent/40 shadow-sm shadow-arc-accent/20" : ""
-      }`}>
+      <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-white/[0.06] flex items-center justify-center transition-all duration-200 group-hover:bg-gray-200 dark:group-hover:bg-white/[0.10]">
         {app.favicon ? (
           <img
             src={app.favicon}
             alt=""
-            className="w-5 h-5 rounded-full"
+            className="w-5 h-5"
             draggable={false}
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = "none";
@@ -103,7 +106,7 @@ function SortablePinnedApp({
       </div>
       {/* Active indicator */}
       <div
-        className={`w-1 h-1 rounded-full mt-0.5 transition-colors duration-150 ${
+        className={`w-[3px] h-[3px] rounded-full mt-0.5 transition-colors duration-200 ${
           hasOpenTab ? "bg-arc-accent" : "bg-transparent"
         }`}
         aria-hidden="true"
@@ -117,7 +120,9 @@ export default function PinnedAppsRow({
   pinnedApps,
   onContextMenu,
 }: PinnedAppsRowProps) {
-  const [localPinnedApps, setLocalPinnedApps] = useState<PinnedApp[]>(pinnedApps);
+  const [localPinnedApps, setLocalPinnedApps] =
+    useState<PinnedApp[]>(pinnedApps);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [editingApp, setEditingApp] = useState<{
     id: string;
     field: "title" | "url";
@@ -144,7 +149,7 @@ export default function PinnedAppsRow({
       editInputRef.current.focus();
       editInputRef.current.select();
     }
-  }, [editingApp?.id, editingApp?.field]);
+  }, [editingApp]);
 
   if (localPinnedApps.length === 0 && !editingApp) return null;
 
@@ -160,6 +165,12 @@ export default function PinnedAppsRow({
       url: app.url,
       origin,
     });
+  };
+
+  const handleDoubleClick = (e: React.MouseEvent, app: PinnedApp) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setEditingApp({ id: app.id, field: "title", value: app.title });
   };
 
   const handlePinnedAppContextMenu = (e: React.MouseEvent, app: PinnedApp) => {
@@ -211,6 +222,7 @@ export default function PinnedAppsRow({
   };
 
   const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
     if (e.key === "Enter") {
       handleEditSubmit();
     } else if (e.key === "Escape") {
@@ -218,7 +230,12 @@ export default function PinnedAppsRow({
     }
   };
 
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragId(event.active.id as string);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDragId(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -231,13 +248,14 @@ export default function PinnedAppsRow({
     reorderPinnedApps(reordered.map((a) => a.id));
   };
 
+  const activeDragApp = activeDragId
+    ? localPinnedApps.find((a) => a.id === activeDragId)
+    : null;
+
   return (
-    <nav
-      aria-label="Pinned apps"
-      className="px-3 py-2 border-b border-gray-200/80 dark:border-arc-border"
-    >
-      <span className="text-[11px] text-gray-400 dark:text-arc-text-secondary font-medium uppercase tracking-wider px-1 mb-1 block">
-        Pinned Apps
+    <nav aria-label="Pinned apps" className="px-3 py-2 pb-2">
+      <span className="text-[11px] text-gray-400 dark:text-arc-text-secondary font-medium px-1 mb-1 block">
+        Pinned apps
       </span>
       {editingApp && (
         <div className="mb-1.5">
@@ -250,7 +268,7 @@ export default function PinnedAppsRow({
             }
             onBlur={handleEditSubmit}
             onKeyDown={handleEditKeyDown}
-            className="w-full px-2 py-1 text-xs rounded-lg border border-gray-300 dark:border-arc-border bg-white dark:bg-arc-surface text-gray-900 dark:text-arc-text-primary outline-none focus:ring-1 focus:ring-arc-accent/50 transition-colors duration-150"
+            className="w-full px-2 py-1 text-xs rounded-lg border border-gray-300 dark:border-arc-border bg-white dark:bg-arc-surface text-gray-900 dark:text-arc-text-primary outline-none focus:ring-1 focus:ring-arc-accent/50 transition-colors duration-200"
             placeholder={
               editingApp.field === "title" ? "App name" : "https://..."
             }
@@ -260,7 +278,9 @@ export default function PinnedAppsRow({
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
+        onDragCancel={() => setActiveDragId(null)}
       >
         <SortableContext
           items={localPinnedApps.map((a) => a.id)}
@@ -268,7 +288,7 @@ export default function PinnedAppsRow({
         >
           <div
             ref={scrollRef}
-            className="flex flex-wrap gap-3 py-0.5"
+            className="flex flex-wrap gap-2 py-0.5"
             role="toolbar"
             aria-label="Pinned applications"
           >
@@ -282,12 +302,33 @@ export default function PinnedAppsRow({
                   app={app}
                   hasOpenTab={hasOpenTab}
                   onClick={() => handleClick(app)}
+                  onDoubleClick={(e) => handleDoubleClick(e, app)}
                   onContextMenu={(e) => handlePinnedAppContextMenu(e, app)}
                 />
               );
             })}
           </div>
         </SortableContext>
+        <DragOverlay>
+          {activeDragApp ? (
+            <div className="flex flex-col items-center">
+              <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-arc-surface flex items-center justify-center shadow-lg border border-gray-200 dark:border-arc-border">
+                {activeDragApp.favicon ? (
+                  <img
+                    src={activeDragApp.favicon}
+                    alt=""
+                    className="w-5 h-5 rounded-full"
+                    draggable={false}
+                  />
+                ) : (
+                  <span className="text-xs font-bold text-gray-500 dark:text-arc-text-secondary">
+                    {activeDragApp.title.charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
     </nav>
   );

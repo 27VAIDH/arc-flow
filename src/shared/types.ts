@@ -6,6 +6,19 @@ export interface Workspace {
   pinnedApps: PinnedApp[];
   folders: Folder[];
   sortOrder: number;
+  notes: string;
+  notesCollapsed: boolean;
+  notesLastEditedAt: number;
+  panelColor?: string;
+}
+
+export interface WorkspaceTemplate {
+  id: string;
+  name: string;
+  emoji: string;
+  accentColor: string;
+  pinnedApps: { url: string; title: string }[];
+  folders: string[];
 }
 
 export interface PinnedApp {
@@ -78,13 +91,14 @@ export type SidePanelMessage =
   | { type: "OPEN_URL"; url: string }
   | { type: "GET_TAB_WORKSPACE_MAP" }
   | { type: "MOVE_TAB_TO_WORKSPACE"; tabId: number; workspaceId: string }
-  |{ type: "SUSPEND_TAB"; tabId: number }
+  | { type: "SUSPEND_TAB"; tabId: number }
   | { type: "SPLIT_VIEW"; tabId: number }
   | {
       type: "UPDATE_FOCUS_MODE";
       enabled: boolean;
       redirectRules: { blockedPattern: string; redirectUrl: string }[];
-    };
+    }
+  | { type: "GET_TAB_INFO"; tabId: number };
 
 export interface Session {
   id: string;
@@ -112,4 +126,6 @@ export interface Settings {
   };
   routingRules: { pattern: string; workspaceId: string }[];
   accentColor: string;
+  panelColor: string;
+  omniboxEnabled: boolean;
 }

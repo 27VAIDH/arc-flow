@@ -107,7 +107,8 @@ async function reconcileTabWorkspaceMap(): Promise<Record<string, string>> {
   const tabs = await queryCurrentWindowTabs();
   const tabMap = await getTabWorkspaceMap();
   const result = await chrome.storage.local.get("activeWorkspaceId");
-  const activeWsId = (result.activeWorkspaceId as string | undefined) ?? "default";
+  const activeWsId =
+    (result.activeWorkspaceId as string | undefined) ?? "default";
   const currentTabIds = new Set(tabs.map((t) => String(t.id)));
   let changed = false;
 
@@ -582,6 +583,111 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
+// --- Chrome Omnibox integration ---
+
+chrome.omnibox.setDefaultSuggestion({
+  description: "Search ArcFlow tabs for: %s",
+});
+
+chrome.omnibox.onInputChanged.addListener(
+  (text: string, suggest: (suggestions: chrome.omnibox.SuggestResult[]) => void) => {
+    (async () => {
+      const settings = await getSettings();
+      if (!settings.omniboxEnabled) {
+        suggest([]);
+        return;
+      }
+
+      const query = text.toLowerCase().trim();
+      if (!query) {
+        suggest([]);
+        return;
+      }
+
+      const allTabs = await chrome.tabs.query({});
+      const tabMap = await getTabWorkspaceMap();
+      const result = await chrome.storage.local.get("activeWorkspaceId");
+      const activeWsId = (result.activeWorkspaceId as string | undefined) ?? "default";
+
+      const currentWsMatches: { tab: chrome.tabs.Tab; hostname: string }[] = [];
+      const otherWsMatches: { tab: chrome.tabs.Tab; hostname: string }[] = [];
+
+      for (const tab of allTabs) {
+        if (!tab.url || tab.id == null) continue;
+        try {
+          const hostname = new URL(tab.url).hostname;
+          if (hostname.includes(query)) {
+            const wsId = tabMap[String(tab.id)] ?? "default";
+            if (wsId === activeWsId) {
+              currentWsMatches.push({ tab, hostname });
+            } else {
+              otherWsMatches.push({ tab, hostname });
+            }
+          }
+        } catch {
+          // Malformed URL, skip
+        }
+      }
+
+      const ordered = [...currentWsMatches, ...otherWsMatches];
+      const suggestions: chrome.omnibox.SuggestResult[] = ordered
+        .slice(0, 5)
+        .map(({ tab, hostname }) => {
+          // Escape XML special characters for omnibox description
+          const title = (tab.title ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          const domain = hostname.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          return {
+            content: String(tab.id),
+            description: `${title} &ndash; <url>${domain}</url> (Switch to Tab)`,
+          };
+        });
+
+      suggest(suggestions);
+    })().catch(() => {
+      suggest([]);
+    });
+  }
+);
+
+chrome.omnibox.onInputEntered.addListener(
+  (text: string) => {
+    (async () => {
+      const tabId = parseInt(text, 10);
+      if (!isNaN(tabId)) {
+        // User selected a tab suggestion — activate it
+        const tabMap = await getTabWorkspaceMap();
+        const result = await chrome.storage.local.get("activeWorkspaceId");
+        const activeWsId = (result.activeWorkspaceId as string | undefined) ?? "default";
+        const tabWsId = tabMap[String(tabId)] ?? "default";
+
+        if (tabWsId !== activeWsId) {
+          // Cross-workspace: switch workspace first
+          await setActiveWorkspace(tabWsId);
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+
+        await chrome.tabs.update(tabId, { active: true });
+        // Focus the tab's window
+        const tab = await chrome.tabs.get(tabId);
+        if (tab.windowId) {
+          await chrome.windows.update(tab.windowId, { focused: true });
+        }
+      } else {
+        // No matching tab — open as URL or Google search
+        let url: string;
+        if (text.includes(".")) {
+          url = text.startsWith("http://") || text.startsWith("https://")
+            ? text
+            : `https://${text}`;
+        } else {
+          url = `https://www.google.com/search?q=${encodeURIComponent(text)}`;
+        }
+        await chrome.tabs.create({ url });
+      }
+    })().catch(() => {});
+  }
+);
+
 // Handle messages from side panel
 chrome.runtime.onMessage.addListener(
   (message: SidePanelMessage, _sender, sendResponse) => {
@@ -636,6 +742,46 @@ chrome.runtime.onMessage.addListener(
     }
     if (message.type === "UPDATE_FOCUS_MODE") {
       applyFocusModeRules().catch(() => {});
+    }
+    if (message.type === "GET_TAB_INFO") {
+      (async () => {
+        try {
+          const tab = await chrome.tabs.get(message.tabId);
+          const tabMap = await getTabWorkspaceMap();
+          const wsId = tabMap[String(message.tabId)] ?? "default";
+          const workspaces = await getWorkspaces();
+          const ws = workspaces.find((w) => w.id === wsId);
+
+          // Look up lastActiveAt from folder items across all workspaces
+          let lastActiveAt = 0;
+          if (tab.active) {
+            lastActiveAt = Date.now();
+          } else {
+            for (const w of workspaces) {
+              for (const folder of w.folders) {
+                for (const item of folder.items) {
+                  if (item.type === "tab" && item.tabId === message.tabId && item.lastActiveAt) {
+                    lastActiveAt = item.lastActiveAt;
+                  }
+                }
+              }
+            }
+          }
+
+          sendResponse({
+            lastActiveAt,
+            workspaceName: ws?.name ?? "Default",
+            workspaceEmoji: ws?.emoji ?? "\u{1F4C1}",
+          });
+        } catch {
+          sendResponse({
+            lastActiveAt: 0,
+            workspaceName: "Default",
+            workspaceEmoji: "\u{1F4C1}",
+          });
+        }
+      })();
+      return true; // async response
     }
     if (message.type === "OPEN_PINNED_APP") {
       // Find existing tab with matching origin, or open a new one

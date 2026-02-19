@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, memo, type RefObject } from "react";
+import { useSwipeGesture } from "./useSwipeGesture";
 import type {
   TabInfo,
   PinnedApp,
@@ -8,8 +9,7 @@ import type {
   FolderItem,
   Session,
 } from "../shared/types";
-import { useTheme } from "./useTheme";
-import type { Settings } from "../shared/types";
+import { useTheme, applyPanelColor } from "./useTheme";
 import {
   addPinnedApp,
   removePinnedApp,
@@ -42,6 +42,10 @@ import SessionManager from "./SessionManager";
 import Onboarding from "./Onboarding";
 import { isOnboardingCompleted } from "../shared/onboardingStorage";
 import { createSessionFromState } from "../shared/sessionStorage";
+import { updateWorkspace } from "../shared/workspaceStorage";
+import QuickNotes from "./QuickNotes";
+import TabPreviewCard from "./TabPreviewCard";
+import type { TabPreviewInfo } from "./TabPreviewCard";
 import { buildCommands } from "./commandRegistry";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
 import {
@@ -56,9 +60,15 @@ import {
   pointerWithin,
   rectIntersection,
   type CollisionDetection,
-  useDraggable,
 } from "@dnd-kit/core";
-import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import {
+  arrayMove,
+  sortableKeyboardCoordinates,
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { List } from "react-window";
 import type { CSSProperties } from "react";
 
@@ -125,6 +135,8 @@ const TAB_ITEM_HEIGHT = 36; // 32px height + 4px gap
 interface VirtualTabRowProps {
   tabs: TabInfo[];
   onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
+  tabNameOverrides: Record<number, string>;
+  onTabRename: (tabId: number, newName: string) => void;
 }
 
 function VirtualTabRow({
@@ -132,12 +144,16 @@ function VirtualTabRow({
   style,
   tabs,
   onContextMenu,
+  tabNameOverrides,
+  onTabRename,
 }: {
   index: number;
   style: CSSProperties;
   ariaAttributes: Record<string, unknown>;
   tabs: TabInfo[];
   onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
+  tabNameOverrides: Record<number, string>;
+  onTabRename: (tabId: number, newName: string) => void;
 }) {
   const tab = tabs[index];
   if (!tab) return null;
@@ -147,6 +163,8 @@ function VirtualTabRow({
       tab={tab}
       onContextMenu={onContextMenu}
       style={style}
+      displayName={tabNameOverrides[tab.id]}
+      onTabRename={onTabRename}
     />
   );
 }
@@ -155,24 +173,65 @@ const DraggableTabItem = memo(function DraggableTabItem({
   tab,
   onContextMenu,
   style: outerStyle,
+  onMouseEnter,
+  onMouseLeave,
+  displayName,
+  onTabRename,
 }: {
   tab: TabInfo;
   onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
   style?: React.CSSProperties;
+  onMouseEnter?: (e: React.MouseEvent, tab: TabInfo) => void;
+  onMouseLeave?: () => void;
+  displayName?: string;
+  onTabRename?: (tabId: number, newName: string) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: `tab:${tab.id}` });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: `tab:${tab.id}` });
+
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null) as RefObject<HTMLInputElement>;
+  const committedRef = useRef(false);
+
+  const hasCustomName = !!displayName;
+  const shownName = displayName || tab.title || tab.url;
+  const originalTitle = tab.title || tab.url;
 
   const style = {
     ...outerStyle,
-    transform: transform
-      ? `translate(${transform.x}px, ${transform.y}px)`
-      : undefined,
-    opacity: isDragging ? 0.5 : 1,
+    transform: CSS.Transform.toString(transform),
+    transition: transition || "transform 200ms ease",
+    opacity: isDragging ? 0.3 : 1,
   };
 
+  const commitRename = useCallback(() => {
+    if (committedRef.current) return;
+    committedRef.current = true;
+    const trimmed = editName.trim();
+    if (onTabRename) {
+      // Empty name clears the override, reverting to original title
+      onTabRename(tab.id, trimmed);
+    }
+    setEditing(false);
+  }, [editName, onTabRename, tab.id]);
+
   const handleClick = () => {
+    if (editing) return;
     chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: tab.id });
+  };
+
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!onTabRename) return;
+    setEditing(true);
+    setEditName(shownName);
+    committedRef.current = false;
+    setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 0);
   };
 
   const handleClose = (e: React.MouseEvent) => {
@@ -188,7 +247,7 @@ const DraggableTabItem = memo(function DraggableTabItem({
   };
 
   const srLabel = [
-    tab.title || tab.url,
+    originalTitle,
     tab.active ? "active" : "",
     tab.audible ? "playing audio" : "",
     tab.discarded ? "suspended" : "",
@@ -206,8 +265,10 @@ const DraggableTabItem = memo(function DraggableTabItem({
       aria-label={srLabel}
       tabIndex={0}
       onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
       onMouseDown={handleMouseDown}
       onKeyDown={(e) => {
+        if (editing) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           handleClick();
@@ -217,11 +278,13 @@ const DraggableTabItem = memo(function DraggableTabItem({
         }
       }}
       onContextMenu={(e) => onContextMenu(e, tab)}
-      className={`group flex items-center gap-2 px-2 h-8 text-sm rounded-lg cursor-default transition-all duration-150 hover:bg-gray-100 dark:hover:bg-arc-surface-hover focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset ${
+      onMouseEnter={onMouseEnter ? (e) => onMouseEnter(e, tab) : undefined}
+      onMouseLeave={onMouseLeave}
+      className={`group flex items-center gap-2 px-3 h-8 text-sm rounded-lg cursor-default transition-all duration-200 hover:bg-gray-100 dark:hover:bg-white/[0.05] focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset ${
         tab.active
-          ? "border-l-[3px] border-l-arc-accent font-medium bg-gray-100/50 dark:bg-arc-surface"
-          : "border-l-[3px] border-l-transparent"
-      } ${tab.discarded ? "opacity-50 italic" : ""}`}
+          ? "font-medium dark:text-arc-text-primary dark:bg-white/[0.08]"
+          : ""
+      } ${tab.discarded ? "opacity-40 italic" : ""}`}
     >
       {/* Drag grip */}
       <span
@@ -229,10 +292,21 @@ const DraggableTabItem = memo(function DraggableTabItem({
         className="shrink-0 flex items-center cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 touch-none opacity-0 group-hover:opacity-100 transition-opacity"
         aria-label="Drag to reorder"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 16 16"
+          fill="currentColor"
+          className="w-3 h-3"
+        >
           <path d="M6 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm5-9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
         </svg>
       </span>
+      {/* Active dot indicator */}
+      {tab.active ? (
+        <span className="w-1 h-1 rounded-full bg-arc-accent shrink-0" />
+      ) : (
+        <span className="w-1 h-1 shrink-0" />
+      )}
       {tab.favIconUrl ? (
         <LazyFavicon src={tab.favIconUrl} alt="" />
       ) : (
@@ -241,9 +315,32 @@ const DraggableTabItem = memo(function DraggableTabItem({
           aria-hidden="true"
         />
       )}
-      <span className="truncate flex-1 select-none text-gray-700 dark:text-arc-text-primary">
-        {tab.title || tab.url}
-      </span>
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={editName}
+          onChange={(e) => setEditName(e.target.value)}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") {
+              commitRename();
+            } else if (e.key === "Escape") {
+              committedRef.current = true;
+              setEditing(false);
+            }
+          }}
+          onBlur={commitRename}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="flex-1 min-w-0 bg-transparent border border-arc-accent/50 rounded px-1 text-sm text-gray-700 dark:text-arc-text-primary outline-none"
+        />
+      ) : (
+        <span
+          className={`truncate flex-1 select-none text-gray-700 dark:text-arc-text-primary ${hasCustomName ? "italic" : ""}`}
+          title={hasCustomName ? originalTitle : undefined}
+        >
+          {shownName}
+        </span>
+      )}
       {tab.audible && (
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -264,7 +361,7 @@ const DraggableTabItem = memo(function DraggableTabItem({
       <button
         onClick={handleClose}
         onPointerDown={(e) => e.stopPropagation()}
-        className="shrink-0 w-4 h-4 flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="shrink-0 w-4 h-4 flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
         aria-label={`Close ${tab.title}`}
       >
         <svg
@@ -280,18 +377,63 @@ const DraggableTabItem = memo(function DraggableTabItem({
   );
 });
 
-function TabDragOverlay({ tab }: { tab: TabInfo }) {
+function DragOverlayCard({
+  icon,
+  title,
+}: {
+  icon: React.ReactNode;
+  title: string;
+}) {
   return (
-    <div className="flex items-center gap-2 px-2 h-8 text-sm rounded-lg bg-white dark:bg-arc-surface shadow-lg border border-gray-200 dark:border-arc-border opacity-90">
-      {tab.favIconUrl ? (
-        <img src={tab.favIconUrl} alt="" className="w-4 h-4 shrink-0" />
-      ) : (
-        <span className="w-4 h-4 shrink-0 rounded bg-gray-200 dark:bg-arc-surface-hover" />
-      )}
-      <span className="truncate flex-1 select-none">
-        {tab.title || tab.url}
+    <div className="flex items-center gap-2 px-2 h-8 text-sm rounded-lg bg-white dark:bg-arc-surface shadow-lg border border-gray-200 dark:border-arc-border opacity-90 max-w-[200px]">
+      {icon}
+      <span className="truncate flex-1 select-none text-gray-700 dark:text-arc-text-primary">
+        {title}
       </span>
     </div>
+  );
+}
+
+function TabDragOverlay({ tab }: { tab: TabInfo }) {
+  return (
+    <DragOverlayCard
+      icon={
+        tab.favIconUrl ? (
+          <img src={tab.favIconUrl} alt="" className="w-4 h-4 shrink-0" draggable={false} />
+        ) : (
+          <span className="w-4 h-4 shrink-0 rounded bg-gray-200 dark:bg-arc-surface-hover" />
+        )
+      }
+      title={tab.title || tab.url}
+    />
+  );
+}
+
+function FolderDragOverlay({ folder }: { folder: Folder }) {
+  return (
+    <DragOverlayCard
+      icon={
+        <span className="text-sm shrink-0" aria-hidden="true">
+          {folder.name.match(/^\p{Emoji}/u)?.[0] || "\uD83D\uDCC1"}
+        </span>
+      }
+      title={folder.name}
+    />
+  );
+}
+
+function FolderItemDragOverlay({ item }: { item: FolderItem }) {
+  return (
+    <DragOverlayCard
+      icon={
+        item.favicon ? (
+          <img src={item.favicon} alt="" className="w-4 h-4 shrink-0" draggable={false} />
+        ) : (
+          <span className="w-4 h-4 shrink-0 rounded bg-gray-200 dark:bg-arc-surface-hover" />
+        )
+      }
+      title={item.title || item.url}
+    />
   );
 }
 
@@ -344,7 +486,7 @@ function FolderPickerDropdown({
       <div key={folder.id}>
         <button
           onClick={() => onSelect(folder.id)}
-          className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-arc-surface-hover flex items-center gap-2 transition-colors duration-150"
+          className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-arc-surface-hover flex items-center gap-2 transition-colors duration-200"
           style={{ paddingLeft: 12 + depth * 16 }}
         >
           <svg
@@ -406,6 +548,8 @@ export default function App() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [activeDragTab, setActiveDragTab] = useState<TabInfo | null>(null);
+  const [activeDragFolder, setActiveDragFolder] = useState<Folder | null>(null);
+  const [activeDragFolderItem, setActiveDragFolderItem] = useState<FolderItem | null>(null);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState("default");
   const [tabWorkspaceMap, setTabWorkspaceMap] = useState<
     Record<string, string>
@@ -416,12 +560,61 @@ export default function App() {
     x: number;
     y: number;
   } | null>(null);
-  const [focusModeEnabled, setFocusModeEnabled] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showOrganizeTabs, setShowOrganizeTabs] = useState(false);
   const [showSessionManager, setShowSessionManager] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [tabNameOverrides, setTabNameOverrides] = useState<Record<number, string>>({});
+  const [tabOrderOverrides, setTabOrderOverrides] = useState<number[]>([]);
+  const [isDraggingTabs, setIsDraggingTabs] = useState(false);
+  const [tabPreview, setTabPreview] = useState<{
+    tab: TabPreviewInfo;
+    position: { top: number; left: number };
+  } | null>(null);
+  const tabPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mainContentRef = useRef<HTMLElement>(null);
+  const [swipeBounce, setSwipeBounce] = useState<"left" | "right" | null>(null);
+
+  // Sorted workspaces for swipe navigation
+  const sortedWorkspaces = useMemo(
+    () => [...workspaces].sort((a, b) => a.sortOrder - b.sortOrder),
+    [workspaces]
+  );
+
+  const handleSwipeLeft = useCallback(() => {
+    const idx = sortedWorkspaces.findIndex((w) => w.id === activeWorkspaceId);
+    if (idx === -1) return;
+    if (idx < sortedWorkspaces.length - 1) {
+      const nextWs = sortedWorkspaces[idx + 1];
+      setActiveWorkspaceStorage(nextWs.id);
+      setActiveWorkspaceId(nextWs.id);
+    } else {
+      // At last workspace — rubber-band bounce
+      setSwipeBounce("left");
+      setTimeout(() => setSwipeBounce(null), 300);
+    }
+  }, [sortedWorkspaces, activeWorkspaceId]);
+
+  const handleSwipeRight = useCallback(() => {
+    const idx = sortedWorkspaces.findIndex((w) => w.id === activeWorkspaceId);
+    if (idx === -1) return;
+    if (idx > 0) {
+      const prevWs = sortedWorkspaces[idx - 1];
+      setActiveWorkspaceStorage(prevWs.id);
+      setActiveWorkspaceId(prevWs.id);
+    } else {
+      // At first workspace — rubber-band bounce
+      setSwipeBounce("right");
+      setTimeout(() => setSwipeBounce(null), 300);
+    }
+  }, [sortedWorkspaces, activeWorkspaceId]);
+
+  useSwipeGesture(mainContentRef, {
+    onSwipeLeft: handleSwipeLeft,
+    onSwipeRight: handleSwipeRight,
+    disabled: sortedWorkspaces.length <= 1,
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -461,9 +654,6 @@ export default function App() {
       setActiveWorkspaceId(ws.id);
     });
     getWorkspaces().then(setWorkspaces);
-    getSettings().then((s) => {
-      setFocusModeEnabled(s.focusMode.enabled);
-    });
 
     // Request initial tab-workspace map from service worker
     chrome.runtime.sendMessage(
@@ -493,12 +683,6 @@ export default function App() {
           const updated = (changes.workspaces.newValue as Workspace[]) ?? [];
           setWorkspaces(updated.sort((a, b) => a.sortOrder - b.sortOrder));
         }
-        if (changes.settings) {
-          const newSettings = changes.settings.newValue as Settings | undefined;
-          if (newSettings) {
-            setFocusModeEnabled(newSettings.focusMode.enabled);
-          }
-        }
       }
     };
 
@@ -512,14 +696,46 @@ export default function App() {
   useEffect(() => {
     const ws = workspaces.find((w) => w.id === activeWorkspaceId);
     if (ws) {
-      setPinnedApps(
-        [...(ws.pinnedApps ?? [])].sort((a, b) => a.sortOrder - b.sortOrder)
-      );
-      setFolders(
-        [...(ws.folders ?? [])].sort((a, b) => a.sortOrder - b.sortOrder)
-      );
+      setTimeout(() => {
+        setPinnedApps(
+          [...(ws.pinnedApps ?? [])].sort((a, b) => a.sortOrder - b.sortOrder)
+        );
+        setFolders(
+          [...(ws.folders ?? [])].sort((a, b) => a.sortOrder - b.sortOrder)
+        );
+      }, 0);
     }
   }, [activeWorkspaceId, workspaces]);
+
+  // Apply workspace-level panel color on workspace switch
+  useEffect(() => {
+    const ws = workspaces.find((w) => w.id === activeWorkspaceId);
+    if (!ws) return;
+    if (ws.panelColor) {
+      applyPanelColor(ws.panelColor);
+    } else {
+      // Fall back to global panel color from settings
+      getSettings().then((s) => {
+        applyPanelColor(s.panelColor);
+      });
+    }
+  }, [activeWorkspaceId, workspaces]);
+
+  // Load tabNameOverrides for the active workspace
+  useEffect(() => {
+    const key = `tabNameOverrides_${activeWorkspaceId}`;
+    chrome.storage.local.get(key, (result) => {
+      setTabNameOverrides((result[key] as Record<number, string>) ?? {});
+    });
+  }, [activeWorkspaceId]);
+
+  // Load tabOrderOverrides for the active workspace
+  useEffect(() => {
+    const key = `tabOrderOverrides_${activeWorkspaceId}`;
+    chrome.storage.local.get(key, (result) => {
+      setTabOrderOverrides((result[key] as number[]) ?? []);
+    });
+  }, [activeWorkspaceId]);
 
   useEffect(() => {
     // Request initial tab list from service worker
@@ -575,14 +791,34 @@ export default function App() {
         .map((item) => item.tabId as number)
     );
 
-    return tabs.filter((tab) => {
+    const filtered = tabs.filter((tab) => {
       const wsId = tabWorkspaceMap[String(tab.id)];
       // Show tabs assigned to the active workspace.
       // Unmapped tabs default to "default" workspace (not shown everywhere).
       const effectiveWsId = wsId || "default";
-      return effectiveWsId === activeWorkspaceId && !tabIdsInFolders.has(tab.id);
+      return (
+        effectiveWsId === activeWorkspaceId && !tabIdsInFolders.has(tab.id)
+      );
     });
-  }, [tabs, tabWorkspaceMap, activeWorkspaceId, folders]);
+
+    // Apply custom tab order if available
+    if (tabOrderOverrides.length > 0) {
+      const orderMap = new Map(tabOrderOverrides.map((id, idx) => [id, idx]));
+      const ordered: TabInfo[] = [];
+      const unordered: TabInfo[] = [];
+      for (const tab of filtered) {
+        if (orderMap.has(tab.id)) {
+          ordered.push(tab);
+        } else {
+          unordered.push(tab);
+        }
+      }
+      ordered.sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
+      return [...ordered, ...unordered];
+    }
+
+    return filtered;
+  }, [tabs, tabWorkspaceMap, activeWorkspaceId, folders, tabOrderOverrides]);
 
   const { cycleTheme } = useTheme();
 
@@ -685,6 +921,96 @@ export default function App() {
 
   const openSessionManager = useCallback(() => setShowSessionManager(true), []);
 
+  // QuickNotes: derive from active workspace
+  const activeWorkspace = useMemo(
+    () => workspaces.find((w) => w.id === activeWorkspaceId),
+    [workspaces, activeWorkspaceId]
+  );
+
+  const handleNotesChange = useCallback(
+    (notes: string) => {
+      updateWorkspace(activeWorkspaceId, {
+        notes,
+        notesLastEditedAt: Date.now(),
+      });
+    },
+    [activeWorkspaceId]
+  );
+
+  const handleNotesCollapseToggle = useCallback(() => {
+    if (!activeWorkspace) return;
+    updateWorkspace(activeWorkspaceId, {
+      notesCollapsed: !activeWorkspace.notesCollapsed,
+    });
+  }, [activeWorkspaceId, activeWorkspace]);
+
+  // Tab name override handler
+  const handleTabRename = useCallback(
+    (tabId: number, newName: string) => {
+      setTabNameOverrides((prev) => {
+        const next = { ...prev };
+        if (newName) {
+          next[tabId] = newName;
+        } else {
+          delete next[tabId];
+        }
+        const key = `tabNameOverrides_${activeWorkspaceId}`;
+        chrome.storage.local.set({ [key]: next });
+        return next;
+      });
+    },
+    [activeWorkspaceId]
+  );
+
+  // Tab hover preview handlers
+  const handleTabHoverStart = useCallback(
+    (e: React.MouseEvent, tab: TabInfo) => {
+      if (tabPreviewTimerRef.current) clearTimeout(tabPreviewTimerRef.current);
+      tabPreviewTimerRef.current = setTimeout(() => {
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const ws = workspaces.find(
+          (w) => w.id === (tabWorkspaceMap[String(tab.id)] || "default")
+        );
+        const previewInfo: TabPreviewInfo = {
+          id: tab.id,
+          title: tab.title || tab.url,
+          url: tab.url,
+          favIconUrl: tab.favIconUrl || "",
+          active: tab.active,
+          audible: tab.audible,
+          discarded: tab.discarded,
+          lastActiveAt: 0,
+          workspaceName: ws?.name || "Default",
+          workspaceEmoji: ws?.emoji || "\uD83C\uDFE0",
+        };
+        setTabPreview({
+          tab: previewInfo,
+          position: { top: rect.top, left: rect.right + 8 },
+        });
+      }, 400);
+    },
+    [workspaces, tabWorkspaceMap]
+  );
+
+  const handleTabHoverEnd = useCallback(() => {
+    if (tabPreviewTimerRef.current) clearTimeout(tabPreviewTimerRef.current);
+    tabPreviewTimerRef.current = null;
+    setTabPreview(null);
+  }, []);
+
+  // Focus Notes command
+  const focusNotes = useCallback(() => {
+    if (activeWorkspace?.notesCollapsed) {
+      updateWorkspace(activeWorkspaceId, { notesCollapsed: false });
+    }
+    setTimeout(() => {
+      const textarea = document.querySelector<HTMLTextAreaElement>(
+        'textarea[aria-label^="Workspace notes"]'
+      );
+      textarea?.focus();
+    }, 100);
+  }, [activeWorkspaceId, activeWorkspace]);
+
   // Build command palette commands
   const commands = useMemo(
     () =>
@@ -701,6 +1027,7 @@ export default function App() {
         onSplitView: splitViewActiveTab,
         onSaveSession: handleSaveSession,
         onRestoreSession: openSessionManager,
+        onFocusNotes: focusNotes,
       }),
     [
       workspaces,
@@ -715,6 +1042,7 @@ export default function App() {
       splitViewActiveTab,
       handleSaveSession,
       openSessionManager,
+      focusNotes,
     ]
   );
 
@@ -852,20 +1180,23 @@ export default function App() {
     }
   }, []);
 
-  const handleFolderItemClick = useCallback((item: FolderItem) => {
-    if (item.type === "tab" && item.tabId != null) {
-      // Check if the tab still exists in our known tabs list
-      const tabStillOpen = tabs.some((t) => t.id === item.tabId);
-      if (tabStillOpen) {
-        chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: item.tabId });
+  const handleFolderItemClick = useCallback(
+    (item: FolderItem) => {
+      if (item.type === "tab" && item.tabId != null) {
+        // Check if the tab still exists in our known tabs list
+        const tabStillOpen = tabs.some((t) => t.id === item.tabId);
+        if (tabStillOpen) {
+          chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: item.tabId });
+        } else {
+          // Tab was closed — open the URL instead
+          chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
+        }
       } else {
-        // Tab was closed — open the URL instead
         chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
       }
-    } else {
-      chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
-    }
-  }, [tabs]);
+    },
+    [tabs]
+  );
 
   const handleFolderItemContextMenu = useCallback(
     (e: React.MouseEvent, item: FolderItem, folderId: string) => {
@@ -885,7 +1216,10 @@ export default function App() {
           label: "Switch to Tab",
           onClick: () => {
             if (item.tabId != null) {
-              chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: item.tabId });
+              chrome.runtime.sendMessage({
+                type: "SWITCH_TAB",
+                tabId: item.tabId,
+              });
             } else {
               chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
             }
@@ -923,15 +1257,36 @@ export default function App() {
       if (id.startsWith("tab:")) {
         const tabId = parseInt(id.replace("tab:", ""), 10);
         const tab = tabs.find((t) => t.id === tabId);
-        if (tab) setActiveDragTab(tab);
+        if (tab) {
+          setActiveDragTab(tab);
+          setIsDraggingTabs(true);
+        }
+      } else if (id.startsWith("folder:")) {
+        const folderId = id.replace("folder:", "");
+        const folder = folders.find((f) => f.id === folderId);
+        if (folder) {
+          setActiveDragFolder(folder);
+        }
+      } else if (id.startsWith("folder-item:")) {
+        const itemId = id.replace("folder-item:", "");
+        for (const folder of folders) {
+          const item = folder.items.find((i) => i.id === itemId);
+          if (item) {
+            setActiveDragFolderItem(item);
+            break;
+          }
+        }
       }
     },
-    [tabs]
+    [tabs, folders]
   );
 
   const handleDragEnd = useCallback(
     async (event: DragEndEvent) => {
       setActiveDragTab(null);
+      setActiveDragFolder(null);
+      setActiveDragFolderItem(null);
+      setIsDraggingTabs(false);
       const { active, over } = event;
       if (!over) return;
 
@@ -1029,7 +1384,29 @@ export default function App() {
         return;
       }
 
-      // Case 4: Reorder folders among siblings
+      // Case 4: Reorder tabs within the tab list
+      if (activeId.startsWith("tab:") && overId.startsWith("tab:")) {
+        const activeTabId = parseInt(activeId.replace("tab:", ""), 10);
+        const overTabId = parseInt(overId.replace("tab:", ""), 10);
+
+        const oldIndex = filteredTabs.findIndex((t) => t.id === activeTabId);
+        const newIndex = filteredTabs.findIndex((t) => t.id === overTabId);
+
+        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+          const reordered = arrayMove(filteredTabs, oldIndex, newIndex);
+          const newOrder = reordered.map((t) => t.id);
+
+          // Optimistic update
+          setTabOrderOverrides(newOrder);
+
+          // Persist to storage
+          const key = `tabOrderOverrides_${activeWorkspaceId}`;
+          chrome.storage.local.set({ [key]: newOrder });
+        }
+        return;
+      }
+
+      // Case 5: Reorder folders among siblings
       if (activeId.startsWith("folder:") && overId.startsWith("folder:")) {
         const activeFolderId = activeId.replace("folder:", "");
         const overFolderId = overId.replace("folder:", "");
@@ -1073,11 +1450,22 @@ export default function App() {
         return;
       }
     },
-    [tabs, folders, setFolders]
+    [tabs, folders, setFolders, filteredTabs, activeWorkspaceId]
   );
 
+  const activeDragType = activeDragTab
+    ? "tab"
+    : activeDragFolder
+      ? "folder"
+      : activeDragFolderItem
+        ? "folder-item"
+        : undefined;
+
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 dark:bg-arc-bg dark:text-arc-text-primary">
+    <div
+      className="flex flex-col min-h-screen bg-gray-50 text-gray-900 dark:bg-[rgba(15,15,23,0.78)] dark:text-arc-text-primary backdrop-frosted"
+      data-drag-type={activeDragType}
+    >
       {/* Live region for screen reader announcements */}
       <div
         role="status"
@@ -1091,11 +1479,13 @@ export default function App() {
           `. ${suspendedCount} suspended, ~${estimatedMBSaved} MB saved`}
       </div>
 
-      <header className="flex items-center justify-between px-4 py-3 border-b border-gray-200/80 dark:border-arc-border">
-        <h1 className="text-sm font-semibold tracking-tight text-gray-800 dark:text-arc-text-primary">ArcFlow</h1>
+      <header className="flex items-center justify-between px-4 py-3 pb-2">
+        <h1 className="text-sm font-semibold tracking-tight text-gray-800 dark:text-arc-text-primary">
+          ArcFlow
+        </h1>
         <button
           onClick={() => setShowOrganizeTabs(true)}
-          className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-150"
+          className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-200"
           title="Organize Tabs"
           aria-label="Organize Tabs"
         >
@@ -1120,8 +1510,19 @@ export default function App() {
         <SearchBar
           tabs={tabs}
           folders={folders}
+          allTabs={tabs}
+          tabWorkspaceMap={tabWorkspaceMap}
+          activeWorkspaceId={activeWorkspaceId}
+          workspaces={workspaces}
           onSwitchTab={(tabId) => {
             chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId });
+          }}
+          onSwitchWorkspaceAndTab={(workspaceId, tabId) => {
+            setActiveWorkspaceStorage(workspaceId);
+            setActiveWorkspaceId(workspaceId);
+            setTimeout(() => {
+              chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId });
+            }, 100);
           }}
           onOpenUrl={(url) => {
             chrome.runtime.sendMessage({ type: "OPEN_URL", url });
@@ -1130,14 +1531,28 @@ export default function App() {
       </nav>
 
       {/* Pinned Apps Row (Zone 2) */}
-      <PinnedAppsRow tabs={tabs} pinnedApps={pinnedApps} onContextMenu={setContextMenu} />
+      <PinnedAppsRow
+        tabs={tabs}
+        pinnedApps={pinnedApps}
+        onContextMenu={setContextMenu}
+      />
 
-      <main className="flex-1 flex flex-col" aria-label="Tab management">
+      <main
+        ref={mainContentRef}
+        className={`flex-1 flex flex-col${swipeBounce === "left" ? " swipe-bounce-left" : swipeBounce === "right" ? " swipe-bounce-right" : ""}`}
+        aria-label="Tab management"
+      >
         <DndContext
           sensors={sensors}
           collisionDetection={customCollisionDetection}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
+          onDragCancel={() => {
+            setActiveDragTab(null);
+            setActiveDragFolder(null);
+            setActiveDragFolderItem(null);
+            setIsDraggingTabs(false);
+          }}
         >
           {/* Folder Tree (Zone 3) */}
           <FolderTree
@@ -1146,15 +1561,23 @@ export default function App() {
             setFolders={setFolders}
             onItemClick={handleFolderItemClick}
             onItemContextMenu={handleFolderItemContextMenu}
+            onItemRename={(folderId, itemId, newTitle) => {
+              setFolders(prev => prev.map(f =>
+                f.id === folderId
+                  ? { ...f, items: f.items.map(i => i.id === itemId ? { ...i, title: newTitle } : i) }
+                  : f
+              ));
+              renameItemInFolder(folderId, itemId, newTitle);
+            }}
             onOpenAllTabs={handleOpenAllTabs}
             onCloseAllTabs={handleCloseAllTabs}
           />
 
           {/* Tab list */}
-          <section className="flex-1 px-1 border-t border-gray-200/80 dark:border-arc-border" aria-label="Open tabs">
+          <section className="flex-1 px-1 pt-3" aria-label="Open tabs" data-drop-section="tabs">
             <div className="flex items-center justify-between px-2 py-1">
               <p
-                className="text-[11px] text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider font-medium"
+                className="text-[11px] text-gray-400 dark:text-arc-text-secondary font-medium"
                 aria-live="polite"
               >
                 {filteredTabs.length} tab{filteredTabs.length !== 1 ? "s" : ""}{" "}
@@ -1174,46 +1597,63 @@ export default function App() {
                       tabIds: nonActive.map((t) => t.id),
                     });
                   }}
-                  className="text-[11px] text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-150"
+                  className="text-[11px] text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
                   title="Close all non-active tabs"
                 >
                   Close All
                 </button>
               )}
             </div>
-            {filteredTabs.length >= VIRTUAL_LIST_THRESHOLD ? (
-              <List<VirtualTabRowProps>
-                style={{
-                  height: Math.min(filteredTabs.length * TAB_ITEM_HEIGHT, 400),
-                }}
-                rowComponent={VirtualTabRow}
-                rowCount={filteredTabs.length}
-                rowHeight={TAB_ITEM_HEIGHT}
-                rowProps={{
-                  tabs: filteredTabs,
-                  onContextMenu: handleTabContextMenu,
-                }}
-                overscanCount={5}
-              />
-            ) : (
-              <ul
-                className="flex flex-col gap-1"
-                role="listbox"
-                aria-label="Open tabs"
-              >
-                {filteredTabs.map((tab) => (
-                  <DraggableTabItem
-                    key={tab.id}
-                    tab={tab}
-                    onContextMenu={handleTabContextMenu}
-                  />
-                ))}
-              </ul>
-            )}
+            <SortableContext
+              items={filteredTabs.map((t) => `tab:${t.id}`)}
+              strategy={verticalListSortingStrategy}
+            >
+              {filteredTabs.length >= VIRTUAL_LIST_THRESHOLD && !isDraggingTabs ? (
+                <List<VirtualTabRowProps>
+                  style={{
+                    height: Math.min(filteredTabs.length * TAB_ITEM_HEIGHT, 400),
+                  }}
+                  rowComponent={VirtualTabRow}
+                  rowCount={filteredTabs.length}
+                  rowHeight={TAB_ITEM_HEIGHT}
+                  rowProps={{
+                    tabs: filteredTabs,
+                    onContextMenu: handleTabContextMenu,
+                    tabNameOverrides,
+                    onTabRename: handleTabRename,
+                  }}
+                  overscanCount={5}
+                />
+              ) : (
+                <ul
+                  className="flex flex-col gap-1"
+                  role="listbox"
+                  aria-label="Open tabs"
+                >
+                  {filteredTabs.map((tab) => (
+                    <DraggableTabItem
+                      key={tab.id}
+                      tab={tab}
+                      onContextMenu={handleTabContextMenu}
+                      onMouseEnter={handleTabHoverStart}
+                      onMouseLeave={handleTabHoverEnd}
+                      displayName={tabNameOverrides[tab.id]}
+                      onTabRename={handleTabRename}
+                    />
+                  ))}
+                </ul>
+              )}
+            </SortableContext>
           </section>
 
           <DragOverlay>
-            {activeDragTab ? <TabDragOverlay tab={activeDragTab} /> : null}
+            {activeDragTab ? (
+              <TabDragOverlay tab={activeDragTab} />
+            ) : activeDragFolder ? (
+              <FolderDragOverlay folder={activeDragFolder} />
+            ) : activeDragFolderItem ? (
+              <FolderItemDragOverlay item={activeDragFolderItem} />
+            ) : null}
           </DragOverlay>
         </DndContext>
 
@@ -1221,68 +1661,28 @@ export default function App() {
         <ArchiveSection />
       </main>
 
+      {/* Quick Notes */}
+      {activeWorkspace && (
+        <QuickNotes
+          workspaceId={activeWorkspaceId}
+          workspaceName={activeWorkspace.name}
+          notes={activeWorkspace.notes ?? ""}
+          notesCollapsed={activeWorkspace.notesCollapsed ?? true}
+          notesLastEditedAt={activeWorkspace.notesLastEditedAt ?? 0}
+          onNotesChange={handleNotesChange}
+          onCollapseToggle={handleNotesCollapseToggle}
+        />
+      )}
+
       {/* Footer (Zone 5) */}
-      <footer className="border-t border-gray-200/80 dark:border-arc-border">
+      <footer className="border-t border-gray-200/10 dark:border-white/5">
         <WorkspaceSwitcher
           activeWorkspaceId={activeWorkspaceId}
           onWorkspaceChange={handleWorkspaceChange}
           onContextMenu={setContextMenu}
           onSaveSession={handleSaveSession}
+          onOpenSettings={openSettings}
         />
-        {suspendedCount > 0 && (
-          <div className="px-3 py-1 text-[11px] text-gray-400 dark:text-arc-text-secondary text-center">
-            {suspendedCount} tab{suspendedCount !== 1 ? "s" : ""} suspended | ~
-            {estimatedMBSaved} MB saved
-          </div>
-        )}
-        <div className="flex items-center justify-end px-3 pb-2">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={toggleFocusMode}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-full transition-colors duration-150 hover:bg-gray-100 dark:hover:bg-arc-surface-hover ${
-                focusModeEnabled
-                  ? "text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-500/10"
-                  : "text-gray-500 dark:text-arc-text-secondary"
-              }`}
-              aria-label={`Focus mode: ${focusModeEnabled ? "On" : "Off"}`}
-              title={`Focus mode: ${focusModeEnabled ? "On" : "Off"}`}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                className="w-4 h-4"
-              >
-                <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
-                <path
-                  fillRule="evenodd"
-                  d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41ZM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              {focusModeEnabled ? "Focus" : ""}
-            </button>
-            <button
-              onClick={() => setShowSettings(true)}
-              className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-150"
-              aria-label="Open settings"
-              title="Settings"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                className="w-4 h-4"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M7.84 1.804A1 1 0 0 1 8.82 1h2.36a1 1 0 0 1 .98.804l.331 1.652a6.993 6.993 0 0 1 1.929 1.115l1.598-.54a1 1 0 0 1 1.186.447l1.18 2.044a1 1 0 0 1-.205 1.251l-1.267 1.113a7.047 7.047 0 0 1 0 2.228l1.267 1.113a1 1 0 0 1 .206 1.25l-1.18 2.045a1 1 0 0 1-1.187.447l-1.598-.54a6.993 6.993 0 0 1-1.929 1.115l-.33 1.652a1 1 0 0 1-.98.804H8.82a1 1 0 0 1-.98-.804l-.331-1.652a6.993 6.993 0 0 1-1.929-1.115l-1.598.54a1 1 0 0 1-1.186-.447l-1.18-2.044a1 1 0 0 1 .205-1.251l1.267-1.114a7.05 7.05 0 0 1 0-2.227L1.821 7.773a1 1 0 0 1-.206-1.25l1.18-2.045a1 1 0 0 1 1.187-.447l1.598.54A6.992 6.992 0 0 1 7.51 3.456l.33-1.652ZM10 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
-          </div>
-        </div>
       </footer>
 
       {/* Folder Picker Dropdown */}
@@ -1337,6 +1737,15 @@ export default function App() {
       {/* Onboarding */}
       {showOnboarding && (
         <Onboarding onComplete={() => setShowOnboarding(false)} />
+      )}
+
+      {/* Tab Preview Card */}
+      {tabPreview && (
+        <TabPreviewCard
+          tab={tabPreview.tab}
+          position={tabPreview.position}
+          onClose={handleTabHoverEnd}
+        />
       )}
     </div>
   );
