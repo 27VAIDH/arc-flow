@@ -15,6 +15,7 @@ const defaultHandlers = {
   onSplitView: noop,
   onSaveSession: noop,
   onRestoreSession: noop,
+  onFocusNotes: noop,
 };
 
 describe("buildCommands", () => {
@@ -38,6 +39,9 @@ describe("buildCommands", () => {
         pinnedApps: [],
         folders: [],
         sortOrder: 0,
+        notes: "",
+        notesCollapsed: true,
+        notesLastEditedAt: 0,
       },
       {
         id: "ws-2",
@@ -47,6 +51,9 @@ describe("buildCommands", () => {
         pinnedApps: [],
         folders: [],
         sortOrder: 1,
+        notes: "",
+        notesCollapsed: true,
+        notesLastEditedAt: 0,
       },
     ];
 

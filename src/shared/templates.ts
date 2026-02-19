@@ -1,0 +1,88 @@
+import { WorkspaceTemplate } from "./types";
+
+export const WORKSPACE_TEMPLATES: WorkspaceTemplate[] = [
+  {
+    id: "developer",
+    name: "Developer",
+    emoji: "\u{1F4BB}",
+    accentColor: "#22C55E",
+    pinnedApps: [
+      { url: "https://github.com", title: "GitHub" },
+      { url: "https://stackoverflow.com", title: "StackOverflow" },
+      { url: "https://developer.mozilla.org", title: "MDN" },
+      { url: "http://localhost:3000", title: "localhost:3000" },
+      { url: "https://www.npmjs.com", title: "npm" },
+    ],
+    folders: ["Repos", "Docs", "Issues"],
+  },
+  {
+    id: "student",
+    name: "Student",
+    emoji: "\u{1F4DA}",
+    accentColor: "#3B82F6",
+    pinnedApps: [
+      { url: "https://drive.google.com", title: "Google Drive" },
+      { url: "https://www.notion.so", title: "Notion" },
+      { url: "https://canvas.instructure.com", title: "Canvas" },
+      { url: "https://en.wikipedia.org", title: "Wikipedia" },
+      { url: "https://scholar.google.com", title: "Google Scholar" },
+    ],
+    folders: ["Courses", "Research", "Assignments"],
+  },
+  {
+    id: "creative",
+    name: "Creative",
+    emoji: "\u{1F3A8}",
+    accentColor: "#EC4899",
+    pinnedApps: [
+      { url: "https://www.figma.com", title: "Figma" },
+      { url: "https://dribbble.com", title: "Dribbble" },
+      { url: "https://www.behance.net", title: "Behance" },
+      { url: "https://www.pinterest.com", title: "Pinterest" },
+      { url: "https://coolors.co", title: "Coolors" },
+    ],
+    folders: ["Inspiration", "Projects", "Assets"],
+  },
+  {
+    id: "work",
+    name: "Work",
+    emoji: "\u{1F4BC}",
+    accentColor: "#F59E0B",
+    pinnedApps: [
+      { url: "https://mail.google.com", title: "Gmail" },
+      { url: "https://app.slack.com", title: "Slack" },
+      { url: "https://www.notion.so", title: "Notion" },
+      { url: "https://calendar.google.com", title: "Google Calendar" },
+      { url: "https://www.atlassian.com/software/jira", title: "Jira" },
+    ],
+    folders: ["Projects", "Meetings", "References"],
+  },
+  {
+    id: "research",
+    name: "Research",
+    emoji: "\u{1F52C}",
+    accentColor: "#8B5CF6",
+    pinnedApps: [
+      { url: "https://scholar.google.com", title: "Google Scholar" },
+      { url: "https://pubmed.ncbi.nlm.nih.gov", title: "PubMed" },
+      { url: "https://www.zotero.org", title: "Zotero" },
+      { url: "https://arxiv.org", title: "arXiv" },
+      { url: "https://en.wikipedia.org", title: "Wikipedia" },
+    ],
+    folders: ["Papers", "Notes", "Data"],
+  },
+  {
+    id: "personal",
+    name: "Personal",
+    emoji: "\u{1F3E0}",
+    accentColor: "#EF4444",
+    pinnedApps: [
+      { url: "https://mail.google.com", title: "Gmail" },
+      { url: "https://www.youtube.com", title: "YouTube" },
+      { url: "https://www.reddit.com", title: "Reddit" },
+      { url: "https://x.com", title: "Twitter/X" },
+      { url: "https://www.netflix.com", title: "Netflix" },
+    ],
+    folders: ["Entertainment", "Shopping", "Bookmarks"],
+  },
+];

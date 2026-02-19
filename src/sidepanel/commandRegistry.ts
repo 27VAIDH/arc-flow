@@ -14,6 +14,7 @@ export function buildCommands({
   onSplitView,
   onSaveSession,
   onRestoreSession,
+  onFocusNotes,
 }: {
   workspaces: Workspace[];
   onSwitchWorkspace: (workspaceId: string) => void;
@@ -27,6 +28,7 @@ export function buildCommands({
   onSplitView: () => void;
   onSaveSession: () => void;
   onRestoreSession: () => void;
+  onFocusNotes: () => void;
 }): Command[] {
   const commands: Command[] = [];
 
@@ -108,6 +110,13 @@ export function buildCommands({
     name: "Restore Session",
     icon: "restore",
     action: onRestoreSession,
+  });
+
+  commands.push({
+    id: "focus-notes",
+    name: "Focus Workspace Notes",
+    icon: "notes",
+    action: onFocusNotes,
   });
 
   return commands;

@@ -7,7 +7,7 @@ import {
   updateFolder,
 } from "../shared/folderStorage";
 import type { ContextMenuItem } from "./ContextMenu";
-import { useDroppable } from "@dnd-kit/core";
+import { useDroppable, useDndMonitor } from "@dnd-kit/core";
 import {
   SortableContext,
   verticalListSortingStrategy,
@@ -31,6 +31,7 @@ interface FolderTreeProps {
     item: FolderItem,
     folderId: string
   ) => void;
+  onItemRename?: (folderId: string, itemId: string, newTitle: string) => void;
   onOpenAllTabs?: (folder: Folder) => void;
   onCloseAllTabs?: (folder: Folder) => void;
 }
@@ -120,6 +121,7 @@ function FolderHeader({
           onChange={(e) => setEditName(e.target.value)}
           onBlur={commitRename}
           onKeyDown={(e) => {
+            e.stopPropagation();
             if (e.key === "Enter") commitRename();
             if (e.key === "Escape") {
               committedRef.current = true;
@@ -153,12 +155,23 @@ function FolderHeader({
   );
 }
 
+function DropIndicatorLine({ depth }: { depth: number }) {
+  return (
+    <div
+      className="h-0.5 bg-arc-accent rounded-full"
+      style={{ marginLeft: (depth + 1) * 16 + 8 + 4, marginRight: 8 }}
+    />
+  );
+}
+
 function DraggableFolderItem({
   item,
   depth,
   folderId,
   onClick,
   onContextMenu,
+  onRename,
+  isOverItem,
 }: {
   item: FolderItem;
   depth: number;
@@ -169,7 +182,14 @@ function DraggableFolderItem({
     item: FolderItem,
     folderId: string
   ) => void;
+  onRename?: (folderId: string, itemId: string, newTitle: string) => void;
+  isOverItem?: boolean;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(item.title || item.url);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const committedRef = useRef(false);
+
   const {
     attributes,
     listeners,
@@ -179,14 +199,33 @@ function DraggableFolderItem({
     isDragging,
   } = useSortable({ id: `folder-item:${item.id}` });
 
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  const commitRename = () => {
+    if (committedRef.current) return;
+    committedRef.current = true;
+    const trimmed = editName.trim();
+    if (trimmed && trimmed !== (item.title || item.url)) {
+      onRename?.(folderId, item.id, trimmed);
+    }
+    setEditing(false);
+  };
+
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
+    transition: transition || "transform 200ms ease",
+    opacity: isDragging ? 0.3 : 1,
     paddingLeft: (depth + 1) * 16 + 8,
   };
 
   return (
+    <>
+    {isOverItem && <DropIndicatorLine depth={depth} />}
     <div
       ref={setNodeRef}
       style={style}
@@ -195,9 +234,11 @@ function DraggableFolderItem({
       aria-label={`${item.type === "link" ? "Saved link: " : ""}${item.title || item.url}`}
       tabIndex={0}
       className={`group flex items-center gap-2 px-2 h-7 text-sm rounded-lg cursor-default hover:bg-gray-100 dark:hover:bg-white/[0.05] focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset transition-colors duration-200 ${item.type === "link" ? "cursor-pointer" : ""}`}
-      onClick={() => onClick?.(item, folderId)}
+      onClick={() => {
+        if (!editing) onClick?.(item, folderId);
+      }}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (!editing && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
           onClick?.(item, folderId);
         }
@@ -236,10 +277,40 @@ function DraggableFolderItem({
           aria-hidden="true"
         />
       )}
-      <span className="truncate flex-1 select-none">
-        {item.title || item.url}
-      </span>
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={editName}
+          onChange={(e) => setEditName(e.target.value)}
+          onBlur={commitRename}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") commitRename();
+            if (e.key === "Escape") {
+              committedRef.current = true;
+              setEditing(false);
+              setEditName(item.title || item.url);
+            }
+          }}
+          className="flex-1 text-sm bg-white dark:bg-arc-surface border border-arc-accent/50 rounded-md px-1 py-0 outline-none"
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <span
+          className="truncate flex-1 select-none"
+          onDoubleClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            committedRef.current = false;
+            setEditName(item.title || item.url);
+            setEditing(true);
+          }}
+        >
+          {item.title || item.url}
+        </span>
+      )}
     </div>
+    </>
   );
 }
 
@@ -253,6 +324,8 @@ function SortableFolder({
   renderFolder,
   onItemClick,
   onItemContextMenu,
+  onItemRename,
+  isOverFolder,
 }: {
   folder: Folder;
   depth: number;
@@ -267,6 +340,8 @@ function SortableFolder({
     item: FolderItem,
     folderId: string
   ) => void;
+  onItemRename?: (folderId: string, itemId: string, newTitle: string) => void;
+  isOverFolder?: boolean;
 }) {
   const {
     attributes,
@@ -281,15 +356,46 @@ function SortableFolder({
     id: `folder-drop:${folder.id}`,
   });
 
+  // Track which folder-item is being hovered for drop indicators
+  const [overItemId, setOverItemId] = useState<string | null>(null);
+  useDndMonitor({
+    onDragOver(event) {
+      const overId = event.over?.id ? String(event.over.id) : null;
+      if (overId && overId.startsWith("folder-item:")) {
+        const itemId = overId.replace("folder-item:", "");
+        if (folder.items.some((i) => i.id === itemId)) {
+          setOverItemId(itemId);
+        } else {
+          setOverItemId(null);
+        }
+      } else {
+        setOverItemId(null);
+      }
+    },
+    onDragEnd() {
+      setOverItemId(null);
+    },
+    onDragCancel() {
+      setOverItemId(null);
+    },
+  });
+
   const sortableStyle = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
+    transition: transition || "transform 200ms ease",
+    opacity: isDragging ? 0.3 : 1,
   };
 
   const itemIds = folder.items.map((item) => `folder-item:${item.id}`);
 
   return (
+    <>
+    {isOverFolder && (
+      <div
+        className="h-0.5 bg-arc-accent rounded-full"
+        style={{ marginLeft: depth * 16 + 4, marginRight: 8 }}
+      />
+    )}
     <div
       ref={(node) => {
         setSortableRef(node);
@@ -361,6 +467,8 @@ function SortableFolder({
                 folderId={folder.id}
                 onClick={onItemClick}
                 onContextMenu={onItemContextMenu}
+                onRename={onItemRename}
+                isOverItem={overItemId === item.id}
               />
             ))}
           </SortableContext>
@@ -370,6 +478,7 @@ function SortableFolder({
         </div>
       )}
     </div>
+    </>
   );
 }
 
@@ -379,6 +488,7 @@ export default function FolderTree({
   setFolders,
   onItemClick,
   onItemContextMenu,
+  onItemRename,
   onOpenAllTabs,
   onCloseAllTabs,
 }: FolderTreeProps) {
@@ -524,6 +634,25 @@ export default function FolderTree({
     ]
   );
 
+  // Track which folder is being hovered for drop indicator between folders
+  const [overFolderId, setOverFolderId] = useState<string | null>(null);
+  useDndMonitor({
+    onDragOver(event) {
+      const overId = event.over?.id ? String(event.over.id) : null;
+      if (overId && overId.startsWith("folder:")) {
+        setOverFolderId(overId.replace("folder:", ""));
+      } else {
+        setOverFolderId(null);
+      }
+    },
+    onDragEnd() {
+      setOverFolderId(null);
+    },
+    onDragCancel() {
+      setOverFolderId(null);
+    },
+  });
+
   // Build tree structure: top-level folders and their children
   const topLevelFolders = folders.filter((f) => f.parentId === null);
 
@@ -544,6 +673,8 @@ export default function FolderTree({
       renderFolder={renderFolder}
       onItemClick={onItemClick}
       onItemContextMenu={onItemContextMenu}
+      onItemRename={onItemRename}
+      isOverFolder={overFolderId === folder.id}
     />
   );
 

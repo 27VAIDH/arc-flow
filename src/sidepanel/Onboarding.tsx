@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { addPinnedApp, getPinnedApps } from "../shared/storage";
 import { createFolder } from "../shared/folderStorage";
 import { setOnboardingCompleted } from "../shared/onboardingStorage";
+import { WORKSPACE_TEMPLATES } from "../shared/templates";
+import { createWorkspaceFromTemplate, setActiveWorkspace } from "../shared/workspaceStorage";
 
 interface TopSite {
   url: string;
@@ -25,6 +27,8 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
   const [folderName, setFolderName] = useState("");
   const [folderCreated, setFolderCreated] = useState(false);
   const [pinning, setPinning] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [templateApplied, setTemplateApplied] = useState(false);
 
   useEffect(() => {
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
@@ -117,6 +121,17 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
     setFolderCreated(true);
   }, [folderName]);
 
+  const handleApplyTemplate = useCallback(async () => {
+    if (!selectedTemplateId) return;
+    try {
+      const ws = await createWorkspaceFromTemplate(selectedTemplateId);
+      await setActiveWorkspace(ws.id);
+      setTemplateApplied(true);
+    } catch {
+      // Ignore errors
+    }
+  }, [selectedTemplateId]);
+
   const handleFinish = useCallback(async () => {
     await setOnboardingCompleted();
     onComplete();
@@ -127,7 +142,7 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
     onComplete();
   }, [onComplete]);
 
-  const stepCount = 3;
+  const stepCount = 4;
 
   return (
     <div
@@ -240,6 +255,56 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
           <div className="flex flex-col gap-4">
             <div>
               <h2 className="text-base font-medium mb-1">
+                Start with a template
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Templates set up a workspace with relevant apps and folders.
+                You can skip this and create workspaces later.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {WORKSPACE_TEMPLATES.map((template) => (
+                <button
+                  key={template.id}
+                  onClick={() => setSelectedTemplateId(template.id)}
+                  className={`rounded-lg border-2 p-3 text-left transition-colors ${
+                    selectedTemplateId === template.id
+                      ? "bg-opacity-10 dark:bg-opacity-20"
+                      : "border-gray-200 hover:border-gray-300 dark:border-gray-600 dark:hover:border-gray-500"
+                  }`}
+                  style={
+                    selectedTemplateId === template.id
+                      ? {
+                          borderColor: template.accentColor,
+                          backgroundColor: `${template.accentColor}15`,
+                        }
+                      : undefined
+                  }
+                  disabled={templateApplied}
+                >
+                  <div className="mb-1 text-xl">{template.emoji}</div>
+                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {template.name}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    {template.pinnedApps.length} apps &middot;{" "}
+                    {template.folders.length} folders
+                  </div>
+                </button>
+              ))}
+            </div>
+            {templateApplied && (
+              <p className="text-xs text-green-600 dark:text-green-400">
+                Workspace created! You can switch to it from the workspace bar.
+              </p>
+            )}
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="flex flex-col gap-4">
+            <div>
+              <h2 className="text-base font-medium mb-1">
                 Create your first folder
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -276,7 +341,7 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
           </div>
         )}
 
-        {step === 2 && (
+        {step === 3 && (
           <div className="flex flex-col gap-4">
             <div>
               <h2 className="text-base font-medium mb-1">Explore features</h2>
@@ -388,13 +453,27 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
         )}
         {step === 1 && (
           <button
-            onClick={() => setStep(2)}
+            onClick={() => {
+              if (selectedTemplateId && !templateApplied) {
+                handleApplyTemplate().then(() => setStep(2));
+              } else {
+                setStep(2);
+              }
+            }}
+            className="px-4 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700"
+          >
+            {selectedTemplateId && !templateApplied ? "Create & Next" : "Next"}
+          </button>
+        )}
+        {step === 2 && (
+          <button
+            onClick={() => setStep(3)}
             className="px-4 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700"
           >
             Next
           </button>
         )}
-        {step === 2 && (
+        {step === 3 && (
           <button
             onClick={handleFinish}
             className="px-4 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700"

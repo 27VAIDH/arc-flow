@@ -18,35 +18,44 @@ function lightenColor(hex: string): string {
   return `#${lighten(r).toString(16).padStart(2, "0")}${lighten(g).toString(16).padStart(2, "0")}${lighten(b).toString(16).padStart(2, "0")}`;
 }
 
-const DEFAULT_PANEL_BG = "rgba(15,15,23,0.78)";
-
-function applyPanelColor(color: string): void {
-  if (!color) {
-    document.documentElement.style.setProperty(
-      "--color-arc-panel-bg",
-      DEFAULT_PANEL_BG
-    );
-    document.documentElement.style.setProperty(
-      "--color-arc-panel-bg-secondary",
-      DEFAULT_PANEL_BG
-    );
-    return;
-  }
-  // Append C7 hex alpha (78% opacity) to custom panel colors
-  const withAlpha = color.length === 7 ? color + "C7" : color;
-  document.documentElement.style.setProperty("--color-arc-panel-bg", withAlpha);
-  document.documentElement.style.setProperty(
-    "--color-arc-panel-bg-secondary",
-    withAlpha
-  );
-}
-
 function applyAccentColor(color: string): void {
   document.documentElement.style.setProperty("--color-arc-accent", color);
   document.documentElement.style.setProperty(
     "--color-arc-accent-hover",
     lightenColor(color)
   );
+}
+
+function lightenColorByPercent(hex: string, percent: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const lighten = (c: number) => Math.min(255, Math.round(c + (255 - c) * percent));
+  return `#${lighten(r).toString(16).padStart(2, "0")}${lighten(g).toString(16).padStart(2, "0")}${lighten(b).toString(16).padStart(2, "0")}`;
+}
+
+function getLuminance(hex: string): number {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const toLinear = (c: number) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
+
+export function applyPanelColor(color: string): void {
+  if (!color) {
+    document.documentElement.style.removeProperty("--color-arc-panel-bg");
+    document.documentElement.style.removeProperty("--color-arc-panel-bg-secondary");
+    document.documentElement.classList.remove("light-panel");
+    return;
+  }
+  document.documentElement.style.setProperty("--color-arc-panel-bg", color);
+  document.documentElement.style.setProperty("--color-arc-panel-bg-secondary", lightenColorByPercent(color, 0.1));
+  if (getLuminance(color) > 0.5) {
+    document.documentElement.classList.add("light-panel");
+  } else {
+    document.documentElement.classList.remove("light-panel");
+  }
 }
 
 function applyTheme(preference: ThemePreference): void {
@@ -68,7 +77,7 @@ export function useTheme() {
       if (s.accentColor) {
         applyAccentColor(s.accentColor);
       }
-      applyPanelColor(s.panelColor ?? "");
+      // Panel color applied by App.tsx to support per-workspace overrides
     });
   }, []);
 
@@ -87,9 +96,7 @@ export function useTheme() {
         if (newSettings?.accentColor) {
           applyAccentColor(newSettings.accentColor);
         }
-        if (newSettings) {
-          applyPanelColor(newSettings.panelColor ?? "");
-        }
+        // Panel color is now managed by App.tsx to support per-workspace overrides
       }
     };
     chrome.storage.onChanged.addListener(handler);

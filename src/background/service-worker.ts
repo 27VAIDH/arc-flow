@@ -743,6 +743,46 @@ chrome.runtime.onMessage.addListener(
     if (message.type === "UPDATE_FOCUS_MODE") {
       applyFocusModeRules().catch(() => {});
     }
+    if (message.type === "GET_TAB_INFO") {
+      (async () => {
+        try {
+          const tab = await chrome.tabs.get(message.tabId);
+          const tabMap = await getTabWorkspaceMap();
+          const wsId = tabMap[String(message.tabId)] ?? "default";
+          const workspaces = await getWorkspaces();
+          const ws = workspaces.find((w) => w.id === wsId);
+
+          // Look up lastActiveAt from folder items across all workspaces
+          let lastActiveAt = 0;
+          if (tab.active) {
+            lastActiveAt = Date.now();
+          } else {
+            for (const w of workspaces) {
+              for (const folder of w.folders) {
+                for (const item of folder.items) {
+                  if (item.type === "tab" && item.tabId === message.tabId && item.lastActiveAt) {
+                    lastActiveAt = item.lastActiveAt;
+                  }
+                }
+              }
+            }
+          }
+
+          sendResponse({
+            lastActiveAt,
+            workspaceName: ws?.name ?? "Default",
+            workspaceEmoji: ws?.emoji ?? "\u{1F4C1}",
+          });
+        } catch {
+          sendResponse({
+            lastActiveAt: 0,
+            workspaceName: "Default",
+            workspaceEmoji: "\u{1F4C1}",
+          });
+        }
+      })();
+      return true; // async response
+    }
     if (message.type === "OPEN_PINNED_APP") {
       // Find existing tab with matching origin, or open a new one
       chrome.tabs.query({ currentWindow: true }).then((tabs) => {

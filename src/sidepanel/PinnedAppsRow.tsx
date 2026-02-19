@@ -9,10 +9,12 @@ import type { ContextMenuItem } from "./ContextMenu";
 import {
   DndContext,
   closestCenter,
+  DragOverlay,
   PointerSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -46,6 +48,7 @@ interface SortablePinnedAppProps {
   app: PinnedApp;
   hasOpenTab: boolean;
   onClick: () => void;
+  onDoubleClick: (e: React.MouseEvent) => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }
 
@@ -53,6 +56,7 @@ function SortablePinnedApp({
   app,
   hasOpenTab,
   onClick,
+  onDoubleClick,
   onContextMenu,
 }: SortablePinnedAppProps) {
   const {
@@ -66,8 +70,8 @@ function SortablePinnedApp({
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
+    transition: transition || "transform 200ms ease",
+    opacity: isDragging ? 0.3 : 1,
   };
 
   return (
@@ -77,6 +81,7 @@ function SortablePinnedApp({
       {...attributes}
       {...listeners}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       className="flex flex-col items-center shrink-0 group touch-none"
       title={app.title}
@@ -117,6 +122,7 @@ export default function PinnedAppsRow({
 }: PinnedAppsRowProps) {
   const [localPinnedApps, setLocalPinnedApps] =
     useState<PinnedApp[]>(pinnedApps);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [editingApp, setEditingApp] = useState<{
     id: string;
     field: "title" | "url";
@@ -159,6 +165,12 @@ export default function PinnedAppsRow({
       url: app.url,
       origin,
     });
+  };
+
+  const handleDoubleClick = (e: React.MouseEvent, app: PinnedApp) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setEditingApp({ id: app.id, field: "title", value: app.title });
   };
 
   const handlePinnedAppContextMenu = (e: React.MouseEvent, app: PinnedApp) => {
@@ -210,6 +222,7 @@ export default function PinnedAppsRow({
   };
 
   const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
     if (e.key === "Enter") {
       handleEditSubmit();
     } else if (e.key === "Escape") {
@@ -217,7 +230,12 @@ export default function PinnedAppsRow({
     }
   };
 
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragId(event.active.id as string);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDragId(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -229,6 +247,10 @@ export default function PinnedAppsRow({
     setLocalPinnedApps(reordered);
     reorderPinnedApps(reordered.map((a) => a.id));
   };
+
+  const activeDragApp = activeDragId
+    ? localPinnedApps.find((a) => a.id === activeDragId)
+    : null;
 
   return (
     <nav aria-label="Pinned apps" className="px-3 py-2 pb-2">
@@ -256,7 +278,9 @@ export default function PinnedAppsRow({
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
+        onDragCancel={() => setActiveDragId(null)}
       >
         <SortableContext
           items={localPinnedApps.map((a) => a.id)}
@@ -278,12 +302,33 @@ export default function PinnedAppsRow({
                   app={app}
                   hasOpenTab={hasOpenTab}
                   onClick={() => handleClick(app)}
+                  onDoubleClick={(e) => handleDoubleClick(e, app)}
                   onContextMenu={(e) => handlePinnedAppContextMenu(e, app)}
                 />
               );
             })}
           </div>
         </SortableContext>
+        <DragOverlay>
+          {activeDragApp ? (
+            <div className="flex flex-col items-center">
+              <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-arc-surface flex items-center justify-center shadow-lg border border-gray-200 dark:border-arc-border">
+                {activeDragApp.favicon ? (
+                  <img
+                    src={activeDragApp.favicon}
+                    alt=""
+                    className="w-5 h-5 rounded-full"
+                    draggable={false}
+                  />
+                ) : (
+                  <span className="text-xs font-bold text-gray-500 dark:text-arc-text-secondary">
+                    {activeDragApp.title.charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
     </nav>
   );

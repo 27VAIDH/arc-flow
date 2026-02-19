@@ -12,6 +12,13 @@ import {
   THEME_OPTIONS,
   AI_PROVIDER_OPTIONS,
 } from "../shared/constants";
+import { applyPanelColor } from "./useTheme";
+
+const COLOR_PALETTE = [
+  "#2E75B6", "#EF4444", "#F97316", "#EAB308",
+  "#22C55E", "#14B8A6", "#06B6D4", "#6366f1",
+  "#A855F7", "#EC4899", "#78716C", "#64748B",
+];
 
 function SelectField({
   label,
@@ -95,7 +102,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="absolute inset-0 z-50 flex flex-col bg-gray-50 dark:bg-arc-bg"
+      className="absolute inset-0 z-50 flex flex-col bg-gray-50 dark:bg-[var(--color-arc-panel-bg)]"
       role="dialog"
       aria-modal="true"
       aria-label="Settings"
@@ -144,20 +151,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                 Accent Color
               </label>
               <div className="flex flex-wrap gap-2">
-                {[
-                  "#2E75B6",
-                  "#EF4444",
-                  "#F97316",
-                  "#EAB308",
-                  "#22C55E",
-                  "#14B8A6",
-                  "#06B6D4",
-                  "#6366f1",
-                  "#A855F7",
-                  "#EC4899",
-                  "#78716C",
-                  "#64748B",
-                ].map((color) => (
+                {COLOR_PALETTE.map((color) => (
                   <button
                     key={color}
                     onClick={() => {
@@ -189,6 +183,70 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                     aria-label={`Select accent color ${color}${settings.accentColor === color ? " (selected)" : ""}`}
                   />
                 ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-sm text-gray-700 dark:text-arc-text-primary block mb-2">
+                Panel Color
+              </label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                <button
+                  onClick={() => {
+                    handleUpdate({ panelColor: "" });
+                    applyPanelColor("");
+                  }}
+                  className={`w-6 h-6 rounded-full border border-gray-300 dark:border-arc-border focus:outline-none focus:ring-2 focus:ring-arc-accent/50 transition-transform duration-100 hover:scale-110 flex items-center justify-center ${
+                    !settings.panelColor
+                      ? "ring-2 ring-offset-1 ring-gray-400 dark:ring-offset-arc-surface"
+                      : ""
+                  }`}
+                  style={{ background: "linear-gradient(135deg, #1a1a2e 50%, #3a3a5e 50%)" }}
+                  title="Default"
+                  aria-label={`Reset to default panel color${!settings.panelColor ? " (selected)" : ""}`}
+                />
+                {COLOR_PALETTE.map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => {
+                      handleUpdate({ panelColor: color });
+                      applyPanelColor(color);
+                    }}
+                    className={`w-6 h-6 rounded-full focus:outline-none focus:ring-2 focus:ring-arc-accent/50 transition-transform duration-100 hover:scale-110 ${
+                      settings.panelColor?.toLowerCase() === color.toLowerCase()
+                        ? "ring-2 ring-offset-1 ring-gray-400 dark:ring-offset-arc-surface"
+                        : ""
+                    }`}
+                    style={{ backgroundColor: color }}
+                    title={color}
+                    aria-label={`Select panel color ${color}${settings.panelColor === color ? " (selected)" : ""}`}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={settings.panelColor || ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    handleUpdate({ panelColor: v });
+                    if (/^#[0-9A-Fa-f]{6}$/.test(v)) {
+                      applyPanelColor(v);
+                    }
+                  }}
+                  placeholder="#000000"
+                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-150 w-24"
+                />
+                {settings.panelColor && (
+                  <button
+                    onClick={() => {
+                      handleUpdate({ panelColor: "" });
+                      applyPanelColor("");
+                    }}
+                    className="text-xs text-gray-500 dark:text-arc-text-secondary hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                  >
+                    Reset
+                  </button>
+                )}
               </div>
             </div>
           </div>
