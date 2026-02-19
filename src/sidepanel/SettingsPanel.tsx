@@ -474,29 +474,34 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                   }
                 />
                 {settings.aiGrouping.provider && (
-                  <div className="flex items-center justify-between gap-4">
-                    <label className="text-sm text-gray-700 dark:text-arc-text-primary shrink-0">
-                      API Key
-                    </label>
-                    <input
-                      type="password"
-                      value={settings.aiGrouping.apiKey}
-                      onChange={(e) =>
-                        handleUpdate({
-                          aiGrouping: {
-                            ...settings.aiGrouping,
-                            apiKey: e.target.value,
-                          },
-                        })
-                      }
-                      placeholder={
-                        settings.aiGrouping.provider === "anthropic"
-                          ? "sk-ant-..."
-                          : "sk-..."
-                      }
-                      className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 min-w-[120px] w-full max-w-[180px]"
-                    />
-                  </div>
+                  <>
+                    <div className="flex items-center justify-between gap-4">
+                      <label className="text-sm text-gray-700 dark:text-arc-text-primary shrink-0">
+                        API Key
+                      </label>
+                      <input
+                        type="password"
+                        value={settings.aiGrouping.apiKey}
+                        onChange={(e) =>
+                          handleUpdate({
+                            aiGrouping: {
+                              ...settings.aiGrouping,
+                              apiKey: e.target.value,
+                            },
+                          })
+                        }
+                        placeholder={
+                          settings.aiGrouping.provider === "anthropic"
+                            ? "sk-ant-..."
+                            : "sk-..."
+                        }
+                        className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 min-w-[120px] w-full max-w-[180px]"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-400 dark:text-arc-text-secondary">
+                      Your API key is stored locally on your device without encryption. It is never sent anywhere except the selected AI provider.
+                    </p>
+                  </>
                 )}
               </>
             )}
@@ -585,7 +590,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         {/* Omnibox */}
         <section>
-          <h3 className="text-[11px] font-semibold text-gray-400 dark:text-arc-text-secondary uppercase tracking-wider mb-3">
+          <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
             Omnibox
           </h3>
           <div className="space-y-3">

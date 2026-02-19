@@ -149,7 +149,7 @@ export default function PinnedAppsRow({
       editInputRef.current.focus();
       editInputRef.current.select();
     }
-  }, [editingApp?.id, editingApp?.field]);
+  }, [editingApp]);
 
   if (localPinnedApps.length === 0 && !editingApp) return null;
 

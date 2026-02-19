@@ -696,12 +696,14 @@ export default function App() {
   useEffect(() => {
     const ws = workspaces.find((w) => w.id === activeWorkspaceId);
     if (ws) {
-      setPinnedApps(
-        [...(ws.pinnedApps ?? [])].sort((a, b) => a.sortOrder - b.sortOrder)
-      );
-      setFolders(
-        [...(ws.folders ?? [])].sort((a, b) => a.sortOrder - b.sortOrder)
-      );
+      setTimeout(() => {
+        setPinnedApps(
+          [...(ws.pinnedApps ?? [])].sort((a, b) => a.sortOrder - b.sortOrder)
+        );
+        setFolders(
+          [...(ws.folders ?? [])].sort((a, b) => a.sortOrder - b.sortOrder)
+        );
+      }, 0);
     }
   }, [activeWorkspaceId, workspaces]);
 

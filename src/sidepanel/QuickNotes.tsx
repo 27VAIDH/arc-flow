@@ -52,7 +52,7 @@ export default function QuickNotes({
 
   // Sync local state when workspace changes or external notes update
   useEffect(() => {
-    setLocalNotes(notes);
+    setTimeout(() => setLocalNotes(notes), 0);
   }, [notes, workspaceId]);
 
   const debouncedSave = useCallback(
