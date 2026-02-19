@@ -2,6 +2,9 @@
 
 Arc Browser-inspired sidebar for Chrome with workspaces, pinned apps, smart tab search, and a premium frosted glass UI.
 
+<!-- Replace with actual screenshot -->
+![ArcFlow hero — sidebar open with workspaces and tabs](docs/screenshots/hero.png)
+
 ## Features
 
 - **Workspaces** — Organize tabs into separate workspaces with emoji icons and custom colors
@@ -17,6 +20,9 @@ Arc Browser-inspired sidebar for Chrome with workspaces, pinned apps, smart tab 
 - **Swipe Navigation** — Swipe between workspaces on trackpad
 - **Keyboard Shortcuts** — `Ctrl+Shift+1-4` to switch workspaces, command palette
 
+<!-- Replace with actual screenshot -->
+![ArcFlow features overview](docs/screenshots/features-overview.png)
+
 ## Install
 
 ### Option A: Download the release (easiest)
@@ -25,8 +31,19 @@ Arc Browser-inspired sidebar for Chrome with workspaces, pinned apps, smart tab 
 2. Extract the zip
 3. Open Chrome and go to `chrome://extensions`
 4. Enable **Developer mode** (toggle in the top right)
+
+<!-- Replace with actual screenshot -->
+![Step 4 — Enable Developer mode toggle](docs/screenshots/install-developer-mode.png)
+
 5. Click **Load unpacked** and select the extracted `dist` folder
+
+<!-- Replace with actual screenshot -->
+![Step 5 — Click Load unpacked and select the dist folder](docs/screenshots/install-load-unpacked.png)
+
 6. Click the ArcFlow icon in your toolbar to open the sidebar
+
+<!-- Replace with actual screenshot -->
+![Step 6 — ArcFlow icon in the Chrome toolbar](docs/screenshots/install-toolbar-icon.png)
 
 ### Option B: Build from source
 
@@ -38,6 +55,17 @@ npm run build
 ```
 
 Then load the `dist/` folder as an unpacked extension (same steps 3-6 above).
+
+## Screenshots
+
+<!-- Replace each with actual screenshots -->
+
+| Feature | Preview |
+|---------|---------|
+| Sidebar with tabs and folders | ![Sidebar](docs/screenshots/sidebar.png) |
+| Switch-to-Tab search | ![Search](docs/screenshots/search.png) |
+| Workspaces with emoji icons | ![Workspaces](docs/screenshots/workspaces.png) |
+| Settings & customization | ![Settings](docs/screenshots/settings.png) |
 
 ## Development
 
