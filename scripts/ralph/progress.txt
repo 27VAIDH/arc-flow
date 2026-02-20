@@ -64,6 +64,8 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - `analyticsTrackOpened()`, `analyticsTrackClosed()`, `analyticsTrackDomain(url)`, `analyticsTrackWorkspaceTime()` are synchronous buffer operations
 - Workspace time tracking uses last-activation pattern: on each `onActivated`, calculate elapsed time for previous workspace, then record new activation
 - Analytics entries auto-pruned to 30 days on each flush
+- `AnalyticsSection` in SettingsPanel.tsx is self-contained: reads from `analytics` and `focusStats` storage keys, listens for changes
+- Analytics dashboard uses pure CSS bars (no charting library) — `AnalyticsDailyEntry` type duplicated locally in SettingsPanel.tsx
 
 ---
 
@@ -828,4 +830,46 @@ There are still 9 stories with `passes: false` (US-022 through US-030), so more 
   - Workspace time tracking uses "last activation" pattern: store timestamp+wsId on each activation, calculate delta on next activation
   - `AnalyticsDailyEntry` type is local to service-worker.ts — US-023 (analytics dashboard) will read from the `analytics` storage key directly
   - 30-minute cap on workspace time prevents unrealistic values from browser idle/sleep
+---
+
+## Iteration 22 - Fri Feb 20 13:03:06 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-22.log
+---
+**US-022 is complete.** Committed as `453b6bd` (code) + `00d4a90` (PRD/progress).
+
+**US-022 Summary:**
+- Added analytics data collection to the service worker with debounced writes (30-second flush interval)
+- In-memory buffer tracks: tabs opened/closed, domain visits, workspace time
+- Data structure: `{daily: {[YYYY-MM-DD]: {opened, closed, domains: {domain: count}, workspaceMinutes: {wsId: minutes}}}}`
+- `chrome.tabs.onCreated` → increments opened count
+- `chrome.tabs.onRemoved` → increments closed count  
+- `chrome.tabs.onActivated` → extracts domain from tab URL and increments domain count; calculates minutes since last activation and adds to previous workspace's time
+- Workspace time capped at 30 minutes per activation to avoid idle inflation
+- Entries older than 30 days pruned on each flush
+- All tracking functions are synchronous buffer operations (no async overhead on hot paths)
+- Typecheck passes, lint passes
+- File changed: `src/background/service-worker.ts`
+
+There are still 8 stories with `passes: false` (US-023 through US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-023
+- Added `AnalyticsSection` component to SettingsPanel.tsx — self-contained analytics dashboard
+- 7-day tabs opened/closed bar chart: vertical bars with accent color (opened) and muted gray (closed), day labels
+- Workspace time: horizontal progress bars per workspace with emoji labels and hours/minutes display
+- Top 5 domains: numbered list sorted by visit count descending
+- Memory saved: estimated total MB from closed/suspended tabs (~50 MB per tab heuristic)
+- Focus time 7-day chart: vertical green bars showing Deep Work minutes per day (only shown if data exists)
+- Clear Analytics button with confirmation dialog: "Are you sure? This cannot be undone."
+- Shows "No data yet" when analytics and focusStats are both empty
+- All charts use pure CSS (Tailwind classes) — no charting library
+- Reads from `analytics` and `focusStats` storage keys with live `chrome.storage.onChanged` listener
+- `AnalyticsDailyEntry` and `AnalyticsData` types duplicated locally (same as service worker)
+- Files changed: `src/sidepanel/SettingsPanel.tsx`
+- **Learnings for future iterations:**
+  - `AnalyticsSection` receives `workspaces` prop to resolve workspace IDs to names/emojis
+  - Aggregation logic (all days) is computed inline — no caching needed since data is small (max 30 days)
+  - Memory estimate is a rough heuristic (closed tabs * 50 MB) — not based on actual memory measurements
+  - Focus stats chart is conditionally rendered only when there's at least one day with data > 0
 ---
