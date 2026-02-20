@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Settings, Workspace } from "../shared/types";
+import type { Settings, Workspace, RoutingRule } from "../shared/types";
 import {
   getSettings,
   updateSettings,
@@ -12,6 +12,22 @@ import {
   THEME_OPTIONS,
 } from "../shared/constants";
 import { applyPanelColor } from "./useTheme";
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  sortableKeyboardCoordinates,
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 const COLOR_PALETTE = [
   "#2E75B6", "#EF4444", "#F97316", "#EAB308",
@@ -108,6 +124,233 @@ function TestConnectionButton({ apiKey }: { apiKey: string }) {
         <span className="text-red-500 text-xs" title={errorMsg}>&#10007; {errorMsg}</span>
       )}
     </div>
+  );
+}
+
+function SortableRoutingRuleRow({
+  rule,
+  index,
+  workspaces,
+  onToggle,
+  onDelete,
+}: {
+  rule: RoutingRule;
+  index: number;
+  workspaces: Workspace[];
+  onToggle: (index: number) => void;
+  onDelete: (index: number) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: `rule:${index}` });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition: transition || "transform 200ms ease",
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  const ws = workspaces.find((w) => w.id === rule.workspaceId);
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      className={`flex items-center gap-2 ${!rule.enabled ? "opacity-50" : ""}`}
+    >
+      {/* Drag handle */}
+      <span
+        {...listeners}
+        className="shrink-0 flex items-center cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 touch-none"
+        aria-label="Drag to reorder"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 16 16"
+          fill="currentColor"
+          className="w-3 h-3"
+        >
+          <path d="M6 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm5-9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
+        </svg>
+      </span>
+      {/* Pattern text */}
+      <span className="text-sm text-gray-700 dark:text-arc-text-primary truncate flex-1 min-w-0">
+        {rule.pattern || <span className="italic text-gray-400">empty</span>}
+      </span>
+      {/* Workspace badge */}
+      <span className="text-xs text-gray-500 dark:text-arc-text-secondary shrink-0 truncate max-w-[80px]">
+        {ws ? `${ws.emoji} ${ws.name}` : "Unknown"}
+      </span>
+      {/* Enable/disable toggle */}
+      <button
+        onClick={() => onToggle(index)}
+        className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+          rule.enabled
+            ? "bg-arc-accent"
+            : "bg-gray-300 dark:bg-arc-surface-hover"
+        }`}
+        aria-label={rule.enabled ? "Disable rule" : "Enable rule"}
+      >
+        <span
+          className={`pointer-events-none inline-block h-3 w-3 rounded-full bg-white shadow transition-transform ${
+            rule.enabled ? "translate-x-3" : "translate-x-0"
+          }`}
+        />
+      </button>
+      {/* Delete button */}
+      <button
+        onClick={() => onDelete(index)}
+        className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-red-500 dark:hover:text-red-400 shrink-0"
+        aria-label="Delete rule"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 16 16"
+          fill="currentColor"
+          className="w-3.5 h-3.5"
+        >
+          <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+function RoutingRulesSection({
+  settings,
+  workspaces,
+  onUpdate,
+}: {
+  settings: Settings;
+  workspaces: Workspace[];
+  onUpdate: (data: Partial<Settings>) => void;
+}) {
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newPattern, setNewPattern] = useState("");
+  const [newWorkspaceId, setNewWorkspaceId] = useState(
+    workspaces[0]?.id ?? "default"
+  );
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = parseInt(String(active.id).replace("rule:", ""), 10);
+    const newIndex = parseInt(String(over.id).replace("rule:", ""), 10);
+
+    const reordered = arrayMove(settings.routingRules, oldIndex, newIndex);
+    onUpdate({ routingRules: reordered });
+  };
+
+  const handleToggle = (index: number) => {
+    const rules = [...settings.routingRules];
+    rules[index] = { ...rules[index], enabled: !rules[index].enabled };
+    onUpdate({ routingRules: rules });
+  };
+
+  const handleDelete = (index: number) => {
+    const rules = settings.routingRules.filter((_, i) => i !== index);
+    onUpdate({ routingRules: rules });
+  };
+
+  const handleAdd = () => {
+    if (!newPattern.trim()) return;
+    const rules = [
+      ...settings.routingRules,
+      { pattern: newPattern.trim(), workspaceId: newWorkspaceId, enabled: true },
+    ];
+    onUpdate({ routingRules: rules });
+    setNewPattern("");
+    setNewWorkspaceId(workspaces[0]?.id ?? "default");
+    setShowAddForm(false);
+  };
+
+  return (
+    <section>
+      <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
+        Auto-routing
+      </h3>
+      <div className="space-y-3">
+        <p className="text-xs text-gray-500 dark:text-arc-text-secondary">
+          Route new tabs to workspaces based on URL patterns. Use * as
+          wildcard (e.g. *.google.com/*).
+        </p>
+        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+          <SortableContext
+            items={settings.routingRules.map((_, i) => `rule:${i}`)}
+            strategy={verticalListSortingStrategy}
+          >
+            {settings.routingRules.map((rule, index) => (
+              <SortableRoutingRuleRow
+                key={`rule-${index}`}
+                rule={rule}
+                index={index}
+                workspaces={workspaces}
+                onToggle={handleToggle}
+                onDelete={handleDelete}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
+        {showAddForm ? (
+          <div className="space-y-2 p-2 rounded-lg border border-gray-200 dark:border-arc-border bg-white/50 dark:bg-arc-surface/50">
+            <input
+              type="text"
+              value={newPattern}
+              onChange={(e) => setNewPattern(e.target.value)}
+              placeholder="e.g., github.com/*"
+              className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 w-full"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleAdd();
+                if (e.key === "Escape") setShowAddForm(false);
+              }}
+            />
+            <select
+              value={newWorkspaceId}
+              onChange={(e) => setNewWorkspaceId(e.target.value)}
+              className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 w-full"
+            >
+              {workspaces.map((ws) => (
+                <option key={ws.id} value={ws.id}>
+                  {ws.emoji} {ws.name}
+                </option>
+              ))}
+            </select>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleAdd}
+                disabled={!newPattern.trim()}
+                className="text-sm text-arc-accent dark:text-arc-accent-hover hover:text-indigo-700 dark:hover:text-indigo-300 disabled:opacity-50"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  setShowAddForm(false);
+                  setNewPattern("");
+                }}
+                className="text-sm text-gray-500 dark:text-arc-text-secondary hover:text-gray-700 dark:hover:text-gray-300"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="text-sm text-arc-accent dark:text-arc-accent-hover hover:text-indigo-700 dark:hover:text-indigo-300"
+          >
+            + Add Rule
+          </button>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -504,86 +747,12 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
           </div>
         </section>
 
-        {/* Air Traffic Control */}
-        <section>
-          <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
-            Air Traffic Control
-          </h3>
-          <div className="space-y-3">
-            <p className="text-xs text-gray-500 dark:text-arc-text-secondary">
-              Route new tabs to workspaces based on URL patterns. Use * as
-              wildcard (e.g. *slack.com*).
-            </p>
-            {settings.routingRules.map((rule, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={rule.pattern}
-                  onChange={(e) => {
-                    const rules = [...settings.routingRules];
-                    rules[index] = { ...rules[index], pattern: e.target.value };
-                    handleUpdate({ routingRules: rules });
-                  }}
-                  placeholder="*example.com*"
-                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 flex-1 min-w-0"
-                />
-                <select
-                  value={rule.workspaceId}
-                  onChange={(e) => {
-                    const rules = [...settings.routingRules];
-                    rules[index] = {
-                      ...rules[index],
-                      workspaceId: e.target.value,
-                    };
-                    handleUpdate({ routingRules: rules });
-                  }}
-                  className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 min-w-[100px]"
-                >
-                  {workspaces.map((ws) => (
-                    <option key={ws.id} value={ws.id}>
-                      {ws.emoji} {ws.name}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => {
-                    const rules = settings.routingRules.filter(
-                      (_, i) => i !== index
-                    );
-                    handleUpdate({ routingRules: rules });
-                  }}
-                  className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-500 dark:hover:text-red-400 shrink-0"
-                  aria-label="Delete rule"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 16 16"
-                    fill="currentColor"
-                    className="w-3.5 h-3.5"
-                  >
-                    <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-            <button
-              onClick={() => {
-                const rules = [
-                  ...settings.routingRules,
-                  {
-                    pattern: "",
-                    workspaceId: workspaces[0]?.id ?? "default",
-                    enabled: true,
-                  },
-                ];
-                handleUpdate({ routingRules: rules });
-              }}
-              className="text-sm text-arc-accent dark:text-arc-accent-hover hover:text-indigo-700 dark:hover:text-indigo-300"
-            >
-              + Add Rule
-            </button>
-          </div>
-        </section>
+        {/* Auto-routing */}
+        <RoutingRulesSection
+          settings={settings}
+          workspaces={workspaces}
+          onUpdate={handleUpdate}
+        />
 
         {/* Omnibox */}
         <section>
