@@ -23,6 +23,7 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - Toast renders as fixed bottom-center overlay with `animate-fade-in` (defined in index.css)
 - Context menu items can be async — `onClick` handler supports `async () => {}` pattern
 - To add routing rules from code: `getSettings()` → check existing → `updateSettings({ routingRules: [...existing, newRule] })`
+- App.tsx message listener is mount-once (`[]` deps) — use `useRef` + `useEffect` to access changing state (e.g., `activeWorkspaceIdRef`)
 
 ---
 
@@ -203,4 +204,37 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - Context menu `onClick` handlers can be async — useful for storage operations
   - `getSettings()` must be called at click time (not menu render time) to get fresh routing rules
   - `animate-fade-in` CSS class is already defined in `index.css` — reuse it for entry animations
+---
+
+## Iteration 6 - Fri Feb 20 12:17:44 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-6.log
+---
+**US-006 is complete.** Committed as `4c218e1`. There are still 24 stories with `passes: false`, so more iterations are needed.
+
+**US-006 Summary:**
+- Added "Always open [domain] here" context menu item to tab right-click menu in `App.tsx`
+- Extracts domain from tab URL, creates `*://domain/*` routing rule for the active workspace
+- Checks for existing rule before adding — shows "Rule already exists for [domain]" toast if duplicate
+- Shows success toast: "Tabs from [domain] will auto-route to [emoji] [name]"
+- Added reusable toast notification system to App.tsx (3-second auto-dismiss, fixed bottom-center)
+- Skips chrome:// and extension:// domains
+- Typecheck passes, lint passes
+- File changed: `src/sidepanel/App.tsx`
+---
+
+## 2026-02-20 - US-007
+- Added auto-routing indicator banner in App.tsx below the search bar
+- Listens for `tab-auto-routed` message from service worker via existing `handleMessage` listener
+- Uses `activeWorkspaceIdRef` (ref updated via useEffect) to check workspace match inside the mount-once listener
+- Banner shows workspace emoji + name: "Tab auto-routed to [emoji] [name]"
+- Banner auto-fades after 3 seconds via useEffect timer
+- Banner has small X button to dismiss immediately
+- Only shows if user is currently viewing the target workspace
+- Styled with accent color bg tint, rounded corners, and `animate-fade-in` animation
+- Files changed: `src/sidepanel/App.tsx`
+- **Learnings for future iterations:**
+  - The message listener in App.tsx is set up once with `[]` dependency — use refs to access changing state inside it
+  - `getWorkspaces()` can be called inside the message handler to get fresh workspace data (name, emoji)
+  - `animate-fade-in` class from `index.css` works well for entry animations on banners
 ---

@@ -569,12 +569,18 @@ export default function App() {
   const [tabOrderOverrides, setTabOrderOverrides] = useState<number[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [isDraggingTabs, setIsDraggingTabs] = useState(false);
+  const [autoRouteIndicator, setAutoRouteIndicator] = useState<{
+    workspaceId: string;
+    workspaceName: string;
+    workspaceEmoji: string;
+  } | null>(null);
   const [tabPreview, setTabPreview] = useState<{
     tab: TabPreviewInfo;
     position: { top: number; left: number };
   } | null>(null);
   const tabPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mainContentRef = useRef<HTMLElement>(null);
+  const activeWorkspaceIdRef = useRef(activeWorkspaceId);
   const [swipeBounce, setSwipeBounce] = useState<"left" | "right" | null>(null);
 
   // Sorted workspaces for swipe navigation
@@ -637,6 +643,11 @@ export default function App() {
     });
   }, []);
 
+  // Keep activeWorkspaceId ref in sync for use in message listener
+  useEffect(() => {
+    activeWorkspaceIdRef.current = activeWorkspaceId;
+  }, [activeWorkspaceId]);
+
   // Auto-dismiss toast after 3 seconds
   useEffect(() => {
     if (toast) {
@@ -644,6 +655,14 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [toast]);
+
+  // Auto-dismiss auto-route indicator after 3 seconds
+  useEffect(() => {
+    if (autoRouteIndicator) {
+      const timer = setTimeout(() => setAutoRouteIndicator(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [autoRouteIndicator]);
 
   // Listen for Ctrl+Shift+K to open command palette
   useEffect(() => {
@@ -778,6 +797,20 @@ export default function App() {
               tab.id === message.tabId && tab.windowId === message.windowId,
           }))
         );
+      } else if (message.type === "tab-auto-routed") {
+        // Show indicator only if user is viewing the target workspace
+        if (message.workspaceId === activeWorkspaceIdRef.current) {
+          getWorkspaces().then((wsList) => {
+            const ws = wsList.find((w) => w.id === message.workspaceId);
+            if (ws) {
+              setAutoRouteIndicator({
+                workspaceId: ws.id,
+                workspaceName: ws.name,
+                workspaceEmoji: ws.emoji,
+              });
+            }
+          });
+        }
       }
     };
 
@@ -1567,6 +1600,30 @@ export default function App() {
           }}
         />
       </nav>
+
+      {/* Auto-routing indicator */}
+      {autoRouteIndicator && (
+        <div className="mx-4 mb-1 flex items-center justify-between gap-2 px-3 py-1.5 text-xs rounded-lg bg-arc-accent/10 dark:bg-arc-accent/15 text-arc-accent dark:text-arc-accent-hover animate-fade-in transition-opacity duration-300">
+          <span>
+            Tab auto-routed to {autoRouteIndicator.workspaceEmoji}{" "}
+            {autoRouteIndicator.workspaceName}
+          </span>
+          <button
+            onClick={() => setAutoRouteIndicator(null)}
+            className="shrink-0 w-4 h-4 flex items-center justify-center hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+            aria-label="Dismiss auto-route notification"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              className="w-3 h-3"
+            >
+              <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* Pinned Apps Row (Zone 2) */}
       <PinnedAppsRow
