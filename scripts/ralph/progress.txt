@@ -27,6 +27,8 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - `pendingWorkspaceSuggestion` storage key holds AI/fallback workspace suggestion for sidepanel (US-009)
 - `WorkspaceSuggestion` type in types.ts has `tabIds` array for knowing which tabs to move into new workspace
 - `checkForWorkspaceSuggestion()` in service worker has 10-min cooldown — safe to call from hot paths
+- Workspace suggestion card in App.tsx uses `pendingWorkspaceSuggestion` storage key; dismissal tracked via `suggestionDismissedAt` (24h cooldown)
+- `assignTabToWorkspace(tabId, wsId)` from workspaceStorage.ts moves a tab to a workspace in the tab-workspace map
 
 ---
 
@@ -278,4 +280,41 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - `pendingWorkspaceSuggestion` storage key holds the suggestion for the sidepanel (US-009) to consume
   - `WorkspaceSuggestion.tabIds` tracks which tabs to move when the user accepts the suggestion
   - Domain clustering fallback capitalizes the first part of the hostname as workspace name (e.g., "github.com" → "Github")
+---
+
+## Iteration 8 - Fri Feb 20 12:23:21 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-8.log
+---
+**US-008 is complete.** Committed as `1e4d045`. There are still 22 stories with `passes: false`, so more iterations are needed.
+
+**US-008 Summary:**
+- Added AI auto-workspace suggestion engine to the service worker
+- `getUnorganizedTabs()`: finds tabs not matching any routing rule and not in any folder
+- `getAISuggestion()`: calls OpenRouter API with tab titles/URLs, asks for `{suggest, name, emoji, reason}` JSON response
+- `domainClusterFallback()`: when AI is unavailable, groups 3+ tabs from the same domain into a suggestion
+- `checkForWorkspaceSuggestion()`: orchestrates the detection with a 10-minute cooldown
+- Suggestion stored in `chrome.storage.local` under `pendingWorkspaceSuggestion`
+- Sends `workspace-suggestion-ready` message to sidepanel
+- Added `WorkspaceSuggestion` type and `workspace-suggestion-ready` message type to `types.ts`
+- Triggered on tab navigation complete and via periodic 5-minute alarm
+- Typecheck passes, lint passes
+- Files changed: `src/background/service-worker.ts`, `src/shared/types.ts`
+---
+
+## 2026-02-20 - US-009
+- Added AI auto-workspace suggestion card to sidebar in App.tsx
+- Listens for `workspace-suggestion-ready` message and loads `pendingWorkspaceSuggestion` from storage
+- Also loads pending suggestion on mount (in case message was sent before sidepanel opened)
+- Card appears below search bar (after auto-routing indicator) with emoji, name, and reason text
+- "Create" button: creates workspace with suggested name/emoji, moves relevant tabs (via tabIds), switches user to new workspace
+- "Dismiss" button: hides card, stores `suggestionDismissedAt` timestamp, suppresses re-showing for 24 hours
+- Card styled with rounded corners, subtle shadow, accent border matching theme
+- Uses existing toast system for success/error feedback
+- Files changed: `src/sidepanel/App.tsx`
+- **Learnings for future iterations:**
+  - `assignTabToWorkspace` from workspaceStorage.ts is the correct way to move tabs to a workspace
+  - `createWorkspace` sets a default emoji, so call `updateWorkspace` right after to set the suggested emoji
+  - `loadWorkspaceSuggestion` is a stable callback (via useCallback) so it can be used in the mount-once useEffect dependency array
+  - 24h dismissal uses `suggestionDismissedAt` key in chrome.storage.local
 ---
