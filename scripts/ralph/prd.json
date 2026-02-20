@@ -1,0 +1,563 @@
+{
+  "project": "ArcFlow",
+  "branchName": "ralph/v2-intelligence-delight",
+  "description": "ArcFlow v2.0 — Intelligence & Delight Update. AI-powered automation via OpenRouter.ai, auto-routing, tab deduplication, recently closed recovery, Deep Work Mode with Pomodoro, Morning Briefing, markdown notes, usage analytics, daily snapshots, tab energy scores, workspace handoff, and contextual snippets.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Replace AI service with OpenRouter.ai backend",
+      "description": "As a developer, I need to replace the existing Anthropic/OpenAI integration in aiGroupingService.ts with a single OpenRouter.ai backend. Update the API call to use endpoint https://openrouter.ai/api/v1/chat/completions with model google/gemini-2.0-flash-001. Request headers: Authorization Bearer, Content-Type application/json, HTTP-Referer chrome-extension://arcflow. Keep 10-second timeout. Fallback to heuristic grouping on failure.",
+      "acceptanceCriteria": [
+        "aiGroupingService.ts uses fetch to https://openrouter.ai/api/v1/chat/completions",
+        "Request body includes model: 'google/gemini-2.0-flash-001'",
+        "Headers include Authorization Bearer <key>, Content-Type application/json, HTTP-Referer chrome-extension://arcflow",
+        "10-second timeout via AbortController",
+        "On failure, falls back to heuristic grouping (existing behavior)",
+        "Error logged to console with descriptive message",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Update settings UI for OpenRouter API key",
+      "description": "As a user, I want a single OpenRouter API Key field in settings instead of separate Anthropic/OpenAI provider selection. In SettingsPanel.tsx: remove provider dropdown (anthropic/openai), remove old apiKey field. Add single 'OpenRouter API Key' text input. Add 'Test Connection' button that calls OpenRouter with a minimal prompt and shows success/failure. Update settingsStorage.ts to migrate old aiGrouping.provider/apiKey to new openRouterApiKey field. Update shared/types.ts Settings interface.",
+      "acceptanceCriteria": [
+        "SettingsPanel.tsx: provider dropdown removed",
+        "SettingsPanel.tsx: single 'OpenRouter API Key' password input field shown",
+        "Test Connection button makes minimal API call (e.g., 'Say hi' with max_tokens: 5) and shows green checkmark on success, red X with error on failure",
+        "Settings type updated: aiGrouping replaced with openRouterApiKey: string",
+        "settingsStorage.ts: migration function checks for old aiGrouping.apiKey and copies to openRouterApiKey",
+        "constants.ts DEFAULT_SETTINGS updated",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Add auto-routing rules storage and matching engine",
+      "description": "As a developer, I need a routing rules engine that matches tab URLs against glob patterns and returns the target workspace. In shared/: create routingEngine.ts with matchRoute(url, rules) function. Rules schema: {pattern: string, workspaceId: string, enabled: boolean}. Glob matching: convert pattern to regex (*.google.com/* → regex). First match wins. Export from shared/types.ts.",
+      "acceptanceCriteria": [
+        "routingEngine.ts exports matchRoute(url: string, rules: RoutingRule[]): string | null",
+        "RoutingRule type: {pattern: string, workspaceId: string, enabled: boolean}",
+        "Glob patterns converted correctly: * matches anything except /, ** matches everything",
+        "github.com/* matches https://github.com/repo but not https://api.github.com/repo",
+        "*.google.com/* matches https://docs.google.com/page and https://mail.google.com/inbox",
+        "First matching enabled rule wins, disabled rules skipped",
+        "Returns null if no match",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Wire auto-routing into service worker tab events",
+      "description": "As a user, I want new tabs automatically routed to the correct workspace. In background/service-worker.ts: on chrome.tabs.onUpdated (status complete, URL changed), call matchRoute with the tab URL and settings.routingRules. If match found and tab not already in target workspace, update tabWorkspaceMap to assign tab to target workspace. Send message to sidepanel to show brief 'Auto-routed to [Workspace]' indicator.",
+      "acceptanceCriteria": [
+        "chrome.tabs.onUpdated listener calls matchRoute when tab URL changes (status === 'complete')",
+        "If matchRoute returns a workspaceId different from current, tabWorkspaceMap updated in storage",
+        "chrome.runtime.sendMessage sent with type 'tab-auto-routed' and workspaceId/tabId",
+        "chrome:// and extension:// URLs are ignored (not routed)",
+        "New tab pages (chrome://newtab) are ignored",
+        "If no rule matches, no action taken",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Add auto-routing rules settings UI",
+      "description": "As a user, I want to manage auto-routing rules in settings. In SettingsPanel.tsx: add 'Auto-Routing Rules' section. Show list of existing rules with pattern, workspace name, enable/disable toggle, and delete button. 'Add Rule' button opens inline form with pattern text input and workspace dropdown. Rules saved to settings.routingRules. Rules reorderable via drag handles (use existing @dnd-kit).",
+      "acceptanceCriteria": [
+        "New 'Auto-routing' section in SettingsPanel.tsx",
+        "Each rule row shows: pattern text, workspace emoji+name, toggle switch, delete (X) button",
+        "Add Rule button shows inline form with pattern input and workspace dropdown",
+        "Pattern input has placeholder: 'e.g., github.com/*'",
+        "Workspace dropdown lists all current workspaces",
+        "Rules saved to settings.routingRules on add/edit/delete/toggle",
+        "Rules reorderable via drag handle (drag icon on left of each row)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Add quick-add routing rule from tab context menu",
+      "description": "As a user, I want to right-click a tab in the sidebar and select 'Always open [domain] in this workspace' to quickly create a routing rule. In ContextMenu.tsx: add menu item that extracts domain from tab URL, creates *://domain/* pattern, saves to settings.routingRules for current workspace. Show toast confirmation.",
+      "acceptanceCriteria": [
+        "ContextMenu.tsx: new item 'Always open [domain] in this workspace' (domain extracted from tab URL)",
+        "Clicking creates rule: {pattern: '*://domain/*', workspaceId: currentWorkspaceId, enabled: true}",
+        "Rule appended to settings.routingRules in storage",
+        "Toast shown: 'Tabs from [domain] will auto-route to [Workspace emoji+name]'",
+        "If rule for same domain already exists, show toast: 'Rule already exists for [domain]'",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Add auto-routing indicator in sidebar",
+      "description": "As a user, I want a brief visual indicator when a tab is auto-routed to my workspace. In App.tsx: listen for 'tab-auto-routed' message from service worker. Show a small dismissible banner below search bar: 'Tab auto-routed to [Workspace emoji+name]' that fades out after 3 seconds.",
+      "acceptanceCriteria": [
+        "chrome.runtime.onMessage listener for 'tab-auto-routed' in App.tsx",
+        "Banner appears below search bar with workspace emoji and name",
+        "Banner auto-fades after 3 seconds (opacity transition)",
+        "Banner has small X to dismiss immediately",
+        "Only shows if user is currently viewing the target workspace",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Add AI auto-workspace suggestion — service worker logic",
+      "description": "As a developer, I need the service worker to detect when 3+ unorganized tabs share a topic and trigger an AI suggestion. Track 'unorganized' tabs (not matching any routing rule, not in a folder). When 3+ share a domain or are opened within 2 minutes, send titles+URLs to OpenRouter with prompt asking for workspace name/emoji suggestion. Store suggestion in chrome.storage.local under 'pendingWorkspaceSuggestion'. Cooldown: 1 suggestion per 10 minutes.",
+      "acceptanceCriteria": [
+        "Service worker tracks unorganized tabs (no routing rule match, not in any folder)",
+        "When 3+ unorganized tabs detected, OpenRouter API called with tab titles and URLs",
+        "Prompt asks for JSON response: {suggest: boolean, name: string, emoji: string, reason: string}",
+        "API response parsed and stored in chrome.storage.local as 'pendingWorkspaceSuggestion'",
+        "Cooldown: suggestion skipped if last suggestion was < 10 minutes ago",
+        "If OpenRouter unavailable, falls back to domain clustering (3+ tabs same domain = suggest with domain as name)",
+        "chrome.runtime.sendMessage sent with type 'workspace-suggestion-ready'",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Add AI auto-workspace suggestion — sidebar UI card",
+      "description": "As a user, I want to see a suggestion card when ArcFlow detects a new topic cluster. In App.tsx: listen for 'workspace-suggestion-ready' message. Read pendingWorkspaceSuggestion from storage. Show card at top of sidebar: '[emoji] Create [name] workspace? [reason]' with 'Create' and 'Dismiss' buttons. Create button creates workspace and moves tabs. Dismiss hides card and suppresses for 24h.",
+      "acceptanceCriteria": [
+        "Suggestion card appears at top of sidebar (below search bar) with emoji, name, and reason",
+        "Card styled like onboarding card: rounded corners, subtle shadow, accent border",
+        "'Create' button: creates workspace with suggested name/emoji, moves relevant tabs into it, removes card",
+        "'Dismiss' button: hides card, stores dismissal timestamp, suppresses re-showing for 24 hours",
+        "Card does not show if user already dismissed within 24 hours",
+        "After creation, user is switched to the new workspace",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Track recently closed tabs in service worker",
+      "description": "As a developer, I need to track tabs closed by the user for recovery. In service-worker.ts: listen to chrome.tabs.onRemoved. Before tab is fully removed, get tab info (url, title, favIconUrl). Store in chrome.storage.local under 'recentlyClosed' as array of {url, title, favicon, workspaceId, closedAt}. Keep last 20 entries (FIFO). Do NOT track tabs closed by auto-archive (check if tab URL matches an archive entry added in the same second).",
+      "acceptanceCriteria": [
+        "chrome.tabs.onRemoved listener captures tab info before removal",
+        "Closed tab stored with: url, title, favicon (favIconUrl), workspaceId (from tabWorkspaceMap), closedAt (Date.now())",
+        "Array capped at 20 entries, oldest removed when exceeded",
+        "Stored in chrome.storage.local under key 'recentlyClosed'",
+        "Tabs with chrome:// or extension:// URLs are NOT tracked",
+        "Tabs closed by auto-archive are NOT tracked (compare with recent archive entries)",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Add recently closed tabs sidebar section",
+      "description": "As a user, I want a 'Recently Closed' collapsible section in the sidebar to recover accidentally closed tabs. Create RecentlyClosedSection.tsx component. Show between Archive and Quick Notes. Each entry: favicon, truncated title, workspace emoji badge, relative time. Click reopens URL in new tab assigned to original workspace. Clear All button. Section hidden when empty.",
+      "acceptanceCriteria": [
+        "New RecentlyClosedSection.tsx component following collapsible section pattern (like ArchiveSection)",
+        "Section placed between Archive and Quick Notes in App.tsx",
+        "Section header: 'Recently closed' with count badge and collapse toggle",
+        "Each entry shows: favicon (16px), title (truncated 40 chars), workspace emoji, relative time ('2m ago')",
+        "Clicking entry: opens URL in new tab, assigns to original workspaceId in tabWorkspaceMap, removes from list",
+        "'Clear all' button empties the list with no confirmation",
+        "Section hidden entirely when recentlyClosed array is empty",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Add tab deduplication detection in service worker",
+      "description": "As a developer, I need the service worker to detect duplicate tabs across workspaces. In service-worker.ts: on chrome.tabs.onUpdated (status complete), normalize the URL (strip trailing slash, www. prefix, hash fragment) and check against all other open tabs. If duplicate found, send message to sidepanel with type 'duplicate-tab-detected', newTabId, existingTabId, existingWorkspaceId. Ignore chrome://, extension://, and newtab URLs.",
+      "acceptanceCriteria": [
+        "normalizeUrl function: strips trailing /, removes www. prefix, removes hash fragment",
+        "On tab URL update (status complete), normalized URL compared against all other open tabs",
+        "If duplicate found, chrome.runtime.sendMessage sent with: type 'duplicate-tab-detected', newTabId, existingTabId, existingWorkspaceId, existingWorkspaceName",
+        "chrome://, extension://, about:blank, and chrome://newtab URLs ignored",
+        "Self-comparison excluded (new tab not compared to itself)",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Add tab deduplication notification bar in sidebar",
+      "description": "As a user, I want a notification when I open a duplicate tab so I can switch to the existing one. In App.tsx: listen for 'duplicate-tab-detected' message. Show a non-blocking bar below search bar: 'This tab is already open in [Workspace emoji]. Switch to it?' with 'Switch' and 'Keep Both' buttons. Switch closes duplicate and activates existing tab. Auto-dismiss after 8 seconds.",
+      "acceptanceCriteria": [
+        "Notification bar appears below search bar on duplicate detection",
+        "Shows: 'Already open in [Workspace emoji+name]' with Switch and Keep Both buttons",
+        "'Switch' button: closes new duplicate tab (chrome.tabs.remove), activates existing tab (chrome.tabs.update active:true), switches workspace if needed",
+        "'Keep Both' button: dismisses notification, keeps both tabs",
+        "Bar auto-dismisses after 8 seconds with fade-out transition",
+        "Only one dedup notification shown at a time (new one replaces old)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Add Deep Work Mode toggle and state management",
+      "description": "As a user, I want a Deep Work button in the sidebar header that activates focus features. In App.tsx: add brain icon button to header. When toggled on: enable focus mode (set focusMode.enabled = true in settings), suspend all tabs except active (chrome.tabs.discard), expand Quick Notes. Store deepWorkActive boolean in chrome.storage.local. Add keyboard shortcut Ctrl+Shift+D. Add command palette entry.",
+      "acceptanceCriteria": [
+        "Brain/focus icon button added to sidebar header (right side, next to Organize button)",
+        "Button toggles deepWorkActive state in chrome.storage.local",
+        "When activated: settings.focusMode.enabled set to true, chrome.tabs.discard called for all non-active tabs, Quick Notes section expanded",
+        "When deactivated: settings.focusMode.enabled set to false, tabs NOT unsuspended",
+        "Header gets subtle accent glow/border when Deep Work is active (ring-1 ring-arc-accent/30)",
+        "State persists across sidebar close/reopen",
+        "Command palette entry: 'Toggle Deep Work Mode'",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Add Pomodoro timer component",
+      "description": "As a user, I want a Pomodoro timer in the sidebar during Deep Work Mode. Create PomodoroTimer.tsx component. Shows below header when Deep Work is active. Default: 25 min work / 5 min break / 4 sessions before long break (15 min). Display: MM:SS, session count, work/break label. Pause/resume and skip buttons. Timer uses chrome.alarms for accuracy. State persisted in chrome.storage.local under 'pomodoroState'.",
+      "acceptanceCriteria": [
+        "PomodoroTimer.tsx component renders below header in App.tsx only when deepWorkActive is true",
+        "Shows remaining time MM:SS, 'Session X of 4', and 'Work'/'Break' label",
+        "Pause/resume toggle button (play/pause icon)",
+        "Skip button (skip-forward icon) jumps to next phase",
+        "Timer uses chrome.alarms API: alarm fires every minute, exact remaining time calculated from startedAt timestamp",
+        "When work session ends: chrome.notifications.create with title 'Break time!' and message '5 minutes'",
+        "When break ends: chrome.notifications.create with title 'Back to work!' and message 'Session N starting'",
+        "After session 4: notification suggests 15-min long break",
+        "State persisted: {phase: 'work'|'break', sessionNumber, startedAt, pausedAt, remainingMs}",
+        "Compact single-line design: [MM:SS] [Session 2/4 · Work] [pause] [skip]",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Add focus stats tracking and display",
+      "description": "As a user, I want to see my Deep Work focus time. Track total minutes and session count per day in chrome.storage.local under 'focusStats'. Data structure: {[YYYY-MM-DD]: {totalMinutes: number, sessions: number}}. Update on Pomodoro work session completion. Show 'Today: Xh Ym (N sessions)' in the Deep Work header area. Keep 30 days of history.",
+      "acceptanceCriteria": [
+        "focusStats stored in chrome.storage.local with {[dateString]: {totalMinutes, sessions}} structure",
+        "On each Pomodoro work session completion (25 min timer ends), totalMinutes incremented by 25 and sessions by 1",
+        "Display shows 'Today: 2h 15m (5 sessions)' below Pomodoro timer when Deep Work is active",
+        "Shows '0m (0 sessions)' if no focus time today",
+        "Entries older than 30 days pruned on each write",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Add Morning Briefing card",
+      "description": "As a user, I want a daily summary card on first sidebar open. Create MorningBriefing.tsx component. Shows at top of sidebar on first open each calendar day. Content: total tabs + per-workspace breakdown with emojis, tabs opened/closed since last session, yesterday's focus time. Dismiss button hides for rest of day. Store lastSessionTimestamp and briefingDismissedDate in storage.",
+      "acceptanceCriteria": [
+        "MorningBriefing.tsx component shown at top of sidebar (above search bar)",
+        "Only shows on first sidebar open per calendar day (compare today's date vs briefingDismissedDate)",
+        "Card shows: total open tabs, per-workspace tab counts with emoji icons",
+        "Shows 'X tabs opened, Y closed since last session' (tracked by service worker)",
+        "Shows yesterday's focus time if > 0 from focusStats",
+        "Shows first line of each workspace's notes as reminders (if non-empty)",
+        "Dismiss (X) button stores today's date as briefingDismissedDate",
+        "Card styled with rounded corners, subtle shadow, matching theme colors",
+        "lastSessionTimestamp updated on sidebar visibilitychange (hidden)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 17,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Add AI tip to Morning Briefing",
+      "description": "As a user, I want an AI-generated productivity tip in my morning briefing. If OpenRouter API key is configured, send yesterday's browsing summary (top domains, tab counts, workspace names) to OpenRouter with prompt: 'Based on this browsing summary, give one short productivity tip (under 20 words).' Display as italicized line at bottom of briefing card. 5-second timeout; skip if slow.",
+      "acceptanceCriteria": [
+        "If openRouterApiKey is set, API call made with yesterday's browsing summary",
+        "Prompt asks for one short tip under 20 words",
+        "Tip displayed as italicized text at bottom of Morning Briefing card",
+        "5-second timeout via AbortController; on timeout or error, tip section simply hidden",
+        "If no API key configured, tip section not shown (no error)",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Add markdown preview to Quick Notes",
+      "description": "As a user, I want markdown support in workspace notes. In QuickNotes.tsx: add Edit/Preview toggle button. In Edit mode: existing textarea (raw markdown). In Preview mode: render markdown as HTML. Support: **bold**, *italic*, ## headers, - bullet lists, - [ ] checklists, [links](url). Increase limit to 5000 chars. Checklists clickable in preview (toggle [ ] / [x]).",
+      "acceptanceCriteria": [
+        "Toggle button in notes header: 'Edit' / 'Preview' with icon",
+        "Edit mode: existing textarea behavior, raw markdown visible",
+        "Preview mode: markdown rendered as styled HTML (use simple regex-based renderer, no heavy library)",
+        "Supported syntax: **bold** → <strong>, *italic* → <em>, ## headers → <h2>, - lists → <ul><li>, - [ ] → checkbox, [text](url) → <a>",
+        "Checklist items clickable in preview: clicking toggles - [ ] ↔ - [x] in underlying text",
+        "Character limit increased from 2000 to 5000",
+        "Character counter shows 'X / 5,000'",
+        "Existing plain text notes render correctly (plain text is valid markdown)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 19,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Add content script for notes capture from page",
+      "description": "As a user, I want to right-click selected text on any page and save it to my ArcFlow workspace notes. Add content_scripts entry to manifest.json. Create content/capture.ts content script. Register context menu item 'Save to ArcFlow Notes' in service worker. On click: get selected text, append to current workspace notes with source attribution format. Show annotation popup for optional note.",
+      "acceptanceCriteria": [
+        "manifest.json: content_scripts entry added matching <all_urls>",
+        "content/capture.ts: content script that listens for messages from background",
+        "Context menu item 'Save to ArcFlow Notes' registered in service worker (chrome.contextMenus.create with contexts: ['selection'])",
+        "On context menu click: selected text captured, sent to service worker",
+        "Service worker appends to workspace notes: '\\n\\n> [text]\\n— [title](url)\\n'",
+        "If text would exceed 5000 chars, content script shows alert: 'Notes full'",
+        "Small overlay popup appears on page for optional annotation input with Save/Skip buttons",
+        "If annotation added, format: '\\n\\n> [text]\\n— [title](url)\\n📝 [annotation]\\n'",
+        "Toast/notification confirms: 'Saved to [Workspace] notes'",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Add link current tab button to notes panel",
+      "description": "As a user, I want a quick button in the notes panel to insert a markdown link to the active tab. In QuickNotes.tsx: add small link icon button in header (next to edit/preview toggle). On click: get active tab title+URL via chrome.tabs.query, insert [title](url) at cursor position or append to end. Only enabled in Edit mode.",
+      "acceptanceCriteria": [
+        "Link icon button (chain-link icon) added to QuickNotes header, next to edit/preview toggle",
+        "On click: queries chrome.tabs.query({active: true, currentWindow: true}) for active tab",
+        "Inserts '[Page Title](url)' at textarea cursor position, or appends if no cursor",
+        "Button disabled (grayed out) when in Preview mode",
+        "Button has tooltip: 'Insert link to current tab'",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 21,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Add analytics data collection in service worker",
+      "description": "As a developer, I need the service worker to collect browsing analytics. Track: tabs opened (onCreated count), tabs closed (onRemoved count), domain visits (onActivated → extract domain), workspace time (onActivated → track time per workspace). Store in chrome.storage.local under 'analytics' key. Data structure: {daily: {[YYYY-MM-DD]: {opened, closed, domains: {domain: count}, workspaceMinutes: {wsId: minutes}}}}. Auto-prune entries older than 30 days.",
+      "acceptanceCriteria": [
+        "chrome.tabs.onCreated: increments analytics.daily[today].opened",
+        "chrome.tabs.onRemoved: increments analytics.daily[today].closed",
+        "chrome.tabs.onActivated: extracts domain from tab URL, increments analytics.daily[today].domains[domain]",
+        "chrome.tabs.onActivated: calculates minutes since last activation, adds to workspaceMinutes[previousWorkspaceId]",
+        "Data stored under 'analytics' key in chrome.storage.local",
+        "Entries older than 30 days pruned on each daily write",
+        "All writes debounced (batch updates every 30 seconds, not on every event)",
+        "Typecheck passes"
+      ],
+      "priority": 22,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Add usage analytics dashboard in settings",
+      "description": "As a user, I want to see my browsing stats in settings. Add 'Analytics' section to SettingsPanel.tsx. Show: tabs opened/closed per day (7-day bar chart using simple CSS bars), time per workspace (horizontal bars), top 5 domains (list with counts), total MB saved from suspension, focus time per day (7-day chart). Clear Analytics button with confirmation.",
+      "acceptanceCriteria": [
+        "New 'Analytics' section in SettingsPanel.tsx",
+        "Tabs chart: 7 vertical bars showing opened (accent color) vs closed (muted color) per day, labeled with day names",
+        "Workspace time: horizontal bars per workspace with emoji, showing hours and minutes",
+        "Top domains: list of top 5 domains with visit counts, sorted descending",
+        "Memory saved: single stat showing total estimated MB saved from tab suspension",
+        "Focus time: 7 vertical bars showing Deep Work minutes per day",
+        "All charts use simple CSS/inline SVG (no charting library)",
+        "Clear Analytics button with confirmation dialog ('Are you sure? This cannot be undone.')",
+        "Shows 'No data yet' message if analytics object is empty",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 23,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Add automatic daily session snapshots",
+      "description": "As a user, I want ArcFlow to auto-save my workspace state daily. In service-worker.ts: create chrome.alarms for 'daily-snapshot' at midnight. On alarm: capture all workspaces, pinned apps, folders, folder items, and open tab URLs/titles per workspace. Store under 'dailySnapshots' in storage. Keep last 7 snapshots (FIFO). Add 'Daily Snapshots' section to SessionManager.tsx with restore functionality. Add command palette entry: 'Restore yesterday's tabs'.",
+      "acceptanceCriteria": [
+        "chrome.alarms.create for 'daily-snapshot' with periodInMinutes: 1440 (24h)",
+        "On alarm: snapshot captures workspaces array, pinned apps, folders, and current tab URLs/titles per workspace",
+        "Stored in chrome.storage.local under 'dailySnapshots' as {[YYYY-MM-DD]: {workspaces, tabs, createdAt}}",
+        "Max 7 entries, oldest removed when exceeded",
+        "SessionManager.tsx: new 'Daily Snapshots' subsection showing last 7 days",
+        "Each snapshot row: date, tab count, workspace names, 'Restore' button",
+        "'Yesterday's Tabs' shortcut button at top of section",
+        "Restore uses existing session restore logic (replace/add mode dialog)",
+        "Command palette entry: 'Restore yesterday's tabs'",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 24,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "Add tab energy score calculation",
+      "description": "As a developer, I need a tab energy score system. Create shared/energyScore.ts with calculateEnergyScore(tab, activationCounts, lastActiveMap) function. Score: freshness (0-40 based on time since last active) + visitFrequency (0-30 based on activation count in 24h) + memoryEstimate (0-30 heuristic based on URL type). Track activation counts in service worker. Recalculate every 5 minutes via chrome.alarms.",
+      "acceptanceCriteria": [
+        "energyScore.ts exports calculateEnergyScore returning number 1-100",
+        "Freshness (0-40): active now=40, <1h=35, <4h=25, <1d=15, <3d=5, >3d=0",
+        "Visit frequency (0-30): 10+ activations in 24h=30, 5+=20, 2+=10, 1=5, 0=0",
+        "Memory estimate (0-30): simple URLs (text pages)=30, media sites (youtube,netflix)=10, unknown=20",
+        "Service worker tracks activationCounts: {[tabId]: {count: number, timestamps: number[]}} in memory",
+        "chrome.alarms for 'energy-recalc' every 5 minutes",
+        "On alarm: recalculate all tab scores, store in chrome.storage.local under 'tabEnergyScores'",
+        "Typecheck passes"
+      ],
+      "priority": 25,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title": "Add tab energy score dots and workspace health bar",
+      "description": "As a user, I want colored energy dots on tabs and a health bar per workspace. In App.tsx DraggableTabItem: add 8px colored dot left of favicon. Green (70-100), yellow (40-69), red (1-39). Tooltip: 'Energy: XX — [description]'. In WorkspaceSwitcher.tsx: add thin horizontal bar below each workspace emoji showing average energy. Same color scheme.",
+      "acceptanceCriteria": [
+        "8px circle (w-2 h-2 rounded-full) rendered left of favicon in each tab row",
+        "Dot color: bg-green-400 (70-100), bg-yellow-400 (40-69), bg-red-400 (1-39)",
+        "Tooltip on hover: 'Energy: 72 — Active, frequently visited' (description varies by score range)",
+        "Scores read from tabEnergyScores in chrome.storage.local",
+        "WorkspaceSwitcher.tsx: thin bar (h-0.5) below each workspace emoji button",
+        "Bar color based on average score of tabs in that workspace",
+        "Bar shows bg-gray-700 background with colored fill based on average percentage",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 26,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-027",
+      "title": "Add workspace export",
+      "description": "As a user, I want to export a workspace as a JSON file. In WorkspaceSwitcher.tsx or ContextMenu: add 'Export Workspace' option. In command palette: 'Export current workspace'. Export JSON: {version: '2.0', type: 'arcflow-workspace', name, emoji, accentColor, pinnedApps, folders (with items), notes}. Does NOT export open tabs, API keys, or settings. File download via browser API.",
+      "acceptanceCriteria": [
+        "Context menu on workspace emoji: 'Export Workspace' option",
+        "Command palette entry: 'Export current workspace'",
+        "Exported JSON includes: version '2.0', type 'arcflow-workspace', workspace name, emoji, accentColor, pinnedApps array, folders with items, notes text",
+        "Does NOT include: open tab states, openRouterApiKey, settings, tabWorkspaceMap",
+        "File downloaded as 'arcflow-workspace-[name]-[YYYY-MM-DD].json'",
+        "Uses URL.createObjectURL + anchor click for download",
+        "Typecheck passes"
+      ],
+      "priority": 27,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-028",
+      "title": "Add workspace import",
+      "description": "As a user, I want to import a workspace from a JSON file. In SettingsPanel.tsx: add 'Import Workspace' section with file picker. In command palette: 'Import workspace'. Validate JSON structure and version field. If workspace name exists, append ' (imported)'. Create new workspace with all pinned apps, folders, and notes. Show success/error toast.",
+      "acceptanceCriteria": [
+        "Settings section: 'Import Workspace' with file input accepting .json",
+        "Command palette entry: 'Import workspace' (triggers file picker)",
+        "Validates: version === '2.0', type === 'arcflow-workspace', required fields present",
+        "Invalid file shows error toast: 'Invalid workspace file'",
+        "If workspace name already exists, appends ' (imported)' to avoid collision",
+        "Creates new workspace with imported pinned apps, folders (with items), and notes",
+        "Success toast: 'Workspace [name] imported with X pinned apps and Y folders'",
+        "User switched to the newly imported workspace",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 28,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-029",
+      "title": "Add contextual snippets storage and content script",
+      "description": "As a user, I want to save text snippets from any webpage. Add context menu item 'Save Snippet to ArcFlow' in service worker (contexts: ['selection']). On click: content script shows overlay popup with text preview, source URL, optional annotation input, Save/Cancel. Save to chrome.storage.local under 'snippets_[workspaceId]'. Max 50 per workspace (FIFO with warning).",
+      "acceptanceCriteria": [
+        "Context menu item 'Save Snippet to ArcFlow' registered with contexts: ['selection']",
+        "Content script shows overlay popup: selected text preview (first 200 chars), source URL, annotation input, Save/Cancel buttons",
+        "Popup styled: fixed position, rounded corners, semi-transparent dark background, z-index 99999",
+        "Save stores: {id: crypto.randomUUID(), text, annotation, sourceUrl, sourceTitle, savedAt: Date.now()}",
+        "Stored under 'snippets_[activeWorkspaceId]' in chrome.storage.local",
+        "Max 50 entries per workspace; on exceed, oldest removed and warning toast shown",
+        "Cancel or Escape closes popup without saving",
+        "Enter key in annotation field triggers save",
+        "Typecheck passes"
+      ],
+      "priority": 29,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-030",
+      "title": "Add snippets sidebar section",
+      "description": "As a user, I want to see and manage my saved snippets in the sidebar. Create SnippetsSection.tsx component. Collapsible section between Quick Notes and Workspace Switcher. Each snippet: first line truncated 80 chars, source domain favicon, relative time. Click expands to show full text + annotation + source link. Delete (X) per snippet. Clear All with confirmation. Section hidden when empty. Count badge on header.",
+      "acceptanceCriteria": [
+        "SnippetsSection.tsx following collapsible section pattern",
+        "Placed between Quick Notes and Workspace Switcher in App.tsx",
+        "Header: 'Snippets (N)' with count badge and collapse toggle",
+        "Each snippet row: first line of text (truncated 80 chars), source favicon, relative time",
+        "Click row: expands inline to show full text, annotation (if any, prefixed with pencil emoji), and source link",
+        "Source link: clickable, opens original page in new tab",
+        "Delete (X) button on each snippet, instant delete (no confirmation)",
+        "'Clear all' button at section bottom with confirmation dialog",
+        "Section hidden when no snippets exist for current workspace",
+        "Reads from 'snippets_[currentWorkspaceId]' in storage",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 30,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

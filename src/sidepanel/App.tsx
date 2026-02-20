@@ -8,6 +8,7 @@ import type {
   Folder,
   FolderItem,
   Session,
+  WorkspaceSuggestion,
 } from "../shared/types";
 import { useTheme, applyPanelColor } from "./useTheme";
 import {
@@ -29,6 +30,7 @@ import {
   getWorkspaces,
   createWorkspace,
   setActiveWorkspace as setActiveWorkspaceStorage,
+  assignTabToWorkspace,
 } from "../shared/workspaceStorage";
 import PinnedAppsRow from "./PinnedAppsRow";
 import FolderTree from "./FolderTree";
@@ -43,7 +45,11 @@ import Onboarding from "./Onboarding";
 import { isOnboardingCompleted } from "../shared/onboardingStorage";
 import { createSessionFromState } from "../shared/sessionStorage";
 import { updateWorkspace } from "../shared/workspaceStorage";
+import RecentlyClosedSection from "./RecentlyClosedSection";
+import PomodoroTimer from "./PomodoroTimer";
+import MorningBriefing from "./MorningBriefing";
 import QuickNotes from "./QuickNotes";
+import SnippetsSection from "./SnippetsSection";
 import TabPreviewCard from "./TabPreviewCard";
 import type { TabPreviewInfo } from "./TabPreviewCard";
 import { buildCommands } from "./commandRegistry";
@@ -137,6 +143,7 @@ interface VirtualTabRowProps {
   onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
   tabNameOverrides: Record<number, string>;
   onTabRename: (tabId: number, newName: string) => void;
+  tabEnergyScores: Record<string, number>;
 }
 
 function VirtualTabRow({
@@ -146,6 +153,7 @@ function VirtualTabRow({
   onContextMenu,
   tabNameOverrides,
   onTabRename,
+  tabEnergyScores,
 }: {
   index: number;
   style: CSSProperties;
@@ -154,6 +162,7 @@ function VirtualTabRow({
   onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
   tabNameOverrides: Record<number, string>;
   onTabRename: (tabId: number, newName: string) => void;
+  tabEnergyScores: Record<string, number>;
 }) {
   const tab = tabs[index];
   if (!tab) return null;
@@ -165,6 +174,7 @@ function VirtualTabRow({
       style={style}
       displayName={tabNameOverrides[tab.id]}
       onTabRename={onTabRename}
+      energyScore={tabEnergyScores[String(tab.id)]}
     />
   );
 }
@@ -177,6 +187,7 @@ const DraggableTabItem = memo(function DraggableTabItem({
   onMouseLeave,
   displayName,
   onTabRename,
+  energyScore,
 }: {
   tab: TabInfo;
   onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
@@ -185,6 +196,7 @@ const DraggableTabItem = memo(function DraggableTabItem({
   onMouseLeave?: () => void;
   displayName?: string;
   onTabRename?: (tabId: number, newName: string) => void;
+  energyScore?: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: `tab:${tab.id}` });
@@ -306,6 +318,25 @@ const DraggableTabItem = memo(function DraggableTabItem({
         <span className="w-1 h-1 rounded-full bg-arc-accent shrink-0" />
       ) : (
         <span className="w-1 h-1 shrink-0" />
+      )}
+      {/* Energy score dot */}
+      {energyScore != null && (
+        <span
+          className={`w-2 h-2 rounded-full shrink-0 ${
+            energyScore >= 70
+              ? "bg-green-400"
+              : energyScore >= 40
+                ? "bg-yellow-400"
+                : "bg-red-400"
+          }`}
+          title={`Energy: ${energyScore} — ${
+            energyScore >= 70
+              ? "Active, frequently visited"
+              : energyScore >= 40
+                ? "Moderate activity"
+                : "Inactive, consider closing"
+          }`}
+        />
       )}
       {tab.favIconUrl ? (
         <LazyFavicon src={tab.favIconUrl} alt="" />
@@ -567,14 +598,30 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [tabNameOverrides, setTabNameOverrides] = useState<Record<number, string>>({});
   const [tabOrderOverrides, setTabOrderOverrides] = useState<number[]>([]);
+  const [toast, setToast] = useState<string | null>(null);
   const [isDraggingTabs, setIsDraggingTabs] = useState(false);
+  const [autoRouteIndicator, setAutoRouteIndicator] = useState<{
+    workspaceId: string;
+    workspaceName: string;
+    workspaceEmoji: string;
+  } | null>(null);
+  const [dupNotification, setDupNotification] = useState<{
+    newTabId: number;
+    existingTabId: number;
+    existingWorkspaceId: string;
+    existingWorkspaceName: string;
+  } | null>(null);
   const [tabPreview, setTabPreview] = useState<{
     tab: TabPreviewInfo;
     position: { top: number; left: number };
   } | null>(null);
   const tabPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mainContentRef = useRef<HTMLElement>(null);
+  const activeWorkspaceIdRef = useRef(activeWorkspaceId);
   const [swipeBounce, setSwipeBounce] = useState<"left" | "right" | null>(null);
+  const [workspaceSuggestion, setWorkspaceSuggestion] = useState<WorkspaceSuggestion | null>(null);
+  const [deepWorkActive, setDeepWorkActive] = useState(false);
+  const [tabEnergyScores, setTabEnergyScores] = useState<Record<string, number>>({});
 
   // Sorted workspaces for swipe navigation
   const sortedWorkspaces = useMemo(
@@ -627,6 +674,41 @@ export default function App() {
     })
   );
 
+  // Load pending workspace suggestion (check dismissal within 24h)
+  const loadWorkspaceSuggestion = useCallback(() => {
+    chrome.storage.local.get(
+      ["pendingWorkspaceSuggestion", "suggestionDismissedAt"],
+      (result) => {
+        const dismissedAt = result.suggestionDismissedAt as number | undefined;
+        if (dismissedAt && Date.now() - dismissedAt < 24 * 60 * 60 * 1000) {
+          return; // Dismissed within 24 hours
+        }
+        const suggestion = result.pendingWorkspaceSuggestion as WorkspaceSuggestion | undefined;
+        if (suggestion && suggestion.suggest) {
+          setWorkspaceSuggestion(suggestion);
+        }
+      }
+    );
+  }, []);
+
+  // Load Deep Work state from storage on mount
+  useEffect(() => {
+    chrome.storage.local.get("deepWorkActive", (result) => {
+      if (result.deepWorkActive) {
+        setDeepWorkActive(true);
+      }
+    });
+  }, []);
+
+  // Load tab energy scores from storage on mount
+  useEffect(() => {
+    chrome.storage.local.get("tabEnergyScores", (result) => {
+      if (result.tabEnergyScores) {
+        setTabEnergyScores(result.tabEnergyScores as Record<string, number>);
+      }
+    });
+  }, []);
+
   // Check if onboarding is needed on mount
   useEffect(() => {
     isOnboardingCompleted().then((completed) => {
@@ -636,7 +718,36 @@ export default function App() {
     });
   }, []);
 
-  // Listen for Ctrl+Shift+K to open command palette
+  // Keep activeWorkspaceId ref in sync for use in message listener
+  useEffect(() => {
+    activeWorkspaceIdRef.current = activeWorkspaceId;
+  }, [activeWorkspaceId]);
+
+  // Auto-dismiss toast after 3 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  // Auto-dismiss auto-route indicator after 3 seconds
+  useEffect(() => {
+    if (autoRouteIndicator) {
+      const timer = setTimeout(() => setAutoRouteIndicator(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [autoRouteIndicator]);
+
+  // Auto-dismiss duplicate tab notification after 8 seconds
+  useEffect(() => {
+    if (dupNotification) {
+      const timer = setTimeout(() => setDupNotification(null), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [dupNotification]);
+
+  // Listen for Ctrl+Shift+K to open command palette, Ctrl+Shift+D for Deep Work
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "K") {
@@ -682,6 +793,14 @@ export default function App() {
         if (changes.workspaces) {
           const updated = (changes.workspaces.newValue as Workspace[]) ?? [];
           setWorkspaces(updated.sort((a, b) => a.sortOrder - b.sortOrder));
+        }
+        if (changes.deepWorkActive) {
+          setDeepWorkActive(!!changes.deepWorkActive.newValue);
+        }
+        if (changes.tabEnergyScores) {
+          setTabEnergyScores(
+            (changes.tabEnergyScores.newValue as Record<string, number>) ?? {}
+          );
         }
       }
     };
@@ -769,14 +888,46 @@ export default function App() {
               tab.id === message.tabId && tab.windowId === message.windowId,
           }))
         );
+      } else if (message.type === "tab-auto-routed") {
+        // Show indicator only if user is viewing the target workspace
+        if (message.workspaceId === activeWorkspaceIdRef.current) {
+          getWorkspaces().then((wsList) => {
+            const ws = wsList.find((w) => w.id === message.workspaceId);
+            if (ws) {
+              setAutoRouteIndicator({
+                workspaceId: ws.id,
+                workspaceName: ws.name,
+                workspaceEmoji: ws.emoji,
+              });
+            }
+          });
+        }
+      } else if (message.type === "workspace-suggestion-ready") {
+        loadWorkspaceSuggestion();
+      } else if (message.type === "duplicate-tab-detected") {
+        setDupNotification({
+          newTabId: message.newTabId,
+          existingTabId: message.existingTabId,
+          existingWorkspaceId: message.existingWorkspaceId,
+          existingWorkspaceName: message.existingWorkspaceName,
+        });
+      } else if (message.type === "notes-saved-from-page") {
+        setToast(`Saved to ${message.workspaceName} notes`);
+        // Reload workspaces to reflect updated notes
+        getWorkspaces().then(setWorkspaces);
+      } else if (message.type === "snippet-saved") {
+        setToast(`Snippet saved to ${message.workspaceName}`);
       }
     };
+
+    // Load any pending workspace suggestion on mount
+    loadWorkspaceSuggestion();
 
     chrome.runtime.onMessage.addListener(handleMessage);
     return () => {
       chrome.runtime.onMessage.removeListener(handleMessage);
     };
-  }, []);
+  }, [loadWorkspaceSuggestion]);
 
   const handleWorkspaceChange = useCallback((workspaceId: string) => {
     setActiveWorkspaceId(workspaceId);
@@ -921,6 +1072,34 @@ export default function App() {
 
   const openSessionManager = useCallback(() => setShowSessionManager(true), []);
 
+  // Restore yesterday's tabs from daily snapshot
+  const restoreYesterdayTabs = useCallback(() => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+    chrome.storage.local.get("dailySnapshots", (result) => {
+      const snapshots = (result.dailySnapshots as Record<string, { tabs: Record<string, { url: string; title: string; favicon: string }[]>; createdAt: number }>) ?? {};
+      const snap = snapshots[yKey];
+      if (!snap) {
+        setToast("No snapshot from yesterday");
+        return;
+      }
+      const allTabs: { url: string; title: string; favicon: string }[] = [];
+      for (const tabs of Object.values(snap.tabs)) {
+        allTabs.push(...tabs);
+      }
+      if (allTabs.length === 0) {
+        setToast("Yesterday's snapshot has no tabs");
+        return;
+      }
+      // Open all tabs from yesterday's snapshot (add mode)
+      for (const tab of allTabs) {
+        chrome.runtime.sendMessage({ type: "OPEN_URL", url: tab.url });
+      }
+      setToast(`Restored ${allTabs.length} tabs from yesterday`);
+    });
+  }, []);
+
   // QuickNotes: derive from active workspace
   const activeWorkspace = useMemo(
     () => workspaces.find((w) => w.id === activeWorkspaceId),
@@ -998,6 +1177,47 @@ export default function App() {
     setTabPreview(null);
   }, []);
 
+  // Toggle Deep Work Mode
+  const toggleDeepWork = useCallback(async () => {
+    const newActive = !deepWorkActive;
+    setDeepWorkActive(newActive);
+    await chrome.storage.local.set({ deepWorkActive: newActive });
+
+    if (newActive) {
+      // Enable focus mode in settings
+      const s = await getSettings();
+      await updateSettings({
+        focusMode: { ...s.focusMode, enabled: true },
+      });
+      chrome.runtime.sendMessage({
+        type: "UPDATE_FOCUS_MODE",
+        enabled: true,
+        redirectRules: s.focusMode.redirectRules,
+      });
+      // Suspend all non-active tabs
+      for (const tab of filteredTabs) {
+        if (!tab.active && !tab.discarded) {
+          chrome.runtime.sendMessage({ type: "SUSPEND_TAB", tabId: tab.id });
+        }
+      }
+      // Expand Quick Notes
+      if (activeWorkspace?.notesCollapsed) {
+        updateWorkspace(activeWorkspaceId, { notesCollapsed: false });
+      }
+    } else {
+      // Disable focus mode in settings (don't unsuspend tabs)
+      const s = await getSettings();
+      await updateSettings({
+        focusMode: { ...s.focusMode, enabled: false },
+      });
+      chrome.runtime.sendMessage({
+        type: "UPDATE_FOCUS_MODE",
+        enabled: false,
+        redirectRules: s.focusMode.redirectRules,
+      });
+    }
+  }, [deepWorkActive, filteredTabs, activeWorkspace, activeWorkspaceId]);
+
   // Focus Notes command
   const focusNotes = useCallback(() => {
     if (activeWorkspace?.notesCollapsed) {
@@ -1010,6 +1230,150 @@ export default function App() {
       textarea?.focus();
     }, 100);
   }, [activeWorkspaceId, activeWorkspace]);
+
+  // Workspace suggestion handlers
+  const handleAcceptSuggestion = useCallback(async () => {
+    if (!workspaceSuggestion) return;
+    try {
+      const ws = await createWorkspace(workspaceSuggestion.name);
+      // Update emoji and accent color
+      await updateWorkspace(ws.id, { emoji: workspaceSuggestion.emoji });
+      // Move suggested tabs to the new workspace
+      for (const tabId of workspaceSuggestion.tabIds) {
+        await assignTabToWorkspace(tabId, ws.id);
+      }
+      // Switch to the new workspace
+      await setActiveWorkspaceStorage(ws.id);
+      setActiveWorkspaceId(ws.id);
+      // Clear suggestion
+      setWorkspaceSuggestion(null);
+      await chrome.storage.local.remove("pendingWorkspaceSuggestion");
+      setToast(`Created ${workspaceSuggestion.emoji} ${workspaceSuggestion.name} workspace`);
+    } catch (err) {
+      console.error("Failed to create workspace from suggestion:", err);
+      setToast("Failed to create workspace");
+    }
+  }, [workspaceSuggestion]);
+
+  // Duplicate tab notification handlers
+  const handleDupSwitch = useCallback(async () => {
+    if (!dupNotification) return;
+    // Close the duplicate (new) tab
+    chrome.runtime.sendMessage({ type: "CLOSE_TAB", tabId: dupNotification.newTabId });
+    // Activate the existing tab
+    chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: dupNotification.existingTabId });
+    // Switch workspace if needed
+    if (dupNotification.existingWorkspaceId !== activeWorkspaceIdRef.current) {
+      await setActiveWorkspaceStorage(dupNotification.existingWorkspaceId);
+      setActiveWorkspaceId(dupNotification.existingWorkspaceId);
+    }
+    setDupNotification(null);
+  }, [dupNotification]);
+
+  const handleDismissSuggestion = useCallback(async () => {
+    setWorkspaceSuggestion(null);
+    await chrome.storage.local.set({ suggestionDismissedAt: Date.now() });
+    await chrome.storage.local.remove("pendingWorkspaceSuggestion");
+  }, []);
+
+  const exportCurrentWorkspace = useCallback(() => {
+    const ws = workspaces.find((w) => w.id === activeWorkspaceId);
+    if (!ws) return;
+    const exportData = {
+      version: "2.0",
+      type: "arcflow-workspace",
+      name: ws.name,
+      emoji: ws.emoji,
+      accentColor: ws.accentColor,
+      pinnedApps: ws.pinnedApps,
+      folders: ws.folders,
+      notes: ws.notes,
+    };
+    const json = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const today = new Date().toISOString().slice(0, 10);
+    const safeName = ws.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `arcflow-workspace-${safeName}-${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [workspaces, activeWorkspaceId]);
+
+  const importWorkspace = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (data.version !== "2.0" || data.type !== "arcflow-workspace" || !data.name) {
+          setToast("Invalid workspace file");
+          return;
+        }
+        const allWs = await getWorkspaces();
+        let name = data.name;
+        if (allWs.some((ws) => ws.name === name)) {
+          name = `${name} (imported)`;
+        }
+        const ws = await createWorkspace(name);
+        const pinnedApps = Array.isArray(data.pinnedApps)
+          ? data.pinnedApps.map((app: { url?: string; title?: string; favicon?: string }, i: number) => ({
+              id: crypto.randomUUID(),
+              url: app.url || "",
+              title: app.title || "",
+              favicon: app.favicon || "",
+              sortOrder: i,
+            }))
+          : [];
+        const folderIdMap = new Map<string, string>();
+        const importedFolders = Array.isArray(data.folders) ? data.folders : [];
+        for (const folder of importedFolders) {
+          if (folder.id) folderIdMap.set(folder.id, crypto.randomUUID());
+        }
+        const folders = importedFolders.map((folder: { id?: string; name?: string; parentId?: string | null; items?: Array<{ url?: string; title?: string; favicon?: string; type?: string; isArchived?: boolean; lastActiveAt?: number }>; isCollapsed?: boolean; sortOrder?: number }, i: number) => ({
+          id: folderIdMap.get(folder.id || "") || crypto.randomUUID(),
+          name: folder.name || "Untitled",
+          parentId: folder.parentId ? (folderIdMap.get(folder.parentId) ?? null) : null,
+          items: Array.isArray(folder.items)
+            ? folder.items.map((item) => ({
+                id: crypto.randomUUID(),
+                type: item.type || "link",
+                tabId: null,
+                url: item.url || "",
+                title: item.title || "",
+                favicon: item.favicon || "",
+                isArchived: item.isArchived || false,
+                lastActiveAt: item.lastActiveAt || 0,
+              }))
+            : [],
+          isCollapsed: folder.isCollapsed ?? false,
+          sortOrder: folder.sortOrder ?? i,
+        }));
+        await updateWorkspace(ws.id, {
+          emoji: data.emoji || ws.emoji,
+          accentColor: data.accentColor || ws.accentColor,
+          pinnedApps,
+          folders,
+          notes: typeof data.notes === "string" ? data.notes : "",
+        });
+        setActiveWorkspaceId(ws.id);
+        setActiveWorkspaceStorage(ws.id);
+        const pinnedCount = pinnedApps.length;
+        const folderCount = folders.length;
+        setToast(`Workspace ${data.emoji || ""} ${name} imported with ${pinnedCount} pinned app${pinnedCount !== 1 ? "s" : ""} and ${folderCount} folder${folderCount !== 1 ? "s" : ""}`);
+      } catch {
+        setToast("Invalid workspace file");
+      }
+    };
+    input.click();
+  }, []);
 
   // Build command palette commands
   const commands = useMemo(
@@ -1028,6 +1392,10 @@ export default function App() {
         onSaveSession: handleSaveSession,
         onRestoreSession: openSessionManager,
         onFocusNotes: focusNotes,
+        onToggleDeepWork: toggleDeepWork,
+        onRestoreYesterdayTabs: restoreYesterdayTabs,
+        onExportWorkspace: exportCurrentWorkspace,
+        onImportWorkspace: importWorkspace,
       }),
     [
       workspaces,
@@ -1043,6 +1411,10 @@ export default function App() {
       handleSaveSession,
       openSessionManager,
       focusNotes,
+      toggleDeepWork,
+      restoreYesterdayTabs,
+      exportCurrentWorkspace,
+      importWorkspace,
     ]
   );
 
@@ -1113,6 +1485,35 @@ export default function App() {
           });
         },
       });
+
+      // Add "Always open [domain] in this workspace" for auto-routing
+      try {
+        const domain = new URL(tab.url).hostname;
+        if (domain && !domain.startsWith("chrome") && !domain.startsWith("extension")) {
+          items.push({
+            label: `Always open ${domain} here`,
+            onClick: async () => {
+              const s = await getSettings();
+              const pattern = `*://${domain}/*`;
+              const existing = s.routingRules.find(
+                (r) => r.pattern === pattern || r.pattern === `${domain}/*`
+              );
+              if (existing) {
+                setToast(`Rule already exists for ${domain}`);
+                return;
+              }
+              const activeWs = workspaces.find((ws) => ws.id === activeWorkspaceId);
+              const newRule = { pattern, workspaceId: activeWorkspaceId, enabled: true };
+              await updateSettings({ routingRules: [...s.routingRules, newRule] });
+              setToast(
+                `Tabs from ${domain} will auto-route to ${activeWs?.emoji ?? ""} ${activeWs?.name ?? "this workspace"}`
+              );
+            },
+          });
+        }
+      } catch {
+        // Invalid URL — skip menu item
+      }
 
       // Add "Move to Workspace..." if there are multiple workspaces
       if (workspaces.length > 1) {
@@ -1479,31 +1880,68 @@ export default function App() {
           `. ${suspendedCount} suspended, ~${estimatedMBSaved} MB saved`}
       </div>
 
-      <header className="flex items-center justify-between px-4 py-3 pb-2">
+      <header className={`flex items-center justify-between px-4 py-3 pb-2${deepWorkActive ? " ring-1 ring-arc-accent/30 rounded-lg" : ""}`}>
         <h1 className="text-sm font-semibold tracking-tight text-gray-800 dark:text-arc-text-primary">
           ArcFlow
         </h1>
-        <button
-          onClick={() => setShowOrganizeTabs(true)}
-          className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-200"
-          title="Organize Tabs"
-          aria-label="Organize Tabs"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            className="w-4 h-4"
+        <div className="flex items-center gap-1">
+          <button
+            onClick={toggleDeepWork}
+            className={`flex items-center gap-1 px-2 py-1 text-xs rounded-lg transition-colors duration-200 ${
+              deepWorkActive
+                ? "bg-arc-accent/15 text-arc-accent dark:text-arc-accent-hover"
+                : "hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary"
+            }`}
+            title={deepWorkActive ? "Exit Deep Work Mode (Ctrl+Shift+D)" : "Enter Deep Work Mode (Ctrl+Shift+D)"}
+            aria-label={deepWorkActive ? "Exit Deep Work Mode" : "Enter Deep Work Mode"}
+            aria-pressed={deepWorkActive}
           >
-            <path
-              fillRule="evenodd"
-              d="M2 3.75A.75.75 0 0 1 2.75 3h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 3.75Zm0 4.167a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Zm0 4.166a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Zm0 4.167a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Z"
-              clipRule="evenodd"
-            />
-          </svg>
-          Organize
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="w-4 h-4"
+            >
+              <path d="M12 2a7 7 0 0 0-7 7c0 3.5 2.5 6.5 4 8 .5.5 1 1.5 1 2.5V21h4v-1.5c0-1 .5-2 1-2.5 1.5-1.5 4-4.5 4-8a7 7 0 0 0-7-7Z" />
+              <path d="M10 21h4" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setShowOrganizeTabs(true)}
+            className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-200"
+            title="Organize Tabs"
+            aria-label="Organize Tabs"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="w-4 h-4"
+            >
+              <path
+                fillRule="evenodd"
+                d="M2 3.75A.75.75 0 0 1 2.75 3h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 3.75Zm0 4.167a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Zm0 4.166a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Zm0 4.167a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Z"
+                clipRule="evenodd"
+              />
+            </svg>
+            Organize
+          </button>
+        </div>
       </header>
+
+      {/* Pomodoro Timer (Deep Work Mode) */}
+      {deepWorkActive && <PomodoroTimer />}
+
+      {/* Morning Briefing */}
+      <MorningBriefing
+        tabs={tabs}
+        workspaces={workspaces}
+        tabWorkspaceMap={tabWorkspaceMap}
+      />
 
       {/* Search bar (Zone 1) */}
       <nav aria-label="Tab search">
@@ -1529,6 +1967,84 @@ export default function App() {
           }}
         />
       </nav>
+
+      {/* Auto-routing indicator */}
+      {autoRouteIndicator && (
+        <div className="mx-4 mb-1 flex items-center justify-between gap-2 px-3 py-1.5 text-xs rounded-lg bg-arc-accent/10 dark:bg-arc-accent/15 text-arc-accent dark:text-arc-accent-hover animate-fade-in transition-opacity duration-300">
+          <span>
+            Tab auto-routed to {autoRouteIndicator.workspaceEmoji}{" "}
+            {autoRouteIndicator.workspaceName}
+          </span>
+          <button
+            onClick={() => setAutoRouteIndicator(null)}
+            className="shrink-0 w-4 h-4 flex items-center justify-center hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+            aria-label="Dismiss auto-route notification"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              className="w-3 h-3"
+            >
+              <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* Duplicate tab notification */}
+      {dupNotification && (
+        <div className="mx-4 mb-1 flex items-center justify-between gap-2 px-3 py-1.5 text-xs rounded-lg bg-yellow-500/10 dark:bg-yellow-400/10 text-yellow-700 dark:text-yellow-300 animate-fade-in transition-opacity duration-300">
+          <span className="truncate">
+            Already open in {dupNotification.existingWorkspaceName}
+          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={handleDupSwitch}
+              className="px-2 py-0.5 text-xs font-medium rounded bg-yellow-600/20 dark:bg-yellow-400/20 hover:bg-yellow-600/30 dark:hover:bg-yellow-400/30 transition-colors duration-200"
+            >
+              Switch
+            </button>
+            <button
+              onClick={() => setDupNotification(null)}
+              className="px-2 py-0.5 text-xs font-medium rounded hover:bg-yellow-600/10 dark:hover:bg-yellow-400/10 transition-colors duration-200"
+            >
+              Keep Both
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Workspace Suggestion Card */}
+      {workspaceSuggestion && (
+        <div className="mx-4 mb-2 p-3 rounded-xl border border-arc-accent/20 dark:border-arc-accent/15 bg-white/80 dark:bg-arc-surface/80 shadow-sm animate-fade-in">
+          <div className="flex items-start gap-2">
+            <span className="text-lg shrink-0">{workspaceSuggestion.emoji}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-800 dark:text-arc-text-primary">
+                Create &ldquo;{workspaceSuggestion.name}&rdquo; workspace?
+              </p>
+              <p className="text-xs text-gray-500 dark:text-arc-text-secondary mt-0.5">
+                {workspaceSuggestion.reason}
+              </p>
+              <div className="flex items-center gap-2 mt-2">
+                <button
+                  onClick={handleAcceptSuggestion}
+                  className="px-3 py-1 text-xs font-medium rounded-lg bg-arc-accent text-white hover:bg-arc-accent-hover transition-colors duration-200"
+                >
+                  Create
+                </button>
+                <button
+                  onClick={handleDismissSuggestion}
+                  className="px-3 py-1 text-xs font-medium rounded-lg text-gray-500 dark:text-arc-text-secondary hover:bg-gray-100 dark:hover:bg-arc-surface-hover transition-colors duration-200"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pinned Apps Row (Zone 2) */}
       <PinnedAppsRow
@@ -1621,6 +2137,7 @@ export default function App() {
                     onContextMenu: handleTabContextMenu,
                     tabNameOverrides,
                     onTabRename: handleTabRename,
+                    tabEnergyScores,
                   }}
                   overscanCount={5}
                 />
@@ -1639,6 +2156,7 @@ export default function App() {
                       onMouseLeave={handleTabHoverEnd}
                       displayName={tabNameOverrides[tab.id]}
                       onTabRename={handleTabRename}
+                      energyScore={tabEnergyScores[String(tab.id)]}
                     />
                   ))}
                 </ul>
@@ -1659,6 +2177,9 @@ export default function App() {
 
         {/* Archive Section (Zone 4) */}
         <ArchiveSection />
+
+        {/* Recently Closed Section */}
+        <RecentlyClosedSection workspaces={workspaces} />
       </main>
 
       {/* Quick Notes */}
@@ -1674,6 +2195,9 @@ export default function App() {
         />
       )}
 
+      {/* Snippets Section */}
+      <SnippetsSection workspaceId={activeWorkspaceId} />
+
       {/* Footer (Zone 5) */}
       <footer className="border-t border-gray-200/10 dark:border-white/5">
         <WorkspaceSwitcher
@@ -1682,6 +2206,8 @@ export default function App() {
           onContextMenu={setContextMenu}
           onSaveSession={handleSaveSession}
           onOpenSettings={openSettings}
+          tabEnergyScores={tabEnergyScores}
+          tabWorkspaceMap={tabWorkspaceMap}
         />
       </footer>
 
@@ -1746,6 +2272,13 @@ export default function App() {
           position={tabPreview.position}
           onClose={handleTabHoverEnd}
         />
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[9999] px-4 py-2 text-xs font-medium text-white bg-gray-800 dark:bg-arc-surface-active rounded-lg shadow-lg animate-fade-in">
+          {toast}
+        </div>
       )}
     </div>
   );

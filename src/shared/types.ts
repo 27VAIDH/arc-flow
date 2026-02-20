@@ -78,7 +78,18 @@ export type ServiceWorkerMessage =
       type: "TAB_WORKSPACE_MAP_UPDATED";
       tabWorkspaceMap: Record<string, string>;
     }
-  | { type: "OPEN_COMMAND_PALETTE" };
+  | { type: "OPEN_COMMAND_PALETTE" }
+  | { type: "tab-auto-routed"; tabId: number; workspaceId: string }
+  | { type: "workspace-suggestion-ready" }
+  | {
+      type: "duplicate-tab-detected";
+      newTabId: number;
+      existingTabId: number;
+      existingWorkspaceId: string;
+      existingWorkspaceName: string;
+    }
+  | { type: "notes-saved-from-page"; workspaceName: string }
+  | { type: "snippet-saved"; workspaceName: string };
 
 // Messages sent from side panel to service worker
 export type SidePanelMessage =
@@ -111,6 +122,38 @@ export interface Session {
   tabUrls: { url: string; title: string; favicon: string }[];
 }
 
+export interface RoutingRule {
+  pattern: string;
+  workspaceId: string;
+  enabled: boolean;
+}
+
+export interface WorkspaceSuggestion {
+  suggest: boolean;
+  name: string;
+  emoji: string;
+  reason: string;
+  tabIds: number[];
+  createdAt: number;
+}
+
+export interface RecentlyClosedTab {
+  url: string;
+  title: string;
+  favicon: string;
+  workspaceId: string;
+  closedAt: number;
+}
+
+export interface Snippet {
+  id: string;
+  text: string;
+  annotation: string;
+  sourceUrl: string;
+  sourceTitle: string;
+  savedAt: number;
+}
+
 export interface Settings {
   theme: "system" | "light" | "dark";
   autoArchiveMinutes: number;
@@ -119,12 +162,8 @@ export interface Settings {
     enabled: boolean;
     redirectRules: { blockedPattern: string; redirectUrl: string }[];
   };
-  aiGrouping: {
-    enabled: boolean;
-    provider: "anthropic" | "openai" | null;
-    apiKey: string;
-  };
-  routingRules: { pattern: string; workspaceId: string }[];
+  openRouterApiKey: string;
+  routingRules: RoutingRule[];
   accentColor: string;
   panelColor: string;
   omniboxEnabled: boolean;

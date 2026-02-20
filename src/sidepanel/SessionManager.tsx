@@ -8,6 +8,12 @@ import {
   importSession,
 } from "../shared/sessionStorage";
 
+interface DailySnapshot {
+  workspaces: { id: string; name: string; emoji: string }[];
+  tabs: Record<string, { url: string; title: string; favicon: string }[]>;
+  createdAt: number;
+}
+
 interface SessionManagerProps {
   onClose: () => void;
   onRestore: (session: Session, mode: "replace" | "add") => void;
@@ -33,10 +39,14 @@ export default function SessionManager({
 }: SessionManagerProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [importError, setImportError] = useState<string | null>(null);
+  const [dailySnapshots, setDailySnapshots] = useState<Record<string, DailySnapshot>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getSessions().then(setSessions);
+    chrome.storage.local.get("dailySnapshots", (result) => {
+      setDailySnapshots((result.dailySnapshots as Record<string, DailySnapshot>) ?? {});
+    });
 
     const handleStorageChange = (
       changes: { [key: string]: chrome.storage.StorageChange },
@@ -45,6 +55,9 @@ export default function SessionManager({
       if (area === "local" && changes.sessions) {
         const updated = (changes.sessions.newValue as Session[]) ?? [];
         setSessions(updated.sort((a, b) => b.savedAt - a.savedAt));
+      }
+      if (area === "local" && changes.dailySnapshots) {
+        setDailySnapshots((changes.dailySnapshots.newValue as Record<string, DailySnapshot>) ?? {});
       }
     };
 
@@ -93,6 +106,36 @@ export default function SessionManager({
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, []);
+
+  const handleRestoreSnapshot = useCallback(
+    (dateKey: string) => {
+      const snapshot = dailySnapshots[dateKey];
+      if (!snapshot) return;
+
+      // Collect all tab URLs from all workspaces in the snapshot
+      const allTabs: { url: string; title: string; favicon: string }[] = [];
+      for (const tabs of Object.values(snapshot.tabs)) {
+        allTabs.push(...tabs);
+      }
+
+      if (allTabs.length === 0) return;
+
+      // Create a synthetic Session for the existing restore flow
+      const syntheticSession: Session = {
+        id: `snapshot-${dateKey}`,
+        name: `Daily Snapshot — ${dateKey}`,
+        savedAt: snapshot.createdAt,
+        workspaceSnapshot: { pinnedApps: [], folders: [] },
+        tabUrls: allTabs,
+      };
+
+      const mode = window.confirm(
+        `Restore ${allTabs.length} tabs from ${dateKey}?\n\nOK = Replace current tabs\nCancel = Add alongside existing tabs`
+      );
+      onRestore(syntheticSession, mode ? "replace" : "add");
+    },
+    [dailySnapshots, onRestore]
+  );
 
   const handleImport = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -180,9 +223,65 @@ export default function SessionManager({
         </div>
       )}
 
+      {/* Daily Snapshots section */}
+      {Object.keys(dailySnapshots).length > 0 && (
+        <div className="px-3 pt-3">
+          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+            Daily Snapshots
+          </h3>
+          {/* Yesterday's Tabs shortcut */}
+          {(() => {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+            if (dailySnapshots[yKey]) {
+              const yTotalTabs = Object.values(dailySnapshots[yKey].tabs).reduce((sum, t) => sum + t.length, 0);
+              return (
+                <button
+                  onClick={() => handleRestoreSnapshot(yKey)}
+                  className="w-full mb-2 px-3 py-2 text-xs text-left rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                >
+                  Restore yesterday&rsquo;s tabs ({yTotalTabs} tab{yTotalTabs !== 1 ? "s" : ""})
+                </button>
+              );
+            }
+            return null;
+          })()}
+          <div className="space-y-1.5 mb-3">
+            {Object.keys(dailySnapshots)
+              .sort()
+              .reverse()
+              .map((dateKey) => {
+                const snap = dailySnapshots[dateKey];
+                const totalTabs = Object.values(snap.tabs).reduce((sum, t) => sum + t.length, 0);
+                const wsNames = snap.workspaces.map((w) => `${w.emoji} ${w.name}`).join(", ");
+                return (
+                  <div
+                    key={dateKey}
+                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{dateKey}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {totalTabs} tab{totalTabs !== 1 ? "s" : ""} &middot; {wsNames || "No workspaces"}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleRestoreSnapshot(dateKey)}
+                      className="px-2 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors shrink-0"
+                    >
+                      Restore
+                    </button>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
       {/* Session list */}
       <div className="flex-1 overflow-y-auto p-3">
-        {sessions.length === 0 ? (
+        {sessions.length === 0 && Object.keys(dailySnapshots).length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
             No saved sessions yet. Use &ldquo;Save Session&rdquo; from a
             workspace right-click menu or command palette.

@@ -15,6 +15,10 @@ export function buildCommands({
   onSaveSession,
   onRestoreSession,
   onFocusNotes,
+  onToggleDeepWork,
+  onRestoreYesterdayTabs,
+  onExportWorkspace,
+  onImportWorkspace,
 }: {
   workspaces: Workspace[];
   onSwitchWorkspace: (workspaceId: string) => void;
@@ -29,6 +33,10 @@ export function buildCommands({
   onSaveSession: () => void;
   onRestoreSession: () => void;
   onFocusNotes: () => void;
+  onToggleDeepWork: () => void;
+  onRestoreYesterdayTabs: () => void;
+  onExportWorkspace: () => void;
+  onImportWorkspace: () => void;
 }): Command[] {
   const commands: Command[] = [];
 
@@ -117,6 +125,34 @@ export function buildCommands({
     name: "Focus Workspace Notes",
     icon: "notes",
     action: onFocusNotes,
+  });
+
+  commands.push({
+    id: "toggle-deep-work",
+    name: "Toggle Deep Work Mode",
+    icon: "focus",
+    action: onToggleDeepWork,
+  });
+
+  commands.push({
+    id: "restore-yesterday-tabs",
+    name: "Restore yesterday's tabs",
+    icon: "restore",
+    action: onRestoreYesterdayTabs,
+  });
+
+  commands.push({
+    id: "export-workspace",
+    name: "Export current workspace",
+    icon: "save",
+    action: onExportWorkspace,
+  });
+
+  commands.push({
+    id: "import-workspace",
+    name: "Import workspace",
+    icon: "restore",
+    action: onImportWorkspace,
   });
 
   return commands;

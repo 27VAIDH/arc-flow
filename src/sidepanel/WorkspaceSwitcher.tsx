@@ -58,6 +58,24 @@ interface WorkspaceSwitcherProps {
   }) => void;
   onSaveSession?: () => void;
   onOpenSettings?: () => void;
+  tabEnergyScores?: Record<string, number>;
+  tabWorkspaceMap?: Record<string, string>;
+}
+
+function getWorkspaceAverageEnergy(
+  wsId: string,
+  tabEnergyScores: Record<string, number>,
+  tabWorkspaceMap: Record<string, string>
+): number | null {
+  const tabIds = Object.entries(tabWorkspaceMap)
+    .filter(([, wId]) => wId === wsId)
+    .map(([tId]) => tId);
+  if (tabIds.length === 0) return null;
+  const scores = tabIds
+    .map((tId) => tabEnergyScores[tId])
+    .filter((s): s is number => s != null);
+  if (scores.length === 0) return null;
+  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
 }
 
 export default function WorkspaceSwitcher({
@@ -66,6 +84,8 @@ export default function WorkspaceSwitcher({
   onContextMenu,
   onSaveSession,
   onOpenSettings,
+  tabEnergyScores = {},
+  tabWorkspaceMap = {},
 }: WorkspaceSwitcherProps) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
@@ -278,6 +298,31 @@ export default function WorkspaceSwitcher({
     setShowPanelColorPicker(null);
   }, [activeWorkspaceId]);
 
+  const handleExportWorkspace = useCallback((ws: Workspace) => {
+    const exportData = {
+      version: "2.0",
+      type: "arcflow-workspace",
+      name: ws.name,
+      emoji: ws.emoji,
+      accentColor: ws.accentColor,
+      pinnedApps: ws.pinnedApps,
+      folders: ws.folders,
+      notes: ws.notes,
+    };
+    const json = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const today = new Date().toISOString().slice(0, 10);
+    const safeName = ws.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `arcflow-workspace-${safeName}-${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, []);
+
   const handleContextMenu = useCallback(
     (e: React.MouseEvent, ws: Workspace) => {
       e.preventDefault();
@@ -319,6 +364,11 @@ export default function WorkspaceSwitcher({
         onClick: () => handleClone(ws),
       });
 
+      items.push({
+        label: "Export Workspace",
+        onClick: () => handleExportWorkspace(ws),
+      });
+
       if (onSaveSession) {
         items.push({
           label: "Save Session",
@@ -335,7 +385,7 @@ export default function WorkspaceSwitcher({
 
       onContextMenu({ x: e.clientX, y: e.clientY, items });
     },
-    [onContextMenu, handleDelete, handleClone, onSaveSession]
+    [onContextMenu, handleDelete, handleClone, handleExportWorkspace, onSaveSession]
   );
 
   return (
@@ -382,32 +432,49 @@ export default function WorkspaceSwitcher({
       >
         {workspaces.map((ws) => {
           const isActive = ws.id === activeWorkspaceId;
+          const avgEnergy = getWorkspaceAverageEnergy(ws.id, tabEnergyScores, tabWorkspaceMap);
           return (
-            <button
-              key={ws.id}
-              onClick={() => handleSwitchWorkspace(ws.id)}
-              onContextMenu={(e) => handleContextMenu(e, ws)}
-              className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-arc-accent/50 ${
-                isActive
-                  ? "ring-2 ring-offset-1 dark:ring-offset-arc-bg scale-105"
-                  : "opacity-60 hover:opacity-100 hover:scale-105"
-              }`}
-              style={{
-                backgroundColor: ws.accentColor + "20",
-                ...(isActive
-                  ? {
-                      ringColor: ws.accentColor,
-                      boxShadow: `0 0 0 2px ${ws.accentColor}`,
-                    }
-                  : {}),
-              }}
-              tabIndex={isActive ? 0 : -1}
-              title={ws.name}
-              aria-label={`Switch to ${ws.name} workspace${isActive ? " (active)" : ""}`}
-              aria-pressed={isActive}
-            >
-              {ws.emoji}
-            </button>
+            <div key={ws.id} className="flex flex-col items-center shrink-0 gap-0.5">
+              <button
+                onClick={() => handleSwitchWorkspace(ws.id)}
+                onContextMenu={(e) => handleContextMenu(e, ws)}
+                className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-arc-accent/50 ${
+                  isActive
+                    ? "ring-2 ring-offset-1 dark:ring-offset-arc-bg scale-105"
+                    : "opacity-60 hover:opacity-100 hover:scale-105"
+                }`}
+                style={{
+                  backgroundColor: ws.accentColor + "20",
+                  ...(isActive
+                    ? {
+                        ringColor: ws.accentColor,
+                        boxShadow: `0 0 0 2px ${ws.accentColor}`,
+                      }
+                    : {}),
+                }}
+                tabIndex={isActive ? 0 : -1}
+                title={ws.name}
+                aria-label={`Switch to ${ws.name} workspace${isActive ? " (active)" : ""}`}
+                aria-pressed={isActive}
+              >
+                {ws.emoji}
+              </button>
+              {/* Energy health bar */}
+              <div className="w-5 h-0.5 rounded-full bg-gray-700 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    avgEnergy == null
+                      ? "bg-gray-600"
+                      : avgEnergy >= 70
+                        ? "bg-green-400"
+                        : avgEnergy >= 40
+                          ? "bg-yellow-400"
+                          : "bg-red-400"
+                  }`}
+                  style={{ width: avgEnergy != null ? `${avgEnergy}%` : "0%" }}
+                />
+              </div>
+            </div>
           );
         })}
 

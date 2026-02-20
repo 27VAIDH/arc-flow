@@ -3,6 +3,9 @@ import type {
   TabInfo,
   ServiceWorkerMessage,
   SidePanelMessage,
+  WorkspaceSuggestion,
+  RecentlyClosedTab,
+  Snippet,
 } from "../shared/types";
 import {
   getPinnedApps,
@@ -15,11 +18,16 @@ import {
   setActiveWorkspace,
   assignTabToWorkspace,
   removeTabFromMap,
+  updateWorkspace,
 } from "../shared/workspaceStorage";
 import { getSettings } from "../shared/settingsStorage";
-import { addArchiveEntry } from "../shared/archiveStorage";
+import { addArchiveEntry, getArchiveEntries } from "../shared/archiveStorage";
+import { matchRoute } from "../shared/routingEngine";
+import { calculateEnergyScore } from "../shared/energyScore";
 
 const CONTEXT_MENU_ID = "arcflow-pin-toggle";
+const SAVE_TO_NOTES_MENU_ID = "arcflow-save-to-notes";
+const SAVE_SNIPPET_MENU_ID = "arcflow-save-snippet";
 
 // Register side panel on install
 chrome.runtime.onInstalled.addListener(() => {
@@ -35,8 +43,31 @@ chrome.runtime.onInstalled.addListener(() => {
     contexts: ["page"],
   });
 
+  // Create context menu for saving selected text to notes
+  chrome.contextMenus.create({
+    id: SAVE_TO_NOTES_MENU_ID,
+    title: "Save to ArcFlow Notes",
+    contexts: ["selection"],
+  });
+
+  // Create context menu for saving snippets
+  chrome.contextMenus.create({
+    id: SAVE_SNIPPET_MENU_ID,
+    title: "Save Snippet to ArcFlow",
+    contexts: ["selection"],
+  });
+
   // Register auto-archive alarm (every 5 minutes)
   chrome.alarms.create("arcflow-auto-archive", { periodInMinutes: 5 });
+
+  // Register workspace suggestion check alarm (every 5 minutes)
+  chrome.alarms.create("arcflow-workspace-suggestion", { periodInMinutes: 5 });
+
+  // Register daily snapshot alarm (every 24 hours)
+  chrome.alarms.create("arcflow-daily-snapshot", { periodInMinutes: 1440 });
+
+  // Register energy score recalculation alarm (every 5 minutes)
+  chrome.alarms.create("arcflow-energy-recalc", { periodInMinutes: 5 });
 });
 
 // Open side panel when the toolbar icon is clicked
@@ -48,6 +79,12 @@ const STORAGE_KEY = "tabList";
 const DEBOUNCE_MS = 50;
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+// --- Recently closed tabs: in-memory tab info cache ---
+// We cache tab info because chrome.tabs.get() doesn't work after a tab is removed.
+const tabInfoCache = new Map<number, { url: string; title: string; favIconUrl: string }>();
+const RECENTLY_CLOSED_KEY = "recentlyClosed";
+const MAX_RECENTLY_CLOSED = 20;
 
 function mapTab(tab: chrome.tabs.Tab): TabInfo {
   return {
@@ -142,6 +179,17 @@ async function initialize(): Promise<void> {
   await persistTabs(tabs);
   broadcastTabs(tabs);
 
+  // Populate tab info cache for recently closed tracking
+  for (const tab of tabs) {
+    if (tab.id > 0) {
+      tabInfoCache.set(tab.id, {
+        url: tab.url,
+        title: tab.title,
+        favIconUrl: tab.favIconUrl,
+      });
+    }
+  }
+
   // Reconcile: assign any unmapped tabs to the active workspace
   await reconcileTabWorkspaceMap();
 }
@@ -175,32 +223,184 @@ async function updateContextMenuTitle(tabId: number): Promise<void> {
   }
 }
 
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId !== CONTEXT_MENU_ID || !tab?.id) return;
+const MAX_NOTES_CHARS = 5000;
 
-  const tabUrl = tab.url ?? info.pageUrl ?? "";
-  const tabOrigin = getOrigin(tabUrl);
-  if (!tabOrigin) return;
+/**
+ * Handle "Save to ArcFlow Notes" context menu action.
+ * Sends message to content script for optional annotation, then appends to workspace notes.
+ */
+async function handleSaveToNotes(
+  tabId: number,
+  selectedText: string,
+  pageTitle: string,
+  pageUrl: string
+): Promise<void> {
+  // Get the active workspace for this tab
+  const tabMap = await getTabWorkspaceMap();
+  const wsId = tabMap[String(tabId)] ?? "default";
+  const workspaces = await getWorkspaces();
+  const ws = workspaces.find((w) => w.id === wsId);
+  const wsName = ws ? `${ws.emoji} ${ws.name}` : "Default";
+  const currentNotes = ws?.notes ?? "";
 
-  const apps = await getPinnedApps();
-  const existing = apps.find((app) => getOrigin(app.url) === tabOrigin);
+  // Send message to content script to show annotation popup
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, {
+      type: "ARCFLOW_CAPTURE_SELECTION",
+      selectedText,
+    }) as { action: string; annotation?: string } | undefined;
 
-  if (existing) {
-    await removePinnedApp(existing.id);
-  } else {
-    await addPinnedApp({
-      id: crypto.randomUUID(),
-      url: tabUrl,
-      title: tab.title ?? tabUrl,
-      favicon: tab.favIconUrl ?? "",
-    }).catch(() => {
-      // Max pinned apps reached
+    if (!response || response.action === "cancel") return;
+
+    const annotation = response.annotation ?? "";
+
+    // Build the note entry
+    let noteEntry = `\n\n> ${selectedText}\n— [${pageTitle}](${pageUrl})`;
+    if (annotation) {
+      noteEntry += `\n📝 ${annotation}`;
+    }
+
+    // Check if appending would exceed the limit
+    const newNotes = currentNotes + noteEntry;
+    if (newNotes.length > MAX_NOTES_CHARS) {
+      // Notify content script that notes are full
+      chrome.tabs.sendMessage(tabId, { type: "ARCFLOW_NOTES_FULL" }).catch(() => {});
+      return;
+    }
+
+    // Append to workspace notes
+    await updateWorkspace(wsId, {
+      notes: newNotes,
+      notesLastEditedAt: Date.now(),
     });
+
+    // Notify sidepanel about the notes update
+    const notifyMessage: ServiceWorkerMessage = {
+      type: "notes-saved-from-page",
+      workspaceName: wsName,
+    };
+    chrome.runtime.sendMessage(notifyMessage).catch(() => {
+      // Side panel may not be open
+    });
+  } catch {
+    // Content script may not be injected (e.g., chrome:// pages)
+    console.error("Failed to save to ArcFlow Notes — content script not available");
+  }
+}
+
+const MAX_SNIPPETS_PER_WORKSPACE = 50;
+
+/**
+ * Handle "Save Snippet to ArcFlow" context menu action.
+ * Shows annotation popup via content script, then saves snippet to workspace storage.
+ */
+async function handleSaveSnippet(
+  tabId: number,
+  selectedText: string,
+  pageTitle: string,
+  pageUrl: string
+): Promise<void> {
+  const tabMap = await getTabWorkspaceMap();
+  const wsId = tabMap[String(tabId)] ?? "default";
+  const workspaces = await getWorkspaces();
+  const ws = workspaces.find((w) => w.id === wsId);
+  const wsName = ws ? `${ws.emoji} ${ws.name}` : "Default";
+
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, {
+      type: "ARCFLOW_CAPTURE_SNIPPET",
+      selectedText,
+    }) as { action: string; annotation?: string } | undefined;
+
+    if (!response || response.action === "cancel") return;
+
+    const annotation = response.annotation ?? "";
+    const storageKey = `snippets_${wsId}`;
+
+    const result = await chrome.storage.local.get(storageKey);
+    const snippets: Snippet[] = (result[storageKey] as Snippet[] | undefined) ?? [];
+
+    const newSnippet: Snippet = {
+      id: crypto.randomUUID(),
+      text: selectedText,
+      annotation,
+      sourceUrl: pageUrl,
+      sourceTitle: pageTitle,
+      savedAt: Date.now(),
+    };
+
+    snippets.unshift(newSnippet);
+
+    // Cap at max, remove oldest if exceeded
+    let warning = false;
+    if (snippets.length > MAX_SNIPPETS_PER_WORKSPACE) {
+      snippets.splice(MAX_SNIPPETS_PER_WORKSPACE);
+      warning = true;
+    }
+
+    await chrome.storage.local.set({ [storageKey]: snippets });
+
+    // Notify sidepanel
+    const notifyMessage: ServiceWorkerMessage = {
+      type: "snippet-saved",
+      workspaceName: wsName,
+    };
+    chrome.runtime.sendMessage(notifyMessage).catch(() => {});
+
+    if (warning) {
+      console.warn(`Snippets for workspace ${wsId} exceeded ${MAX_SNIPPETS_PER_WORKSPACE} — oldest removed`);
+    }
+  } catch {
+    console.error("Failed to save snippet — content script not available");
+  }
+}
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  // --- Pin/Unpin to ArcFlow ---
+  if (info.menuItemId === CONTEXT_MENU_ID && tab?.id) {
+    const tabUrl = tab.url ?? info.pageUrl ?? "";
+    const tabOrigin = getOrigin(tabUrl);
+    if (!tabOrigin) return;
+
+    const apps = await getPinnedApps();
+    const existing = apps.find((app) => getOrigin(app.url) === tabOrigin);
+
+    if (existing) {
+      await removePinnedApp(existing.id);
+    } else {
+      await addPinnedApp({
+        id: crypto.randomUUID(),
+        url: tabUrl,
+        title: tab.title ?? tabUrl,
+        favicon: tab.favIconUrl ?? "",
+      }).catch(() => {
+        // Max pinned apps reached
+      });
+    }
+
+    // Update menu title after toggle
+    if (tab.id) {
+      await updateContextMenuTitle(tab.id);
+    }
+    return;
   }
 
-  // Update menu title after toggle
-  if (tab.id) {
-    await updateContextMenuTitle(tab.id);
+  // --- Save to ArcFlow Notes ---
+  if (info.menuItemId === SAVE_TO_NOTES_MENU_ID && tab?.id) {
+    const selectedText = info.selectionText ?? "";
+    if (!selectedText) return;
+
+    await handleSaveToNotes(tab.id, selectedText, tab.title ?? "", tab.url ?? "");
+    return;
+  }
+
+  // --- Save Snippet to ArcFlow ---
+  if (info.menuItemId === SAVE_SNIPPET_MENU_ID && tab?.id) {
+    const selectedText = info.selectionText ?? "";
+    if (!selectedText) return;
+
+    await handleSaveSnippet(tab.id, selectedText, tab.title ?? "", tab.url ?? "");
+    return;
   }
 });
 
@@ -217,27 +417,285 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
 
 // --- Air Traffic Control: URL routing rules ---
 
-function globToRegex(pattern: string): RegExp {
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
-  const regexStr = escaped.replace(/\*/g, ".*");
-  return new RegExp(`^${regexStr}$`, "i");
+/** Normalize a URL for deduplication: strip trailing slash, www. prefix, and hash fragment */
+function normalizeUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    // Remove www. prefix
+    const hostname = parsed.hostname.replace(/^www\./, "");
+    // Rebuild without hash fragment
+    const normalized = `${parsed.protocol}//${hostname}${parsed.port ? ":" + parsed.port : ""}${parsed.pathname}${parsed.search}`;
+    // Strip trailing slash (but keep root "/" as-is)
+    return normalized.length > 1 ? normalized.replace(/\/$/, "") : normalized;
+  } catch {
+    return url;
+  }
+}
+
+/** Returns true for URLs that should be ignored by auto-routing */
+function isIgnoredUrl(url: string): boolean {
+  return (
+    !url ||
+    url.startsWith("chrome://") ||
+    url.startsWith("chrome-extension://") ||
+    url.startsWith("extension://") ||
+    url === "about:blank" ||
+    url === "chrome://newtab/" ||
+    url === "chrome://newtab"
+  );
 }
 
 async function getWorkspaceForUrl(url: string): Promise<string | null> {
+  if (isIgnoredUrl(url)) return null;
   const settings = await getSettings();
-  for (const rule of settings.routingRules) {
-    if (globToRegex(rule.pattern).test(url)) {
-      return rule.workspaceId;
+  return matchRoute(url, settings.routingRules);
+}
+
+// --- Recently closed tabs tracking ---
+
+/**
+ * Track a closed tab for recovery, unless it's an ignored URL or was auto-archived.
+ */
+async function trackRecentlyClosed(tabId: number): Promise<void> {
+  const cached = tabInfoCache.get(tabId);
+  if (!cached || !cached.url) return;
+
+  // Skip ignored URLs
+  if (isIgnoredUrl(cached.url)) return;
+
+  // Skip tabs closed by auto-archive: check if the same URL was archived in the last 2 seconds
+  const archiveEntries = await getArchiveEntries();
+  const now = Date.now();
+  const recentlyArchived = archiveEntries.some(
+    (entry) => entry.url === cached.url && now - entry.archivedAt < 2000
+  );
+  if (recentlyArchived) return;
+
+  // Get workspace ID for this tab
+  const tabMap = await getTabWorkspaceMap();
+  const workspaceId = tabMap[String(tabId)] ?? "default";
+
+  const entry: RecentlyClosedTab = {
+    url: cached.url,
+    title: cached.title,
+    favicon: cached.favIconUrl,
+    workspaceId,
+    closedAt: now,
+  };
+
+  const result = await chrome.storage.local.get(RECENTLY_CLOSED_KEY);
+  const existing = (result[RECENTLY_CLOSED_KEY] as RecentlyClosedTab[] | undefined) ?? [];
+  existing.unshift(entry);
+  const capped = existing.slice(0, MAX_RECENTLY_CLOSED);
+  await chrome.storage.local.set({ [RECENTLY_CLOSED_KEY]: capped });
+}
+
+// --- Tab session counters for Morning Briefing ---
+// Track tabs opened/closed since the last session (sidebar close)
+
+async function incrementTabCounter(field: "opened" | "closed"): Promise<void> {
+  const result = await chrome.storage.local.get("tabSessionCounters");
+  const counters = (result.tabSessionCounters as { opened: number; closed: number }) ?? { opened: 0, closed: 0 };
+  counters[field] += 1;
+  await chrome.storage.local.set({ tabSessionCounters: counters });
+}
+
+// --- Analytics data collection ---
+// Track browsing analytics: tabs opened/closed, domain visits, workspace time
+// All writes debounced (batch every 30 seconds)
+
+interface AnalyticsDailyEntry {
+  opened: number;
+  closed: number;
+  domains: Record<string, number>;
+  workspaceMinutes: Record<string, number>;
+}
+
+interface AnalyticsData {
+  daily: Record<string, AnalyticsDailyEntry>;
+}
+
+// In-memory analytics buffer — flushed to storage every 30 seconds
+let analyticsDirty = false;
+const analyticsBuffer: {
+  openedDelta: number;
+  closedDelta: number;
+  domainDeltas: Record<string, number>;
+  workspaceMinutesDeltas: Record<string, number>;
+} = { openedDelta: 0, closedDelta: 0, domainDeltas: {}, workspaceMinutesDeltas: {} };
+
+// Track last activation for workspace time calculation
+let lastActivationTime: number = 0;
+let lastActivationWorkspaceId: string | null = null;
+
+function getAnalyticsTodayKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function analyticsTrackOpened(): void {
+  analyticsBuffer.openedDelta += 1;
+  analyticsDirty = true;
+}
+
+function analyticsTrackClosed(): void {
+  analyticsBuffer.closedDelta += 1;
+  analyticsDirty = true;
+}
+
+function analyticsTrackDomain(url: string): void {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, "");
+    if (!hostname) return;
+    analyticsBuffer.domainDeltas[hostname] = (analyticsBuffer.domainDeltas[hostname] ?? 0) + 1;
+    analyticsDirty = true;
+  } catch {
+    // Malformed URL
+  }
+}
+
+function analyticsTrackWorkspaceTime(): void {
+  if (lastActivationTime > 0 && lastActivationWorkspaceId) {
+    const elapsedMs = Date.now() - lastActivationTime;
+    const elapsedMinutes = elapsedMs / 60_000;
+    // Cap at 30 minutes to avoid inflated values from idle
+    const capped = Math.min(elapsedMinutes, 30);
+    if (capped > 0.01) {
+      analyticsBuffer.workspaceMinutesDeltas[lastActivationWorkspaceId] =
+        (analyticsBuffer.workspaceMinutesDeltas[lastActivationWorkspaceId] ?? 0) + capped;
+      analyticsDirty = true;
     }
   }
-  return null;
+}
+
+function pruneAnalyticsOlderThan30Days(data: AnalyticsData): void {
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  for (const dateKey of Object.keys(data.daily)) {
+    const d = new Date(dateKey);
+    if (d.getTime() < cutoff) {
+      delete data.daily[dateKey];
+    }
+  }
+}
+
+async function flushAnalytics(): Promise<void> {
+  if (!analyticsDirty) return;
+
+  const todayKey = getAnalyticsTodayKey();
+  const result = await chrome.storage.local.get("analytics");
+  const analytics: AnalyticsData = (result.analytics as AnalyticsData) ?? { daily: {} };
+
+  if (!analytics.daily[todayKey]) {
+    analytics.daily[todayKey] = { opened: 0, closed: 0, domains: {}, workspaceMinutes: {} };
+  }
+
+  const today = analytics.daily[todayKey];
+  today.opened += analyticsBuffer.openedDelta;
+  today.closed += analyticsBuffer.closedDelta;
+
+  for (const [domain, count] of Object.entries(analyticsBuffer.domainDeltas)) {
+    today.domains[domain] = (today.domains[domain] ?? 0) + count;
+  }
+
+  for (const [wsId, minutes] of Object.entries(analyticsBuffer.workspaceMinutesDeltas)) {
+    today.workspaceMinutes[wsId] = (today.workspaceMinutes[wsId] ?? 0) + minutes;
+  }
+
+  // Prune old entries
+  pruneAnalyticsOlderThan30Days(analytics);
+
+  await chrome.storage.local.set({ analytics });
+
+  // Reset buffer
+  analyticsBuffer.openedDelta = 0;
+  analyticsBuffer.closedDelta = 0;
+  analyticsBuffer.domainDeltas = {};
+  analyticsBuffer.workspaceMinutesDeltas = {};
+  analyticsDirty = false;
+}
+
+// Debounced flush: every 30 seconds
+const ANALYTICS_FLUSH_INTERVAL_MS = 30_000;
+setInterval(() => {
+  flushAnalytics().catch(() => {});
+}, ANALYTICS_FLUSH_INTERVAL_MS);
+
+// --- Tab Energy Score tracking ---
+// Track activation counts per tab (in-memory, with timestamps for 24h window)
+const tabActivationCounts = new Map<number, number[]>();
+
+function trackTabActivation(tabId: number): void {
+  const timestamps = tabActivationCounts.get(tabId) ?? [];
+  timestamps.push(Date.now());
+  tabActivationCounts.set(tabId, timestamps);
+}
+
+function getActivationCountLast24h(tabId: number): number {
+  const timestamps = tabActivationCounts.get(tabId);
+  if (!timestamps) return 0;
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  // Prune old timestamps in place
+  const recent = timestamps.filter((t) => t >= cutoff);
+  tabActivationCounts.set(tabId, recent);
+  return recent.length;
+}
+
+async function recalculateEnergyScores(): Promise<void> {
+  const allTabs = await chrome.tabs.query({ currentWindow: true });
+  const workspaces = await getWorkspaces();
+
+  // Build lastActiveAt map from folder items
+  const tabLastActiveMap = new Map<number, number>();
+  for (const ws of workspaces) {
+    for (const folder of ws.folders) {
+      for (const item of folder.items) {
+        if (item.type === "tab" && item.tabId != null && item.lastActiveAt) {
+          tabLastActiveMap.set(item.tabId, item.lastActiveAt);
+        }
+      }
+    }
+  }
+
+  const scores: Record<string, number> = {};
+  for (const tab of allTabs) {
+    if (tab.id == null || !tab.url || isIgnoredUrl(tab.url)) continue;
+    const activationCount = getActivationCountLast24h(tab.id);
+    const lastActiveAt = tab.active ? Date.now() : (tabLastActiveMap.get(tab.id) ?? 0);
+    scores[String(tab.id)] = calculateEnergyScore(
+      { tabId: tab.id, url: tab.url, active: tab.active },
+      activationCount,
+      lastActiveAt
+    );
+  }
+
+  await chrome.storage.local.set({ tabEnergyScores: scores });
+
+  // Clean up activation counts for tabs that no longer exist
+  const currentTabIds = new Set(allTabs.map((t) => t.id).filter((id): id is number => id != null));
+  for (const tabId of tabActivationCounts.keys()) {
+    if (!currentTabIds.has(tabId)) {
+      tabActivationCounts.delete(tabId);
+    }
+  }
 }
 
 // Tab lifecycle event listeners
 chrome.tabs.onCreated.addListener((tab) => {
+  // Increment tab opened counter for Morning Briefing
+  incrementTabCounter("opened").catch(() => {});
+  // Analytics: track tab opened
+  analyticsTrackOpened();
+
   if (tab.id != null) {
     const tabUrl = tab.url ?? tab.pendingUrl ?? "";
     const tabId = tab.id;
+
+    // Cache tab info for recently closed tracking
+    tabInfoCache.set(tabId, {
+      url: tabUrl,
+      title: tab.title ?? "",
+      favIconUrl: tab.favIconUrl ?? "",
+    });
 
     // Try routing rules first, then fall back to active workspace
     const assignWorkspace = async () => {
@@ -259,10 +717,22 @@ chrome.tabs.onCreated.addListener((tab) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
+  // Increment tab closed counter for Morning Briefing
+  incrementTabCounter("closed").catch(() => {});
+  // Analytics: track tab closed
+  analyticsTrackClosed();
+
+  // Track recently closed tab before cleanup
+  trackRecentlyClosed(tabId).catch(() => {});
+
   // Clean up tab-workspace mapping
   removeTabFromMap(tabId).then(() => {
     broadcastTabWorkspaceMap();
   });
+
+  // Clean up tab info cache
+  tabInfoCache.delete(tabId);
+
   debouncedRefresh();
 });
 
@@ -278,21 +748,101 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
   });
   // Update lastActiveAt for auto-archive tracking
   updateLastActiveAt(activeInfo.tabId).catch(() => {});
+  // Track activation for energy score
+  trackTabActivation(activeInfo.tabId);
+
+  // Analytics: track workspace time (time spent in previous workspace) and domain visit
+  analyticsTrackWorkspaceTime();
+  (async () => {
+    try {
+      const tab = await chrome.tabs.get(activeInfo.tabId);
+      if (tab.url && !isIgnoredUrl(tab.url)) {
+        analyticsTrackDomain(tab.url);
+      }
+      // Update last activation tracking for next workspace time calculation
+      const tabMap = await getTabWorkspaceMap();
+      lastActivationTime = Date.now();
+      lastActivationWorkspaceId = tabMap[String(activeInfo.tabId)] ?? "default";
+    } catch {
+      // Tab may not exist
+      lastActivationTime = Date.now();
+      lastActivationWorkspaceId = null;
+    }
+  })().catch(() => {});
+
   debouncedRefresh();
 });
 
 chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
-  // Re-evaluate routing rules when a tab's URL changes (e.g., new tab navigates to a URL)
-  if (changeInfo.url && tab.id != null) {
+  // Update tab info cache on URL or title changes
+  if (tab.id != null && (changeInfo.url || changeInfo.title || changeInfo.favIconUrl)) {
+    const existing = tabInfoCache.get(tab.id) ?? { url: "", title: "", favIconUrl: "" };
+    tabInfoCache.set(tab.id, {
+      url: changeInfo.url ?? existing.url,
+      title: changeInfo.title ?? existing.title,
+      favIconUrl: changeInfo.favIconUrl ?? existing.favIconUrl,
+    });
+  }
+
+  // Auto-route tabs when navigation completes and URL has changed
+  if (changeInfo.status === "complete" && tab.url && tab.id != null) {
     const tabId = tab.id;
-    getWorkspaceForUrl(changeInfo.url)
-      .then(async (matchedWsId) => {
+    const tabUrl = tab.url;
+
+    if (!isIgnoredUrl(tabUrl)) {
+      (async () => {
+        const settings = await getSettings();
+        const matchedWsId = matchRoute(tabUrl, settings.routingRules);
         if (matchedWsId) {
-          await assignTabToWorkspace(tabId, matchedWsId);
-          broadcastTabWorkspaceMap();
+          // Check if tab is already in the target workspace
+          const tabMap = await getTabWorkspaceMap();
+          const currentWsId = tabMap[String(tabId)];
+          if (currentWsId !== matchedWsId) {
+            await assignTabToWorkspace(tabId, matchedWsId);
+            broadcastTabWorkspaceMap();
+            // Notify sidepanel about auto-routing
+            const message: ServiceWorkerMessage = {
+              type: "tab-auto-routed",
+              tabId,
+              workspaceId: matchedWsId,
+            };
+            chrome.runtime.sendMessage(message).catch(() => {
+              // Side panel may not be open
+            });
+          }
         }
-      })
-      .catch(() => {});
+
+        // Duplicate tab detection
+        const normalizedNewUrl = normalizeUrl(tabUrl);
+        const allTabs = await chrome.tabs.query({ currentWindow: true });
+        for (const otherTab of allTabs) {
+          if (otherTab.id == null || otherTab.id === tabId) continue;
+          if (!otherTab.url || isIgnoredUrl(otherTab.url)) continue;
+          if (normalizeUrl(otherTab.url) === normalizedNewUrl) {
+            const dupTabMap = await getTabWorkspaceMap();
+            const existingWsId = dupTabMap[String(otherTab.id)] ?? "default";
+            const workspaces = await getWorkspaces();
+            const existingWs = workspaces.find((w) => w.id === existingWsId);
+            const dupMessage: ServiceWorkerMessage = {
+              type: "duplicate-tab-detected",
+              newTabId: tabId,
+              existingTabId: otherTab.id,
+              existingWorkspaceId: existingWsId,
+              existingWorkspaceName: existingWs
+                ? `${existingWs.emoji} ${existingWs.name}`
+                : "Default",
+            };
+            chrome.runtime.sendMessage(dupMessage).catch(() => {
+              // Side panel may not be open
+            });
+            break; // Only report first duplicate
+          }
+        }
+
+        // Check for workspace suggestion (has built-in cooldown)
+        await checkForWorkspaceSuggestion();
+      })().catch(() => {});
+    }
   }
   debouncedRefresh();
 });
@@ -462,7 +1012,66 @@ async function runAutoSuspend(): Promise<void> {
   }
 }
 
-// Listen for the auto-archive alarm
+// --- Daily snapshot capture ---
+
+const DAILY_SNAPSHOTS_KEY = "dailySnapshots";
+const MAX_DAILY_SNAPSHOTS = 7;
+
+interface DailySnapshot {
+  workspaces: { id: string; name: string; emoji: string }[];
+  tabs: Record<string, { url: string; title: string; favicon: string }[]>;
+  createdAt: number;
+}
+
+async function captureDailySnapshot(): Promise<void> {
+  const workspaces = await getWorkspaces();
+  const allTabs = await chrome.tabs.query({ currentWindow: true });
+  const tabMap = await getTabWorkspaceMap();
+
+  // Build workspace summary
+  const wsInfo = workspaces.map((ws) => ({
+    id: ws.id,
+    name: ws.name,
+    emoji: ws.emoji,
+  }));
+
+  // Group tabs by workspace
+  const tabsByWs: Record<string, { url: string; title: string; favicon: string }[]> = {};
+  for (const tab of allTabs) {
+    if (!tab.url || tab.id == null || isIgnoredUrl(tab.url)) continue;
+    const wsId = tabMap[String(tab.id)] ?? "default";
+    if (!tabsByWs[wsId]) tabsByWs[wsId] = [];
+    tabsByWs[wsId].push({
+      url: tab.url,
+      title: tab.title ?? "",
+      favicon: tab.favIconUrl ?? "",
+    });
+  }
+
+  const todayKey = getAnalyticsTodayKey();
+  const snapshot: DailySnapshot = {
+    workspaces: wsInfo,
+    tabs: tabsByWs,
+    createdAt: Date.now(),
+  };
+
+  const result = await chrome.storage.local.get(DAILY_SNAPSHOTS_KEY);
+  const snapshots: Record<string, DailySnapshot> =
+    (result[DAILY_SNAPSHOTS_KEY] as Record<string, DailySnapshot>) ?? {};
+
+  snapshots[todayKey] = snapshot;
+
+  // Keep only last 7 entries
+  const keys = Object.keys(snapshots).sort();
+  while (keys.length > MAX_DAILY_SNAPSHOTS) {
+    const oldest = keys.shift()!;
+    delete snapshots[oldest];
+  }
+
+  await chrome.storage.local.set({ [DAILY_SNAPSHOTS_KEY]: snapshots });
+}
+
+// Listen for alarms
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ARCHIVE_ALARM_NAME) {
     runAutoArchive().catch(() => {
@@ -472,7 +1081,217 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       // Silently fail — will retry on next alarm
     });
   }
+  if (alarm.name === "arcflow-workspace-suggestion") {
+    checkForWorkspaceSuggestion().catch(() => {
+      // Silently fail — will retry on next alarm
+    });
+  }
+  if (alarm.name === "arcflow-daily-snapshot") {
+    captureDailySnapshot().catch(() => {
+      // Silently fail — will retry on next alarm
+    });
+  }
+  if (alarm.name === "arcflow-energy-recalc") {
+    recalculateEnergyScores().catch(() => {
+      // Silently fail — will retry on next alarm
+    });
+  }
 });
+
+// --- AI Auto-workspace suggestion engine ---
+
+const SUGGESTION_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+let lastSuggestionTimestamp = 0;
+
+/**
+ * Get tabs that are "unorganized" — not matching any routing rule and not in any folder.
+ */
+async function getUnorganizedTabs(): Promise<chrome.tabs.Tab[]> {
+  const allTabs = await chrome.tabs.query({ currentWindow: true });
+  const settings = await getSettings();
+  const workspaces = await getWorkspaces();
+
+  // Collect all tab IDs that are in folders
+  const tabIdsInFolders = new Set<number>();
+  for (const ws of workspaces) {
+    for (const folder of ws.folders) {
+      for (const item of folder.items) {
+        if (item.type === "tab" && item.tabId != null) {
+          tabIdsInFolders.add(item.tabId);
+        }
+      }
+    }
+  }
+
+  const unorganized: chrome.tabs.Tab[] = [];
+  for (const tab of allTabs) {
+    if (!tab.url || tab.id == null) continue;
+    if (isIgnoredUrl(tab.url)) continue;
+    // Skip tabs in folders
+    if (tabIdsInFolders.has(tab.id)) continue;
+    // Skip tabs matching a routing rule
+    if (matchRoute(tab.url, settings.routingRules)) continue;
+    unorganized.push(tab);
+  }
+
+  return unorganized;
+}
+
+/**
+ * Domain clustering fallback: if 3+ tabs share the same domain, suggest a workspace.
+ */
+function domainClusterFallback(
+  tabs: chrome.tabs.Tab[]
+): WorkspaceSuggestion | null {
+  const domainMap = new Map<string, chrome.tabs.Tab[]>();
+  for (const tab of tabs) {
+    try {
+      const hostname = new URL(tab.url!).hostname.replace(/^www\./, "");
+      const existing = domainMap.get(hostname) ?? [];
+      existing.push(tab);
+      domainMap.set(hostname, existing);
+    } catch {
+      // Skip malformed URLs
+    }
+  }
+
+  // Find first domain with 3+ tabs
+  for (const [domain, domainTabs] of domainMap) {
+    if (domainTabs.length >= 3) {
+      const shortName =
+        domain.split(".")[0].charAt(0).toUpperCase() +
+        domain.split(".")[0].slice(1);
+      return {
+        suggest: true,
+        name: shortName,
+        emoji: "🌐",
+        reason: `${domainTabs.length} tabs open from ${domain}`,
+        tabIds: domainTabs.map((t) => t.id!),
+        createdAt: Date.now(),
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Call OpenRouter API to get a workspace suggestion for unorganized tabs.
+ */
+async function getAISuggestion(
+  apiKey: string,
+  tabs: chrome.tabs.Tab[]
+): Promise<WorkspaceSuggestion | null> {
+  const tabSummary = tabs.map((t) => ({
+    title: t.title ?? "",
+    url: t.url ?? "",
+  }));
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          "HTTP-Referer": "chrome-extension://arcflow",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.0-flash-001",
+          max_tokens: 256,
+          messages: [
+            {
+              role: "user",
+              content: `These are unorganized browser tabs. Should they be grouped into a new workspace? If yes, suggest a short workspace name, a single emoji, and a brief reason. Return ONLY a JSON object: {"suggest": boolean, "name": string, "emoji": string, "reason": string}\n\nTabs:\n${JSON.stringify(tabSummary)}`,
+            },
+          ],
+        }),
+        signal: controller.signal,
+      }
+    );
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`OpenRouter API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const text: string = data.choices?.[0]?.message?.content ?? "";
+
+    // Parse JSON from response (may be wrapped in markdown code blocks)
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+
+    const parsed = JSON.parse(jsonMatch[0]) as {
+      suggest?: boolean;
+      name?: string;
+      emoji?: string;
+      reason?: string;
+    };
+
+    if (!parsed.suggest || !parsed.name) return null;
+
+    return {
+      suggest: true,
+      name: parsed.name,
+      emoji: parsed.emoji ?? "📁",
+      reason: parsed.reason ?? "Multiple related tabs detected",
+      tabIds: tabs.map((t) => t.id!),
+      createdAt: Date.now(),
+    };
+  } catch (e) {
+    clearTimeout(timeoutId);
+    console.error("AI workspace suggestion failed:", e);
+    return null;
+  }
+}
+
+/**
+ * Check for unorganized tabs and potentially suggest a new workspace.
+ */
+async function checkForWorkspaceSuggestion(): Promise<void> {
+  // Enforce cooldown
+  const now = Date.now();
+  if (now - lastSuggestionTimestamp < SUGGESTION_COOLDOWN_MS) return;
+
+  const unorganized = await getUnorganizedTabs();
+  if (unorganized.length < 3) return;
+
+  lastSuggestionTimestamp = now;
+
+  const settings = await getSettings();
+  let suggestion: WorkspaceSuggestion | null = null;
+
+  if (settings.openRouterApiKey) {
+    suggestion = await getAISuggestion(
+      settings.openRouterApiKey,
+      unorganized
+    );
+  }
+
+  // Fallback to domain clustering if AI unavailable or returned no suggestion
+  if (!suggestion) {
+    suggestion = domainClusterFallback(unorganized);
+  }
+
+  if (!suggestion) return;
+
+  // Store suggestion
+  await chrome.storage.local.set({ pendingWorkspaceSuggestion: suggestion });
+
+  // Notify sidepanel
+  const message: ServiceWorkerMessage = {
+    type: "workspace-suggestion-ready",
+  };
+  chrome.runtime.sendMessage(message).catch(() => {
+    // Side panel may not be open
+  });
+}
 
 // --- Split view: side-by-side windows ---
 
