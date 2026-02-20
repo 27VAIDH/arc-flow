@@ -226,6 +226,7 @@ function globToRegex(pattern: string): RegExp {
 async function getWorkspaceForUrl(url: string): Promise<string | null> {
   const settings = await getSettings();
   for (const rule of settings.routingRules) {
+    if (!rule.enabled) continue;
     if (globToRegex(rule.pattern).test(url)) {
       return rule.workspaceId;
     }

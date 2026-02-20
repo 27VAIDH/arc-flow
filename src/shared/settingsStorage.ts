@@ -14,6 +14,13 @@ function migrateSettings(stored: Record<string, unknown>): Record<string, unknow
     }
     delete stored.aiGrouping;
   }
+  // Migrate old routingRules missing "enabled" field
+  if (Array.isArray(stored.routingRules)) {
+    stored.routingRules = (stored.routingRules as Record<string, unknown>[]).map((rule) => ({
+      ...rule,
+      enabled: rule.enabled ?? true,
+    }));
+  }
   return stored;
 }
 

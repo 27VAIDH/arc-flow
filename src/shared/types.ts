@@ -111,6 +111,12 @@ export interface Session {
   tabUrls: { url: string; title: string; favicon: string }[];
 }
 
+export interface RoutingRule {
+  pattern: string;
+  workspaceId: string;
+  enabled: boolean;
+}
+
 export interface Settings {
   theme: "system" | "light" | "dark";
   autoArchiveMinutes: number;
@@ -120,7 +126,7 @@ export interface Settings {
     redirectRules: { blockedPattern: string; redirectUrl: string }[];
   };
   openRouterApiKey: string;
-  routingRules: { pattern: string; workspaceId: string }[];
+  routingRules: RoutingRule[];
   accentColor: string;
   panelColor: string;
   omniboxEnabled: boolean;

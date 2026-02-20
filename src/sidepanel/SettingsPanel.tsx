@@ -573,6 +573,7 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                   {
                     pattern: "",
                     workspaceId: workspaces[0]?.id ?? "default",
+                    enabled: true,
                   },
                 ];
                 handleUpdate({ routingRules: rules });
