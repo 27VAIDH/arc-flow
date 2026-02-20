@@ -194,6 +194,40 @@ export default function QuickNotes({
     [localNotes, onNotesChange]
   );
 
+  // Insert markdown link to current active tab at cursor position
+  const handleInsertLink = useCallback(async () => {
+    if (previewMode) return;
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      const tab = tabs[0];
+      if (!tab?.url || !tab.title) return;
+      const linkText = `[${tab.title}](${tab.url})`;
+      const textarea = textareaRef.current;
+      if (textarea) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const newValue = localNotes.slice(0, start) + linkText + localNotes.slice(end);
+        if (newValue.length > MAX_CHARS) return;
+        setLocalNotes(newValue);
+        debouncedSave(newValue);
+        // Restore cursor position after the inserted link
+        setTimeout(() => {
+          textarea.focus();
+          const newPos = start + linkText.length;
+          textarea.setSelectionRange(newPos, newPos);
+        }, 0);
+      } else {
+        // No textarea (shouldn't happen in edit mode), append
+        const newValue = localNotes + (localNotes ? "\n" : "") + linkText;
+        if (newValue.length > MAX_CHARS) return;
+        setLocalNotes(newValue);
+        debouncedSave(newValue);
+      }
+    } catch {
+      // chrome.tabs.query may fail in some contexts
+    }
+  }, [previewMode, localNotes, debouncedSave]);
+
   // Focus textarea when expanding
   const handleToggle = () => {
     onCollapseToggle();
@@ -229,7 +263,7 @@ export default function QuickNotes({
       {/* Expanded content */}
       {!notesCollapsed && (
         <div className="px-3 pb-2">
-          {/* Edit/Preview toggle */}
+          {/* Edit/Preview toggle + Link button */}
           <div className="mb-1.5 flex items-center gap-1">
             <button
               className={`rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
@@ -252,6 +286,19 @@ export default function QuickNotes({
               aria-label="Preview mode"
             >
               👁 Preview
+            </button>
+            <button
+              className={`ml-auto rounded px-1.5 py-0.5 text-[10px] transition-colors ${
+                previewMode
+                  ? "cursor-not-allowed text-gray-300 dark:text-gray-600"
+                  : "text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+              }`}
+              onClick={handleInsertLink}
+              disabled={previewMode}
+              title="Insert link to current tab"
+              aria-label="Insert link to current tab"
+            >
+              🔗
             </button>
           </div>
 
