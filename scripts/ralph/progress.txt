@@ -72,6 +72,8 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - `tabEnergyScores` storage key maps `{[tabId]: number}` (score 1-100) — recalculated every 5 min by service worker alarm
 - `calculateEnergyScore()` in `shared/energyScore.ts` is a pure function: takes tab info, activation count, lastActiveAt → returns 1-100
 - `tabActivationCounts` in service worker is in-memory Map<number, number[]> tracking activation timestamps per tab (24h window)
+- `tabEnergyScores` state in App.tsx is `Record<string, number>` (string tab ID → score 1-100) — loaded from storage on mount, updated reactively via storage change listener
+- WorkspaceSwitcher accepts `tabEnergyScores` and `tabWorkspaceMap` props for health bar computation — `getWorkspaceAverageEnergy()` is a standalone helper
 
 ---
 
@@ -967,4 +969,41 @@ There are still 6 stories with `passes: false` (US-025 through US-030), so more 
   - Energy scores are recalculated every 5 minutes, not on every event — UI reads from storage
   - `calculateEnergyScore` is a pure function in shared/ — can be unit tested independently
   - Media domains list is a simple Set — can be extended as needed
+---
+
+## Iteration 25 - Fri Feb 20 13:13:03 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-25.log
+---
+**US-025 is complete.** Committed as `30a94d2` (code) + `8febda7` (PRD/progress).
+
+**US-025 Summary:**
+- Created `src/shared/energyScore.ts` — pure function `calculateEnergyScore(tab, activationCount, lastActiveAt)` returning a score from 1-100
+- **Freshness (0-40):** active=40, <1h=35, <4h=25, <1d=15, <3d=5, >3d=0
+- **Visit frequency (0-30):** 10+ activations in 24h=30, 5+=20, 2+=10, 1=5, 0=0
+- **Memory estimate (0-30):** media sites (youtube, netflix, etc.)=10, unknown/general=20
+- Added in-memory `tabActivationCounts` (Map) in service worker, tracking activation timestamps per tab
+- `trackTabActivation()` called from `onActivated` listener
+- `recalculateEnergyScores()` runs every 5 minutes via `arcflow-energy-recalc` alarm — queries all tabs, computes scores, stores in `tabEnergyScores` storage key
+- Cleans up activation counts for removed tabs during recalculation
+- Typecheck passes, lint passes
+- Files changed: `src/shared/energyScore.ts` (new), `src/background/service-worker.ts`
+
+There are still 5 stories with `passes: false` (US-026 through US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-026
+- Added 8px colored energy score dots to DraggableTabItem in App.tsx, rendered left of favicon
+- Dot color: green (70-100), yellow (40-69), red (1-39) with descriptive tooltips
+- Added `tabEnergyScores` state to App.tsx, loaded from chrome.storage.local on mount, reactive via storage change listener
+- Passed `energyScore` prop through both virtualized (VirtualTabRow) and non-virtualized tab rendering paths
+- Added workspace health bar to WorkspaceSwitcher.tsx: thin (h-0.5) bar below each workspace emoji button
+- `getWorkspaceAverageEnergy()` helper computes average score from tabWorkspaceMap + tabEnergyScores
+- Health bar fill width = average percentage, color follows same green/yellow/red scheme
+- WorkspaceSwitcher now accepts `tabEnergyScores` and `tabWorkspaceMap` props from App.tsx
+- Files changed: `src/sidepanel/App.tsx`, `src/sidepanel/WorkspaceSwitcher.tsx`
+- **Learnings for future iterations:**
+  - `tabEnergyScores` keys are string tab IDs (from storage), so use `String(tab.id)` when looking up
+  - Health bar uses `getWorkspaceAverageEnergy()` inline — no caching needed since workspace count is small
+  - WorkspaceSwitcher workspace buttons are now wrapped in a `<div>` container to stack the button + health bar
 ---
