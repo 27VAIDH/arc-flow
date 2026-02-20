@@ -1170,3 +1170,25 @@ There is still 1 story with `passes: false` (US-030), so more iterations are nee
   - Google favicon API (`https://www.google.com/s2/favicons?domain=...&sz=16`) is a reliable fallback for favicons when you only have a URL
   - Per-workspace storage keys (`snippets_[wsId]`) require re-reading storage when workspace changes — track storageKey in useEffect deps
 ---
+
+## Iteration 30 - Fri Feb 20 13:33:48 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-30.log
+---
+<promise>COMPLETE</promise>
+
+All 30 user stories are complete and passing. Here's a summary of US-030:
+
+**US-030: Add snippets sidebar section**
+- Created `src/sidepanel/SnippetsSection.tsx` — new collapsible section following the existing pattern
+- **Header:** "Snippets (N)" with count badge and collapse toggle
+- **Each snippet row:** first line of text (truncated 80 chars), source domain favicon, relative time
+- **Click to expand:** shows full text, annotation (with pencil emoji), and clickable source link
+- **Delete (X):** per-snippet button, appears on hover, instant delete
+- **Clear all:** at section bottom with inline confirmation dialog
+- **Section hidden** when no snippets exist for the current workspace
+- **Reads from** `snippets_[currentWorkspaceId]` with live storage change listener
+- Placed between Quick Notes and Workspace Switcher in App.tsx
+- Committed as `85d486a` (code) + `e687e70` (PRD/progress)
+- All 8 tests pass, typecheck passes, lint passes
+---
