@@ -34,7 +34,9 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - `trackRecentlyClosed(tabId)` must be called BEFORE `removeTabFromMap` in onRemoved to capture the workspace ID
 - `RecentlyClosedSection` component reads from `recentlyClosed` storage key, listens for storage changes, and is placed between Archive and Quick Notes in App.tsx
 - `normalizeUrl(url)` in service worker strips trailing `/`, `www.` prefix, and hash fragment for dedup comparison
-- `duplicate-tab-detected` message includes `newTabId`, `existingTabId`, `existingWorkspaceId`, `existingWorkspaceName` — consumed by sidepanel (US-013)
+- `duplicate-tab-detected` message includes `newTabId`, `existingTabId`, `existingWorkspaceName` — consumed by sidepanel (US-013)
+- Notification bars in App.tsx follow a pattern: state + auto-dismiss useEffect + inline JSX below search bar (see autoRouteIndicator and dupNotification)
+- `dupNotification` state handles duplicate tab detection UI — auto-dismisses after 8s, only one shown at a time (new replaces old)
 
 ---
 
@@ -426,4 +428,36 @@ There are still 19 stories with `passes: false` (US-012 through US-030), so more
   - `normalizeUrl` uses `new URL()` for robust parsing — handles edge cases like ports, query strings
   - Duplicate detection runs after auto-routing in the same async block, so routing happens first
   - `existingWorkspaceName` is pre-formatted as "emoji name" for direct display in sidepanel UI
+---
+
+## Iteration 12 - Fri Feb 20 12:33:15 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-12.log
+---
+**US-012 is complete.** Committed as `e271012`.
+
+**Summary:**
+- Added `normalizeUrl()` function to service worker: strips trailing `/`, removes `www.` prefix, removes hash fragment for consistent URL comparison
+- Added duplicate tab detection in the `onUpdated` handler (status === 'complete'): normalizes the new tab's URL and compares against all other open tabs in the current window
+- If a duplicate is found, sends `duplicate-tab-detected` message to sidepanel with `newTabId`, `existingTabId`, `existingWorkspaceId`, and `existingWorkspaceName`
+- Self-comparison excluded, chrome://, extension://, about:blank URLs ignored
+- Added `duplicate-tab-detected` to `ServiceWorkerMessage` union type in `types.ts`
+- Typecheck passes, lint passes
+
+There are still 18 stories with `passes: false` (US-013 through US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-013
+- Added tab deduplication notification bar in sidebar (App.tsx)
+- Listens for `duplicate-tab-detected` message in the existing handleMessage listener
+- Shows yellow-tinted notification bar below search bar: "Already open in [Workspace emoji+name]"
+- "Switch" button: closes duplicate tab, activates existing tab, switches workspace if needed
+- "Keep Both" button: dismisses notification, keeps both tabs open
+- Bar auto-dismisses after 8 seconds with fade-out transition
+- Only one dedup notification shown at a time (new message replaces old via setState)
+- Files changed: `src/sidepanel/App.tsx`
+- **Learnings for future iterations:**
+  - Notification bars follow a consistent pattern in App.tsx: state variable + auto-dismiss useEffect + inline JSX
+  - `handleDupSwitch` uses `activeWorkspaceIdRef.current` (not state) for workspace comparison since it may run inside stale closures
+  - `CLOSE_TAB` and `SWITCH_TAB` messages are fire-and-forget — no need to await
 ---

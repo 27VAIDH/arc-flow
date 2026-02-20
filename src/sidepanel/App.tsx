@@ -577,6 +577,12 @@ export default function App() {
     workspaceName: string;
     workspaceEmoji: string;
   } | null>(null);
+  const [dupNotification, setDupNotification] = useState<{
+    newTabId: number;
+    existingTabId: number;
+    existingWorkspaceId: string;
+    existingWorkspaceName: string;
+  } | null>(null);
   const [tabPreview, setTabPreview] = useState<{
     tab: TabPreviewInfo;
     position: { top: number; left: number };
@@ -684,6 +690,14 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [autoRouteIndicator]);
+
+  // Auto-dismiss duplicate tab notification after 8 seconds
+  useEffect(() => {
+    if (dupNotification) {
+      const timer = setTimeout(() => setDupNotification(null), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [dupNotification]);
 
   // Listen for Ctrl+Shift+K to open command palette
   useEffect(() => {
@@ -834,6 +848,13 @@ export default function App() {
         }
       } else if (message.type === "workspace-suggestion-ready") {
         loadWorkspaceSuggestion();
+      } else if (message.type === "duplicate-tab-detected") {
+        setDupNotification({
+          newTabId: message.newTabId,
+          existingTabId: message.existingTabId,
+          existingWorkspaceId: message.existingWorkspaceId,
+          existingWorkspaceName: message.existingWorkspaceName,
+        });
       }
     };
 
@@ -1102,6 +1123,21 @@ export default function App() {
       setToast("Failed to create workspace");
     }
   }, [workspaceSuggestion]);
+
+  // Duplicate tab notification handlers
+  const handleDupSwitch = useCallback(async () => {
+    if (!dupNotification) return;
+    // Close the duplicate (new) tab
+    chrome.runtime.sendMessage({ type: "CLOSE_TAB", tabId: dupNotification.newTabId });
+    // Activate the existing tab
+    chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: dupNotification.existingTabId });
+    // Switch workspace if needed
+    if (dupNotification.existingWorkspaceId !== activeWorkspaceIdRef.current) {
+      await setActiveWorkspaceStorage(dupNotification.existingWorkspaceId);
+      setActiveWorkspaceId(dupNotification.existingWorkspaceId);
+    }
+    setDupNotification(null);
+  }, [dupNotification]);
 
   const handleDismissSuggestion = useCallback(async () => {
     setWorkspaceSuggestion(null);
@@ -1678,6 +1714,29 @@ export default function App() {
               <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
             </svg>
           </button>
+        </div>
+      )}
+
+      {/* Duplicate tab notification */}
+      {dupNotification && (
+        <div className="mx-4 mb-1 flex items-center justify-between gap-2 px-3 py-1.5 text-xs rounded-lg bg-yellow-500/10 dark:bg-yellow-400/10 text-yellow-700 dark:text-yellow-300 animate-fade-in transition-opacity duration-300">
+          <span className="truncate">
+            Already open in {dupNotification.existingWorkspaceName}
+          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={handleDupSwitch}
+              className="px-2 py-0.5 text-xs font-medium rounded bg-yellow-600/20 dark:bg-yellow-400/20 hover:bg-yellow-600/30 dark:hover:bg-yellow-400/30 transition-colors duration-200"
+            >
+              Switch
+            </button>
+            <button
+              onClick={() => setDupNotification(null)}
+              className="px-2 py-0.5 text-xs font-medium rounded hover:bg-yellow-600/10 dark:hover:bg-yellow-400/10 transition-colors duration-200"
+            >
+              Keep Both
+            </button>
+          </div>
         </div>
       )}
 
