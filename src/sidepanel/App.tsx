@@ -567,6 +567,7 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [tabNameOverrides, setTabNameOverrides] = useState<Record<number, string>>({});
   const [tabOrderOverrides, setTabOrderOverrides] = useState<number[]>([]);
+  const [toast, setToast] = useState<string | null>(null);
   const [isDraggingTabs, setIsDraggingTabs] = useState(false);
   const [tabPreview, setTabPreview] = useState<{
     tab: TabPreviewInfo;
@@ -635,6 +636,14 @@ export default function App() {
       }
     });
   }, []);
+
+  // Auto-dismiss toast after 3 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   // Listen for Ctrl+Shift+K to open command palette
   useEffect(() => {
@@ -1113,6 +1122,35 @@ export default function App() {
           });
         },
       });
+
+      // Add "Always open [domain] in this workspace" for auto-routing
+      try {
+        const domain = new URL(tab.url).hostname;
+        if (domain && !domain.startsWith("chrome") && !domain.startsWith("extension")) {
+          items.push({
+            label: `Always open ${domain} here`,
+            onClick: async () => {
+              const s = await getSettings();
+              const pattern = `*://${domain}/*`;
+              const existing = s.routingRules.find(
+                (r) => r.pattern === pattern || r.pattern === `${domain}/*`
+              );
+              if (existing) {
+                setToast(`Rule already exists for ${domain}`);
+                return;
+              }
+              const activeWs = workspaces.find((ws) => ws.id === activeWorkspaceId);
+              const newRule = { pattern, workspaceId: activeWorkspaceId, enabled: true };
+              await updateSettings({ routingRules: [...s.routingRules, newRule] });
+              setToast(
+                `Tabs from ${domain} will auto-route to ${activeWs?.emoji ?? ""} ${activeWs?.name ?? "this workspace"}`
+              );
+            },
+          });
+        }
+      } catch {
+        // Invalid URL — skip menu item
+      }
 
       // Add "Move to Workspace..." if there are multiple workspaces
       if (workspaces.length > 1) {
@@ -1746,6 +1784,13 @@ export default function App() {
           position={tabPreview.position}
           onClose={handleTabHoverEnd}
         />
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[9999] px-4 py-2 text-xs font-medium text-white bg-gray-800 dark:bg-arc-surface-active rounded-lg shadow-lg animate-fade-in">
+          {toast}
+        </div>
       )}
     </div>
   );

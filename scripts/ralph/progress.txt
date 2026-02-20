@@ -17,6 +17,12 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - `isIgnoredUrl()` helper in service worker filters chrome://, extension://, about:blank, newtab URLs
 - `ServiceWorkerMessage` type union in types.ts — add new message types here for service worker → sidepanel communication
 - Auto-routing sends `tab-auto-routed` message to sidepanel when a tab is moved to a different workspace
+- SettingsPanel uses local DndContext inside `RoutingRulesSection` for sortable routing rules (separate from App.tsx DndContext)
+- Self-contained settings components pattern: `TestConnectionButton`, `RoutingRulesSection`, `SortableRoutingRuleRow` are all local to SettingsPanel.tsx
+- App.tsx has a `toast` state with auto-dismiss (3s) — use `setToast("message")` for ephemeral notifications
+- Toast renders as fixed bottom-center overlay with `animate-fade-in` (defined in index.css)
+- Context menu items can be async — `onClick` handler supports `async () => {}` pattern
+- To add routing rules from code: `getSettings()` → check existing → `updateSettings({ routingRules: [...existing, newRule] })`
 
 ---
 
@@ -130,4 +136,71 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - `isIgnoredUrl()` can be reused for future tab event handlers that need to skip internal URLs
   - The `tab-auto-routed` message is consumed by sidepanel — US-007 will add the UI indicator
   - `getWorkspaceForUrl` now delegates to `matchRoute`, eliminating the duplicate glob logic
+---
+
+## Iteration 4 - Fri Feb 20 12:11:04 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-4.log
+---
+**US-004 is complete.** Committed as `cebb2b1`. There are still 26 stories with `passes: false`, so more iterations are needed.
+
+**US-004 Summary:**
+- Wired auto-routing into service worker `chrome.tabs.onUpdated` listener
+- Replaced local `globToRegex` with shared `matchRoute` from `routingEngine.ts` — eliminating duplicate glob logic
+- Added `isIgnoredUrl()` helper to filter `chrome://`, `extension://`, `about:blank`, and newtab URLs
+- `onUpdated` now triggers on `status === 'complete'`, calls `matchRoute`, checks if tab is already in target workspace before moving
+- Sends `tab-auto-routed` message to sidepanel with `tabId` and `workspaceId`
+- Added `tab-auto-routed` message type to `ServiceWorkerMessage` union in `types.ts`
+- Files changed: `src/background/service-worker.ts`, `src/shared/types.ts`
+- Typecheck passes, lint passes
+---
+
+## 2026-02-20 - US-005
+- Replaced old "Air Traffic Control" inline-edit section with new "Auto-routing" section using dedicated components
+- Created `SortableRoutingRuleRow` component — each rule row shows drag handle, pattern text, workspace emoji+name badge, enable/disable toggle, and delete (X) button
+- Created `RoutingRulesSection` component — self-contained section with DndContext for drag-and-drop reordering of rules
+- "Add Rule" button opens inline form with pattern input (placeholder: `e.g., github.com/*`) and workspace dropdown, with Save/Cancel buttons
+- Rules reorderable via @dnd-kit drag handles using `SortableContext` + `verticalListSortingStrategy`
+- Toggle switch enables/disables individual rules (updates `enabled` field)
+- Rules saved to `settings.routingRules` on add/toggle/delete/reorder
+- Files changed: `src/sidepanel/SettingsPanel.tsx`
+- **Learnings for future iterations:**
+  - SettingsPanel now has its own DndContext inside `RoutingRulesSection` — this is separate from App.tsx's DndContext and works independently
+  - The `SortableRoutingRuleRow` pattern (sortable row with inline controls) can be reused for other sortable settings lists
+  - `RoutingRule` type imported from `shared/types.ts` — already has `enabled` field from US-003
+---
+
+## Iteration 5 - Fri Feb 20 12:13:54 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-5.log
+---
+**US-005 is complete.** Committed as `2d902f6`. There are still 25 stories with `passes: false`, so more iterations are needed.
+
+**US-005 Summary:**
+- Replaced the old "Air Traffic Control" inline-edit section with a new "Auto-routing" section
+- Created `SortableRoutingRuleRow` component: each rule row shows drag handle, pattern text, workspace emoji+name, enable/disable toggle, and delete button
+- Created `RoutingRulesSection` component: self-contained section with its own DndContext for drag-and-drop reordering
+- "Add Rule" opens inline form with pattern input (`e.g., github.com/*` placeholder) and workspace dropdown
+- Rules reorderable via @dnd-kit drag handles
+- Toggle switches enable/disable individual rules
+- All CRUD operations (add/toggle/delete/reorder) save to `settings.routingRules`
+- Typecheck passes, lint passes
+- File changed: `src/sidepanel/SettingsPanel.tsx`
+---
+
+## 2026-02-20 - US-006
+- Added "Always open [domain] here" context menu item for tabs in App.tsx
+- Extracts domain from tab URL via `new URL(tab.url).hostname`
+- Creates routing rule with pattern `*://domain/*` for the active workspace
+- Checks for existing rule with same pattern before adding (shows "Rule already exists" toast)
+- Shows success toast: "Tabs from [domain] will auto-route to [emoji] [name]"
+- Added toast notification system to App.tsx: `toast` state with 3-second auto-dismiss
+- Toast renders as fixed bottom-center overlay with fade-in animation
+- Skips chrome:// and extension:// domains (no menu item shown)
+- Files changed: `src/sidepanel/App.tsx`
+- **Learnings for future iterations:**
+  - App.tsx now has a reusable toast system — `setToast("message")` for any ephemeral notification
+  - Context menu `onClick` handlers can be async — useful for storage operations
+  - `getSettings()` must be called at click time (not menu render time) to get fresh routing rules
+  - `animate-fade-in` CSS class is already defined in `index.css` — reuse it for entry animations
 ---
