@@ -10,6 +10,13 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - OpenRouter API uses OpenAI-compatible response format (`data.choices[0].message.content`)
 - Typecheck: `npx tsc --noEmit`, Lint: `npx eslint <file>`
 - SettingsPanel.tsx uses local component pattern (e.g., `TestConnectionButton`) for self-contained UI sections
+- Routing engine is in `src/shared/routingEngine.ts` — exports `matchRoute(url, rules)` for URL-to-workspace matching
+- `RoutingRule` type has `enabled` field — always check it when iterating rules
+- `settingsStorage.ts` migration adds `enabled: true` to old rules missing the field
+- Service worker `getWorkspaceForUrl` now delegates to `matchRoute` from routingEngine.ts
+- `isIgnoredUrl()` helper in service worker filters chrome://, extension://, about:blank, newtab URLs
+- `ServiceWorkerMessage` type union in types.ts — add new message types here for service worker → sidepanel communication
+- Auto-routing sends `tab-auto-routed` message to sidepanel when a tab is moved to a different workspace
 
 ---
 
@@ -60,4 +67,67 @@ US-001 is complete. There are still 29 stories with `passes: false`, so more ite
   - Settings migration runs on every `getSettings()` call — lightweight but handles legacy data transparently
   - `TestConnectionButton` is a self-contained component within SettingsPanel (not exported)
   - AI grouping is now implicitly enabled whenever `openRouterApiKey` is non-empty (no separate toggle)
+---
+
+## Iteration 2 - Fri Feb 20 12:06:49 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-2.log
+---
+**US-002 is complete.** Committed as `70d7f87`. There are still 28 stories with `passes: false`, so more iterations are needed.
+
+**US-002 Summary:**
+- Replaced nested `aiGrouping` settings object with flat `openRouterApiKey: string` field
+- Removed provider dropdown (Anthropic/OpenAI) from SettingsPanel
+- Added single "OpenRouter API Key" password input field
+- Added "Test Connection" button that calls OpenRouter with a minimal prompt (`Say hi`, max_tokens: 5) and shows green checkmark on success, red X with error on failure
+- Updated `Settings` type, `DEFAULT_SETTINGS`, removed `AI_PROVIDER_OPTIONS`
+- Added migration in `settingsStorage.ts` that converts old `aiGrouping.apiKey` → `openRouterApiKey`
+- Updated `aiGroupingService.ts` and `OrganizeTabsModal.tsx` callers
+- Typecheck passes
+---
+
+## 2026-02-20 - US-003
+- Created `src/shared/routingEngine.ts` with `matchRoute(url, rules)` function
+- Added `RoutingRule` type to `src/shared/types.ts` with `{pattern, workspaceId, enabled}` fields
+- Updated `Settings.routingRules` to use `RoutingRule[]` (added `enabled` field)
+- Glob-to-regex conversion: `**` matches everything, `*` matches anything except `/`
+- Pattern matched against URL without protocol, and also full URL for `*://` patterns
+- Updated service worker `getWorkspaceForUrl` to skip disabled rules
+- Updated SettingsPanel "Add Rule" to include `enabled: true`
+- Added migration in `settingsStorage.ts` to backfill `enabled: true` on old rules
+- Files changed: `src/shared/routingEngine.ts` (new), `src/shared/types.ts`, `src/shared/settingsStorage.ts`, `src/sidepanel/SettingsPanel.tsx`, `src/background/service-worker.ts`
+- **Learnings for future iterations:**
+  - Service worker has its own `globToRegex` that could be replaced with `matchRoute` from routingEngine — future stories (US-004) should consider this
+  - The `matchRoute` function strips protocol before matching, so patterns like `github.com/*` work against `https://github.com/repo`
+  - Patterns with `*://` prefix are matched against the full URL
+---
+
+## Iteration 3 - Fri Feb 20 12:09:00 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-3.log
+---
+**US-003 is complete.** Committed as `af1f3cd`. There are still 27 stories with `passes: false`, so more iterations are needed.
+
+**US-003 Summary:**
+- Created `src/shared/routingEngine.ts` with `matchRoute(url, rules)` — glob pattern matching engine for URL-to-workspace routing
+- Added `RoutingRule` type to `types.ts` with `{pattern, workspaceId, enabled}` fields
+- Glob conversion: `**` matches everything (including `/`), `*` matches anything except `/`
+- Pattern matched against URL with protocol stripped, plus full URL for `*://` patterns
+- First matching enabled rule wins; disabled rules skipped; returns `null` if no match
+- Updated service worker, SettingsPanel, and settingsStorage migration for the new `enabled` field
+- Typecheck passes, lint passes
+---
+
+## 2026-02-20 - US-004
+- Wired auto-routing into service worker `chrome.tabs.onUpdated` listener
+- Replaced local `globToRegex` with shared `matchRoute` from `routingEngine.ts` in `getWorkspaceForUrl`
+- Added `isIgnoredUrl()` helper to filter chrome://, extension://, about:blank, and newtab URLs
+- `onUpdated` now triggers on `status === 'complete'` (not just URL change), calls `matchRoute`, checks if tab is already in target workspace
+- Sends `tab-auto-routed` message to sidepanel with tabId and workspaceId when a tab is auto-routed
+- Added `tab-auto-routed` message type to `ServiceWorkerMessage` union in types.ts
+- Files changed: `src/background/service-worker.ts`, `src/shared/types.ts`
+- **Learnings for future iterations:**
+  - `isIgnoredUrl()` can be reused for future tab event handlers that need to skip internal URLs
+  - The `tab-auto-routed` message is consumed by sidepanel — US-007 will add the UI indicator
+  - `getWorkspaceForUrl` now delegates to `matchRoute`, eliminating the duplicate glob logic
 ---

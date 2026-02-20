@@ -18,6 +18,7 @@ import {
 } from "../shared/workspaceStorage";
 import { getSettings } from "../shared/settingsStorage";
 import { addArchiveEntry } from "../shared/archiveStorage";
+import { matchRoute } from "../shared/routingEngine";
 
 const CONTEXT_MENU_ID = "arcflow-pin-toggle";
 
@@ -217,21 +218,23 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
 
 // --- Air Traffic Control: URL routing rules ---
 
-function globToRegex(pattern: string): RegExp {
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
-  const regexStr = escaped.replace(/\*/g, ".*");
-  return new RegExp(`^${regexStr}$`, "i");
+/** Returns true for URLs that should be ignored by auto-routing */
+function isIgnoredUrl(url: string): boolean {
+  return (
+    !url ||
+    url.startsWith("chrome://") ||
+    url.startsWith("chrome-extension://") ||
+    url.startsWith("extension://") ||
+    url === "about:blank" ||
+    url === "chrome://newtab/" ||
+    url === "chrome://newtab"
+  );
 }
 
 async function getWorkspaceForUrl(url: string): Promise<string | null> {
+  if (isIgnoredUrl(url)) return null;
   const settings = await getSettings();
-  for (const rule of settings.routingRules) {
-    if (!rule.enabled) continue;
-    if (globToRegex(rule.pattern).test(url)) {
-      return rule.workspaceId;
-    }
-  }
-  return null;
+  return matchRoute(url, settings.routingRules);
 }
 
 // Tab lifecycle event listeners
@@ -283,17 +286,35 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
 });
 
 chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
-  // Re-evaluate routing rules when a tab's URL changes (e.g., new tab navigates to a URL)
-  if (changeInfo.url && tab.id != null) {
+  // Auto-route tabs when navigation completes and URL has changed
+  if (changeInfo.status === "complete" && tab.url && tab.id != null) {
     const tabId = tab.id;
-    getWorkspaceForUrl(changeInfo.url)
-      .then(async (matchedWsId) => {
+    const tabUrl = tab.url;
+
+    if (!isIgnoredUrl(tabUrl)) {
+      (async () => {
+        const settings = await getSettings();
+        const matchedWsId = matchRoute(tabUrl, settings.routingRules);
         if (matchedWsId) {
-          await assignTabToWorkspace(tabId, matchedWsId);
-          broadcastTabWorkspaceMap();
+          // Check if tab is already in the target workspace
+          const tabMap = await getTabWorkspaceMap();
+          const currentWsId = tabMap[String(tabId)];
+          if (currentWsId !== matchedWsId) {
+            await assignTabToWorkspace(tabId, matchedWsId);
+            broadcastTabWorkspaceMap();
+            // Notify sidepanel about auto-routing
+            const message: ServiceWorkerMessage = {
+              type: "tab-auto-routed",
+              tabId,
+              workspaceId: matchedWsId,
+            };
+            chrome.runtime.sendMessage(message).catch(() => {
+              // Side panel may not be open
+            });
+          }
         }
-      })
-      .catch(() => {});
+      })().catch(() => {});
+    }
   }
   debouncedRefresh();
 });
