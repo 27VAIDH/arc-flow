@@ -16,6 +16,7 @@ export function buildCommands({
   onRestoreSession,
   onFocusNotes,
   onToggleDeepWork,
+  onRestoreYesterdayTabs,
 }: {
   workspaces: Workspace[];
   onSwitchWorkspace: (workspaceId: string) => void;
@@ -31,6 +32,7 @@ export function buildCommands({
   onRestoreSession: () => void;
   onFocusNotes: () => void;
   onToggleDeepWork: () => void;
+  onRestoreYesterdayTabs: () => void;
 }): Command[] {
   const commands: Command[] = [];
 
@@ -126,6 +128,13 @@ export function buildCommands({
     name: "Toggle Deep Work Mode",
     icon: "focus",
     action: onToggleDeepWork,
+  });
+
+  commands.push({
+    id: "restore-yesterday-tabs",
+    name: "Restore yesterday's tabs",
+    icon: "restore",
+    action: onRestoreYesterdayTabs,
   });
 
   return commands;

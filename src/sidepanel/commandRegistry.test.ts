@@ -17,6 +17,7 @@ const defaultHandlers = {
   onRestoreSession: noop,
   onFocusNotes: noop,
   onToggleDeepWork: noop,
+  onRestoreYesterdayTabs: noop,
 };
 
 describe("buildCommands", () => {

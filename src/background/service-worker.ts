@@ -52,6 +52,9 @@ chrome.runtime.onInstalled.addListener(() => {
 
   // Register workspace suggestion check alarm (every 5 minutes)
   chrome.alarms.create("arcflow-workspace-suggestion", { periodInMinutes: 5 });
+
+  // Register daily snapshot alarm (every 24 hours)
+  chrome.alarms.create("arcflow-daily-snapshot", { periodInMinutes: 1440 });
 });
 
 // Open side panel when the toolbar icon is clicked
@@ -859,6 +862,65 @@ async function runAutoSuspend(): Promise<void> {
   }
 }
 
+// --- Daily snapshot capture ---
+
+const DAILY_SNAPSHOTS_KEY = "dailySnapshots";
+const MAX_DAILY_SNAPSHOTS = 7;
+
+interface DailySnapshot {
+  workspaces: { id: string; name: string; emoji: string }[];
+  tabs: Record<string, { url: string; title: string; favicon: string }[]>;
+  createdAt: number;
+}
+
+async function captureDailySnapshot(): Promise<void> {
+  const workspaces = await getWorkspaces();
+  const allTabs = await chrome.tabs.query({ currentWindow: true });
+  const tabMap = await getTabWorkspaceMap();
+
+  // Build workspace summary
+  const wsInfo = workspaces.map((ws) => ({
+    id: ws.id,
+    name: ws.name,
+    emoji: ws.emoji,
+  }));
+
+  // Group tabs by workspace
+  const tabsByWs: Record<string, { url: string; title: string; favicon: string }[]> = {};
+  for (const tab of allTabs) {
+    if (!tab.url || tab.id == null || isIgnoredUrl(tab.url)) continue;
+    const wsId = tabMap[String(tab.id)] ?? "default";
+    if (!tabsByWs[wsId]) tabsByWs[wsId] = [];
+    tabsByWs[wsId].push({
+      url: tab.url,
+      title: tab.title ?? "",
+      favicon: tab.favIconUrl ?? "",
+    });
+  }
+
+  const todayKey = getAnalyticsTodayKey();
+  const snapshot: DailySnapshot = {
+    workspaces: wsInfo,
+    tabs: tabsByWs,
+    createdAt: Date.now(),
+  };
+
+  const result = await chrome.storage.local.get(DAILY_SNAPSHOTS_KEY);
+  const snapshots: Record<string, DailySnapshot> =
+    (result[DAILY_SNAPSHOTS_KEY] as Record<string, DailySnapshot>) ?? {};
+
+  snapshots[todayKey] = snapshot;
+
+  // Keep only last 7 entries
+  const keys = Object.keys(snapshots).sort();
+  while (keys.length > MAX_DAILY_SNAPSHOTS) {
+    const oldest = keys.shift()!;
+    delete snapshots[oldest];
+  }
+
+  await chrome.storage.local.set({ [DAILY_SNAPSHOTS_KEY]: snapshots });
+}
+
 // Listen for alarms
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ARCHIVE_ALARM_NAME) {
@@ -871,6 +933,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
   if (alarm.name === "arcflow-workspace-suggestion") {
     checkForWorkspaceSuggestion().catch(() => {
+      // Silently fail — will retry on next alarm
+    });
+  }
+  if (alarm.name === "arcflow-daily-snapshot") {
+    captureDailySnapshot().catch(() => {
       // Silently fail — will retry on next alarm
     });
   }

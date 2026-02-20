@@ -1029,6 +1029,34 @@ export default function App() {
 
   const openSessionManager = useCallback(() => setShowSessionManager(true), []);
 
+  // Restore yesterday's tabs from daily snapshot
+  const restoreYesterdayTabs = useCallback(() => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+    chrome.storage.local.get("dailySnapshots", (result) => {
+      const snapshots = (result.dailySnapshots as Record<string, { tabs: Record<string, { url: string; title: string; favicon: string }[]>; createdAt: number }>) ?? {};
+      const snap = snapshots[yKey];
+      if (!snap) {
+        setToast("No snapshot from yesterday");
+        return;
+      }
+      const allTabs: { url: string; title: string; favicon: string }[] = [];
+      for (const tabs of Object.values(snap.tabs)) {
+        allTabs.push(...tabs);
+      }
+      if (allTabs.length === 0) {
+        setToast("Yesterday's snapshot has no tabs");
+        return;
+      }
+      // Open all tabs from yesterday's snapshot (add mode)
+      for (const tab of allTabs) {
+        chrome.runtime.sendMessage({ type: "OPEN_URL", url: tab.url });
+      }
+      setToast(`Restored ${allTabs.length} tabs from yesterday`);
+    });
+  }, []);
+
   // QuickNotes: derive from active workspace
   const activeWorkspace = useMemo(
     () => workspaces.find((w) => w.id === activeWorkspaceId),
@@ -1223,6 +1251,7 @@ export default function App() {
         onRestoreSession: openSessionManager,
         onFocusNotes: focusNotes,
         onToggleDeepWork: toggleDeepWork,
+        onRestoreYesterdayTabs: restoreYesterdayTabs,
       }),
     [
       workspaces,
@@ -1239,6 +1268,7 @@ export default function App() {
       openSessionManager,
       focusNotes,
       toggleDeepWork,
+      restoreYesterdayTabs,
     ]
   );
 
