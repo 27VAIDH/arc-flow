@@ -11,7 +11,7 @@ interface AIGroupingResult {
   source: "ai" | "fallback";
 }
 
-async function callAnthropicAPI(
+async function callOpenRouterAPI(
   apiKey: string,
   tabs: { title: string; url: string }[]
 ): Promise<AIGroupSuggestion[]> {
@@ -19,73 +19,33 @@ async function callAnthropicAPI(
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-5-20250929",
-        max_tokens: 1024,
-        messages: [
-          {
-            role: "user",
-            content: `Group these browser tabs into logical folders. Return ONLY a JSON array where each element has "name" (folder name) and "tabIndices" (array of 0-based tab indices). Group by topic/purpose, not just domain. Minimum 2 tabs per group. Ungrouped tabs should be omitted.\n\nTabs:\n${JSON.stringify(tabs)}`,
-          },
-        ],
-      }),
-      signal: controller.signal,
-    });
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          "HTTP-Referer": "chrome-extension://arcflow",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.0-flash-001",
+          max_tokens: 1024,
+          messages: [
+            {
+              role: "user",
+              content: `Group these browser tabs into logical folders. Return ONLY a JSON array where each element has "name" (folder name) and "tabIndices" (array of 0-based tab indices). Group by topic/purpose, not just domain. Minimum 2 tabs per group. Ungrouped tabs should be omitted.\n\nTabs:\n${JSON.stringify(tabs)}`,
+            },
+          ],
+        }),
+        signal: controller.signal,
+      }
+    );
 
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      throw new Error(`Anthropic API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const text = data.content?.[0]?.type === "text" ? data.content[0].text : "";
-    return parseAIResponse(text);
-  } catch (e) {
-    clearTimeout(timeoutId);
-    throw e;
-  }
-}
-
-async function callOpenAIAPI(
-  apiKey: string,
-  tabs: { title: string; url: string }[]
-): Promise<AIGroupSuggestion[]> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-  try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        max_tokens: 1024,
-        messages: [
-          {
-            role: "user",
-            content: `Group these browser tabs into logical folders. Return ONLY a JSON array where each element has "name" (folder name) and "tabIndices" (array of 0-based tab indices). Group by topic/purpose, not just domain. Minimum 2 tabs per group. Ungrouped tabs should be omitted.\n\nTabs:\n${JSON.stringify(tabs)}`,
-          },
-        ],
-      }),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
+      throw new Error(`OpenRouter API error: ${response.status}`);
     }
 
     const data = await response.json();
@@ -124,19 +84,14 @@ export async function getAIGroupingSuggestions(
   tabs: TabInfo[],
   settings: Settings["aiGrouping"]
 ): Promise<AIGroupingResult> {
-  if (!settings.enabled || !settings.provider || !settings.apiKey) {
+  if (!settings.enabled || !settings.apiKey) {
     return { groups: [], source: "fallback" };
   }
 
   const tabPayload = tabs.map((t) => ({ title: t.title, url: t.url }));
 
   try {
-    let suggestions: AIGroupSuggestion[];
-    if (settings.provider === "anthropic") {
-      suggestions = await callAnthropicAPI(settings.apiKey, tabPayload);
-    } else {
-      suggestions = await callOpenAIAPI(settings.apiKey, tabPayload);
-    }
+    const suggestions = await callOpenRouterAPI(settings.apiKey, tabPayload);
 
     // Convert indices to actual tab objects
     const groups = suggestions
@@ -153,7 +108,8 @@ export async function getAIGroupingSuggestions(
     }
 
     return { groups, source: "ai" };
-  } catch {
+  } catch (error) {
+    console.error("OpenRouter AI grouping failed, falling back to heuristic:", error);
     return { groups: [], source: "fallback" };
   }
 }
