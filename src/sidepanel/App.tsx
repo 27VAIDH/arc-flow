@@ -49,6 +49,7 @@ import RecentlyClosedSection from "./RecentlyClosedSection";
 import PomodoroTimer from "./PomodoroTimer";
 import MorningBriefing from "./MorningBriefing";
 import QuickNotes from "./QuickNotes";
+import SnippetsSection from "./SnippetsSection";
 import TabPreviewCard from "./TabPreviewCard";
 import type { TabPreviewInfo } from "./TabPreviewCard";
 import { buildCommands } from "./commandRegistry";
@@ -2193,6 +2194,9 @@ export default function App() {
           onCollapseToggle={handleNotesCollapseToggle}
         />
       )}
+
+      {/* Snippets Section */}
+      <SnippetsSection workspaceId={activeWorkspaceId} />
 
       {/* Footer (Zone 5) */}
       <footer className="border-t border-gray-200/10 dark:border-white/5">
