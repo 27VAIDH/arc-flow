@@ -83,6 +83,8 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - Max 50 snippets per workspace (FIFO) — oldest removed when exceeded
 - `ARCFLOW_CAPTURE_SNIPPET` message type in content script reuses `createOverlayPopup` — Cancel dismisses without saving (unlike notes where Skip saves without annotation)
 - `snippet-saved` message type notifies sidepanel to show toast
+- `SnippetsSection.tsx` follows collapsible section pattern — reads from `snippets_[workspaceId]` storage key, click-to-expand inline details
+- Workspace change reset in SnippetsSection uses derived state pattern (compare prop vs lastWsId state) to avoid React lint errors with setState in effects
 
 ---
 
@@ -1128,4 +1130,43 @@ There are still 2 stories with `passes: false` (US-029, US-030), so more iterati
   - Snippet storage is per-workspace using dynamic key `snippets_[wsId]` — SnippetsSection (US-030) reads from this key
   - Content script `createOverlayPopup` is reusable for different capture flows — just handle Save/Cancel differently per message type
   - `chrome.storage.local.get()` returns `Record<string, any>` — cast result explicitly (e.g., `as Snippet[] | undefined`) to satisfy TypeScript
+---
+
+## Iteration 29 - Fri Feb 20 13:30:23 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-29.log
+---
+**US-029 is complete.** Committed as `10091cf` (code) + `1a2c17a` (PRD/progress).
+
+**US-029 Summary:**
+- Added `Snippet` type to `shared/types.ts` with `id`, `text`, `annotation`, `sourceUrl`, `sourceTitle`, `savedAt` fields
+- Registered "Save Snippet to ArcFlow" context menu item with `contexts: ['selection']` in the service worker
+- Added `handleSaveSnippet()` in service worker: sends `ARCFLOW_CAPTURE_SNIPPET` message to content script for annotation popup, saves to `snippets_[workspaceId]` in chrome.storage.local
+- Content script handles `ARCFLOW_CAPTURE_SNIPPET` by reusing existing `createOverlayPopup` — Cancel dismisses without saving, Save stores with optional annotation
+- Max 50 snippets per workspace (FIFO), oldest removed when exceeded
+- Enter key in annotation triggers save, Escape closes without saving
+- Added `snippet-saved` message type — sidepanel shows toast on receipt
+- All 8 tests pass, typecheck passes, lint passes
+- Files changed: `src/shared/types.ts`, `src/background/service-worker.ts`, `src/content/capture.ts`, `src/sidepanel/App.tsx`
+
+There is still 1 story with `passes: false` (US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-030
+- Created `SnippetsSection.tsx` component following the collapsible section pattern (like RecentlyClosedSection)
+- Section placed between Quick Notes and Workspace Switcher (footer) in App.tsx
+- Header: 'Snippets (N)' with count badge and collapse toggle chevron + text icon
+- Each snippet row: first line of text (truncated 80 chars), source domain favicon (via Google favicon API), relative time
+- Click row: expands inline to show full text, annotation (if any, prefixed with pencil emoji), and clickable source link
+- Source link opens original page in new tab via `chrome.tabs.create`
+- Delete (X) button on each snippet (appears on hover), instant delete (no confirmation)
+- 'Clear all' button at section bottom with inline confirmation dialog ("Clear all snippets? Yes / No")
+- Section hidden when no snippets exist for current workspace
+- Reads from `snippets_[currentWorkspaceId]` in chrome.storage.local, listens for storage changes
+- Workspace change resets expanded/confirmClear state via derived state pattern (avoids React lint errors)
+- Files changed: `src/sidepanel/SnippetsSection.tsx` (new), `src/sidepanel/App.tsx`
+- **Learnings for future iterations:**
+  - React 19 strict lint doesn't allow `setState` synchronously in `useEffect` — use derived state pattern (compare prop vs tracked state in render body) instead
+  - Google favicon API (`https://www.google.com/s2/favicons?domain=...&sz=16`) is a reliable fallback for favicons when you only have a URL
+  - Per-workspace storage keys (`snippets_[wsId]`) require re-reading storage when workspace changes — track storageKey in useEffect deps
 ---
