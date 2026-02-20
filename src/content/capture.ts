@@ -193,6 +193,27 @@ chrome.runtime.onMessage.addListener(
       return true; // Keep the message channel open for async response
     }
 
+    if (message.type === "ARCFLOW_CAPTURE_SNIPPET") {
+      const selectedText = message.selectedText || window.getSelection()?.toString()?.trim() || "";
+      if (!selectedText) {
+        sendResponse({ action: "cancel" });
+        return;
+      }
+
+      // Reuse the same overlay popup for snippet annotation
+      createOverlayPopup(
+        selectedText,
+        (annotation) => {
+          sendResponse({ action: "save", annotation });
+        },
+        () => {
+          sendResponse({ action: "cancel" });
+        }
+      );
+
+      return true; // Keep the message channel open for async response
+    }
+
     if (message.type === "ARCFLOW_NOTES_FULL") {
       alert("ArcFlow Notes: Notes are full (5,000 character limit reached). Please clear some notes first.");
     }

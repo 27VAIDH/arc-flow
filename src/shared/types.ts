@@ -88,7 +88,8 @@ export type ServiceWorkerMessage =
       existingWorkspaceId: string;
       existingWorkspaceName: string;
     }
-  | { type: "notes-saved-from-page"; workspaceName: string };
+  | { type: "notes-saved-from-page"; workspaceName: string }
+  | { type: "snippet-saved"; workspaceName: string };
 
 // Messages sent from side panel to service worker
 export type SidePanelMessage =
@@ -142,6 +143,15 @@ export interface RecentlyClosedTab {
   favicon: string;
   workspaceId: string;
   closedAt: number;
+}
+
+export interface Snippet {
+  id: string;
+  text: string;
+  annotation: string;
+  sourceUrl: string;
+  sourceTitle: string;
+  savedAt: number;
 }
 
 export interface Settings {

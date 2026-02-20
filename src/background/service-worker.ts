@@ -5,6 +5,7 @@ import type {
   SidePanelMessage,
   WorkspaceSuggestion,
   RecentlyClosedTab,
+  Snippet,
 } from "../shared/types";
 import {
   getPinnedApps,
@@ -26,6 +27,7 @@ import { calculateEnergyScore } from "../shared/energyScore";
 
 const CONTEXT_MENU_ID = "arcflow-pin-toggle";
 const SAVE_TO_NOTES_MENU_ID = "arcflow-save-to-notes";
+const SAVE_SNIPPET_MENU_ID = "arcflow-save-snippet";
 
 // Register side panel on install
 chrome.runtime.onInstalled.addListener(() => {
@@ -45,6 +47,13 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: SAVE_TO_NOTES_MENU_ID,
     title: "Save to ArcFlow Notes",
+    contexts: ["selection"],
+  });
+
+  // Create context menu for saving snippets
+  chrome.contextMenus.create({
+    id: SAVE_SNIPPET_MENU_ID,
+    title: "Save Snippet to ArcFlow",
     contexts: ["selection"],
   });
 
@@ -279,6 +288,73 @@ async function handleSaveToNotes(
   }
 }
 
+const MAX_SNIPPETS_PER_WORKSPACE = 50;
+
+/**
+ * Handle "Save Snippet to ArcFlow" context menu action.
+ * Shows annotation popup via content script, then saves snippet to workspace storage.
+ */
+async function handleSaveSnippet(
+  tabId: number,
+  selectedText: string,
+  pageTitle: string,
+  pageUrl: string
+): Promise<void> {
+  const tabMap = await getTabWorkspaceMap();
+  const wsId = tabMap[String(tabId)] ?? "default";
+  const workspaces = await getWorkspaces();
+  const ws = workspaces.find((w) => w.id === wsId);
+  const wsName = ws ? `${ws.emoji} ${ws.name}` : "Default";
+
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, {
+      type: "ARCFLOW_CAPTURE_SNIPPET",
+      selectedText,
+    }) as { action: string; annotation?: string } | undefined;
+
+    if (!response || response.action === "cancel") return;
+
+    const annotation = response.annotation ?? "";
+    const storageKey = `snippets_${wsId}`;
+
+    const result = await chrome.storage.local.get(storageKey);
+    const snippets: Snippet[] = (result[storageKey] as Snippet[] | undefined) ?? [];
+
+    const newSnippet: Snippet = {
+      id: crypto.randomUUID(),
+      text: selectedText,
+      annotation,
+      sourceUrl: pageUrl,
+      sourceTitle: pageTitle,
+      savedAt: Date.now(),
+    };
+
+    snippets.unshift(newSnippet);
+
+    // Cap at max, remove oldest if exceeded
+    let warning = false;
+    if (snippets.length > MAX_SNIPPETS_PER_WORKSPACE) {
+      snippets.splice(MAX_SNIPPETS_PER_WORKSPACE);
+      warning = true;
+    }
+
+    await chrome.storage.local.set({ [storageKey]: snippets });
+
+    // Notify sidepanel
+    const notifyMessage: ServiceWorkerMessage = {
+      type: "snippet-saved",
+      workspaceName: wsName,
+    };
+    chrome.runtime.sendMessage(notifyMessage).catch(() => {});
+
+    if (warning) {
+      console.warn(`Snippets for workspace ${wsId} exceeded ${MAX_SNIPPETS_PER_WORKSPACE} — oldest removed`);
+    }
+  } catch {
+    console.error("Failed to save snippet — content script not available");
+  }
+}
+
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   // --- Pin/Unpin to ArcFlow ---
   if (info.menuItemId === CONTEXT_MENU_ID && tab?.id) {
@@ -315,6 +391,15 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (!selectedText) return;
 
     await handleSaveToNotes(tab.id, selectedText, tab.title ?? "", tab.url ?? "");
+    return;
+  }
+
+  // --- Save Snippet to ArcFlow ---
+  if (info.menuItemId === SAVE_SNIPPET_MENU_ID && tab?.id) {
+    const selectedText = info.selectionText ?? "";
+    if (!selectedText) return;
+
+    await handleSaveSnippet(tab.id, selectedText, tab.title ?? "", tab.url ?? "");
     return;
   }
 });

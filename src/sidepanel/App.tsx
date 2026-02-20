@@ -914,6 +914,8 @@ export default function App() {
         setToast(`Saved to ${message.workspaceName} notes`);
         // Reload workspaces to reflect updated notes
         getWorkspaces().then(setWorkspaces);
+      } else if (message.type === "snippet-saved") {
+        setToast(`Snippet saved to ${message.workspaceName}`);
       }
     };
 
