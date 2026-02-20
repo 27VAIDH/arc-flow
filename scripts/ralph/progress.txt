@@ -47,6 +47,9 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - `focusStats` stored in chrome.storage.local as `{[YYYY-MM-DD]: {totalMinutes, sessions}}` — updated on Pomodoro work session completion
 - `recordWorkSessionComplete()` in PomodoroTimer.tsx handles focus stats recording + 30-day pruning
 - `FocusStatsData` and `FocusStatsDay` types are local to PomodoroTimer.tsx (not in shared/types.ts)
+- `briefingDismissedDate` stores YYYY-MM-DD string in chrome.storage.local — used by MorningBriefing to show once per day
+- `tabSessionCounters` in chrome.storage.local tracks `{opened: number, closed: number}` since last sidebar hide — reset on visibilitychange hidden
+- `lastSessionTimestamp` stored in chrome.storage.local on sidebar visibilitychange (hidden) — marks session boundaries
 
 ---
 
@@ -584,4 +587,43 @@ There are still 15 stories with `passes: false` (US-016 through US-030), so more
   - The storage key is `focusStats` — a flat object keyed by YYYY-MM-DD date strings
   - `getTodayKey()` helper generates the date key in local timezone
   - The stats display is part of PomodoroTimer, not a separate component — keeps it simple since it only shows during Deep Work
+---
+
+## Iteration 16 - Fri Feb 20 12:44:54 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-16.log
+---
+**US-016 is complete.** Committed as `81211a2`.
+
+**US-016 Summary:**
+- Added focus stats tracking to `PomodoroTimer.tsx` — on each Pomodoro work session completion, `recordWorkSessionComplete()` increments `totalMinutes` by 25 and `sessions` by 1
+- Data stored in `chrome.storage.local` under `focusStats` key with `{[YYYY-MM-DD]: {totalMinutes, sessions}}` structure
+- Entries older than 30 days pruned on each write
+- Display shows "Today: Xh Ym (N sessions)" below the Pomodoro timer when Deep Work is active
+- Shows "0m (0 sessions)" when no focus time recorded today
+- Reactively updates via `chrome.storage.onChanged` listener
+- Typecheck passes, lint passes
+- File changed: `src/sidepanel/PomodoroTimer.tsx`
+
+There are still 14 stories with `passes: false` (US-017 through US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-017
+- Created `MorningBriefing.tsx` component — daily summary card shown at top of sidebar (above search bar) on first open per calendar day
+- Shows total open tabs + per-workspace breakdown with emoji icons
+- Shows "X tabs opened, Y closed since last session" using `tabSessionCounters` tracked by service worker
+- Shows yesterday's focus time from `focusStats` storage key (if > 0)
+- Shows first line of each workspace's notes as reminders (non-empty workspaces only)
+- Dismiss (X) button stores today's date as `briefingDismissedDate` — hides for rest of day
+- `lastSessionTimestamp` updated on sidebar `visibilitychange` (hidden) event
+- Tab session counters reset when sidebar goes hidden (new "session" starts)
+- Added `incrementTabCounter()` function to service worker — tracks opened/closed counts in `tabSessionCounters` storage key
+- Card styled with rounded corners, subtle shadow, accent border matching theme
+- Files changed: `src/sidepanel/MorningBriefing.tsx` (new), `src/sidepanel/App.tsx`, `src/background/service-worker.ts`
+- **Learnings for future iterations:**
+  - `briefingDismissedDate` stores YYYY-MM-DD string — compared against today's date to determine visibility
+  - `tabSessionCounters` in chrome.storage.local tracks `{opened, closed}` since last sidebar hide — reset on each new session
+  - `lastSessionTimestamp` stored on visibilitychange (hidden) — can be used by future features to track session boundaries
+  - `FocusStatsData` type is duplicated locally in MorningBriefing.tsx (same as PomodoroTimer.tsx) — reads from same `focusStats` storage key
+  - Morning Briefing receives `tabs`, `workspaces`, `tabWorkspaceMap` as props from App.tsx for real-time data
 ---

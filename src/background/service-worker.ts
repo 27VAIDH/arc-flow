@@ -313,8 +313,21 @@ async function trackRecentlyClosed(tabId: number): Promise<void> {
   await chrome.storage.local.set({ [RECENTLY_CLOSED_KEY]: capped });
 }
 
+// --- Tab session counters for Morning Briefing ---
+// Track tabs opened/closed since the last session (sidebar close)
+
+async function incrementTabCounter(field: "opened" | "closed"): Promise<void> {
+  const result = await chrome.storage.local.get("tabSessionCounters");
+  const counters = (result.tabSessionCounters as { opened: number; closed: number }) ?? { opened: 0, closed: 0 };
+  counters[field] += 1;
+  await chrome.storage.local.set({ tabSessionCounters: counters });
+}
+
 // Tab lifecycle event listeners
 chrome.tabs.onCreated.addListener((tab) => {
+  // Increment tab opened counter for Morning Briefing
+  incrementTabCounter("opened").catch(() => {});
+
   if (tab.id != null) {
     const tabUrl = tab.url ?? tab.pendingUrl ?? "";
     const tabId = tab.id;
@@ -346,6 +359,9 @@ chrome.tabs.onCreated.addListener((tab) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
+  // Increment tab closed counter for Morning Briefing
+  incrementTabCounter("closed").catch(() => {});
+
   // Track recently closed tab before cleanup
   trackRecentlyClosed(tabId).catch(() => {});
 

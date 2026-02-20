@@ -47,6 +47,7 @@ import { createSessionFromState } from "../shared/sessionStorage";
 import { updateWorkspace } from "../shared/workspaceStorage";
 import RecentlyClosedSection from "./RecentlyClosedSection";
 import PomodoroTimer from "./PomodoroTimer";
+import MorningBriefing from "./MorningBriefing";
 import QuickNotes from "./QuickNotes";
 import TabPreviewCard from "./TabPreviewCard";
 import type { TabPreviewInfo } from "./TabPreviewCard";
@@ -1754,6 +1755,13 @@ export default function App() {
 
       {/* Pomodoro Timer (Deep Work Mode) */}
       {deepWorkActive && <PomodoroTimer />}
+
+      {/* Morning Briefing */}
+      <MorningBriefing
+        tabs={tabs}
+        workspaces={workspaces}
+        tabWorkspaceMap={tabWorkspaceMap}
+      />
 
       {/* Search bar (Zone 1) */}
       <nav aria-label="Tab search">
