@@ -76,6 +76,8 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - WorkspaceSwitcher accepts `tabEnergyScores` and `tabWorkspaceMap` props for health bar computation — `getWorkspaceAverageEnergy()` is a standalone helper
 - Workspace export JSON format: `{version: "2.0", type: "arcflow-workspace", name, emoji, accentColor, pinnedApps, folders, notes}` — used for export/import (US-027/US-028)
 - File download in sidepanel: `URL.createObjectURL(blob)` + temporary `<a>` element + click + `URL.revokeObjectURL(url)`
+- File upload from command palette: programmatic `document.createElement("input")` with type=file + `.click()` — works in sidepanel context
+- Workspace import validates `{version: "2.0", type: "arcflow-workspace"}` and remaps all IDs (folders, items, pinnedApps) to fresh UUIDs
 
 ---
 
@@ -1044,4 +1046,43 @@ There are still 4 stories with `passes: false` (US-027 through US-030), so more 
   - File download pattern: `URL.createObjectURL(blob)` + temporary anchor + click + `URL.revokeObjectURL(url)` — works in Chrome extension sidepanel
   - Workspace name is sanitized for filename via `toLowerCase().replace(/[^a-z0-9]+/g, "-")`
   - US-028 (import) will need to validate the JSON structure and create a new workspace from it
+---
+
+## Iteration 27 - Fri Feb 20 13:21:40 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-27.log
+---
+**US-027 is complete.** Committed as `6bf878f` (code) + `b7d9db2` (PRD/progress).
+
+**US-027 Summary:**
+- Added "Export Workspace" context menu item on workspace emoji buttons in `WorkspaceSwitcher.tsx`
+- Added "Export current workspace" command palette entry in `commandRegistry.ts`
+- Export JSON includes: `version: "2.0"`, `type: "arcflow-workspace"`, workspace name, emoji, accentColor, pinnedApps, folders (with items), notes
+- Does NOT include: open tab states, openRouterApiKey, settings, tabWorkspaceMap
+- File downloaded as `arcflow-workspace-[name]-[YYYY-MM-DD].json` via `URL.createObjectURL` + anchor click
+- All 8 tests pass, typecheck passes
+- Files changed: `src/sidepanel/WorkspaceSwitcher.tsx`, `src/sidepanel/App.tsx`, `src/sidepanel/commandRegistry.ts`, `src/sidepanel/commandRegistry.test.ts`
+
+There are still 3 stories with `passes: false` (US-028, US-029, US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-028
+- Added workspace import functionality via JSON file picker
+- Created `ImportWorkspaceSection` component in SettingsPanel.tsx: file input accepting .json, validates version/type, creates workspace with imported data
+- Validates JSON: `version === "2.0"`, `type === "arcflow-workspace"`, required `name` field
+- If workspace name already exists, appends " (imported)" to avoid collision
+- Creates new workspace with imported pinnedApps (new IDs), folders (new IDs with parentId remapping), and notes
+- Folder items also get new IDs; folder parentId references remapped via folderIdMap
+- Success toast: "Workspace [emoji] [name] imported with X pinned apps and Y folders"
+- Invalid file shows error: "Invalid workspace file"
+- User switched to newly imported workspace after import
+- Command palette entry: "Import workspace" triggers file picker via programmatic `<input>` element
+- Added `onImportWorkspace` callback to commandRegistry.ts
+- Added `importWorkspace` handler in App.tsx using `document.createElement("input")` + click pattern
+- Files changed: `src/sidepanel/SettingsPanel.tsx`, `src/sidepanel/App.tsx`, `src/sidepanel/commandRegistry.ts`, `src/sidepanel/commandRegistry.test.ts`
+- **Learnings for future iterations:**
+  - File picker from command palette uses programmatic `<input type="file">` creation + `.click()` — same pattern works for any command-palette-triggered file selection
+  - `ImportWorkspaceSection` is self-contained in SettingsPanel (reads/writes storage directly, no props needed)
+  - Folder ID remapping is critical for import — old IDs must map to new UUIDs, and parentId references must also be updated
+  - Import duplicates the workspace creation + update pattern: `createWorkspace(name)` then `updateWorkspace(id, data)` to apply all imported fields
 ---
