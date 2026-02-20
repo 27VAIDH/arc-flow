@@ -59,6 +59,11 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - Note entry format: `\n\n> [text]\n— [title](url)\n📝 [annotation]` — annotation line omitted if empty
 - `notes-saved-from-page` message type notifies sidepanel to show toast and refresh workspaces
 - Content script overlay popup uses inline styles (no CSS file needed) with z-index 99999
+- Analytics data stored in chrome.storage.local under `analytics` key with `{daily: {[YYYY-MM-DD]: {opened, closed, domains, workspaceMinutes}}}` structure
+- Analytics writes are debounced via in-memory buffer flushed every 30 seconds (not on every event)
+- `analyticsTrackOpened()`, `analyticsTrackClosed()`, `analyticsTrackDomain(url)`, `analyticsTrackWorkspaceTime()` are synchronous buffer operations
+- Workspace time tracking uses last-activation pattern: on each `onActivated`, calculate elapsed time for previous workspace, then record new activation
+- Analytics entries auto-pruned to 30 days on each flush
 
 ---
 
@@ -749,4 +754,78 @@ There are still 11 stories with `passes: false` (US-020 through US-030), so more
   - `chrome.tabs.sendMessage(tabId, msg)` sends to the content script in a specific tab; `chrome.runtime.sendMessage(msg)` sends to the service worker
   - Content script overlay popup uses inline styles (no CSS framework available in content scripts)
   - `info.selectionText` in context menu click handler provides the selected text directly
+---
+
+## Iteration 20 - Fri Feb 20 12:58:33 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-20.log
+---
+**US-020 is complete.** Committed as `327d7df`.
+
+**US-020 Summary:**
+- Added `content_scripts` entry to `manifest.json` matching `<all_urls>`
+- Created `src/content/capture.ts` — content script with overlay popup for optional annotation (dark themed, z-index 99999, Enter to save, Escape to cancel)
+- Registered `Save to ArcFlow Notes` context menu item with `contexts: ['selection']` in the service worker
+- Added `handleSaveToNotes()` in service worker: sends message to content script to show annotation popup, then appends captured text to workspace notes via `updateWorkspace()`
+- Note format: `\n\n> [text]\n— [title](url)\n📝 [annotation]` (annotation line omitted if empty)
+- If notes would exceed 5000 chars, content script shows alert: "Notes full"
+- Added `notes-saved-from-page` message type; App.tsx shows toast and refreshes workspaces on receipt
+- Added `content-capture` build entry to `vite.config.ts`
+- Typecheck passes, lint passes
+- Files changed: `public/manifest.json`, `vite.config.ts`, `src/content/capture.ts` (new), `src/background/service-worker.ts`, `src/shared/types.ts`, `src/sidepanel/App.tsx`
+
+There are still 10 stories with `passes: false` (US-021 through US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-021
+- Added link icon button (🔗) to QuickNotes header, positioned next to Edit/Preview toggle with `ml-auto`
+- On click: queries `chrome.tabs.query({active: true, currentWindow: true})` for active tab
+- Inserts `[Page Title](url)` at textarea cursor position (selectionStart/selectionEnd), or appends if no textarea ref
+- Button disabled (grayed out with `cursor-not-allowed`) when in Preview mode
+- Button has tooltip: "Insert link to current tab" via `title` attribute
+- Restores cursor position after insertion via `setTimeout` + `setSelectionRange`
+- Respects MAX_CHARS limit — silently skips insertion if it would exceed 5000 chars
+- Files changed: `src/sidepanel/QuickNotes.tsx`
+- **Learnings for future iterations:**
+  - `textareaRef.current.selectionStart/End` gives cursor position for precise text insertion
+  - `setTimeout(() => textarea.setSelectionRange(...), 0)` needed after React state update to restore cursor
+  - `chrome.tabs.query` in sidepanel context works fine — returns the active tab in the current window
+---
+
+## Iteration 21 - Fri Feb 20 13:00:00 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-21.log
+---
+**US-021 is complete.** Committed as `edfd5e7`.
+
+**US-021 Summary:**
+- Added 🔗 link icon button to QuickNotes header, next to the Edit/Preview toggle
+- On click: queries `chrome.tabs.query({active: true, currentWindow: true})` for the active tab
+- Inserts `[Page Title](url)` at the textarea cursor position, or appends if no cursor
+- Button disabled (grayed out) when in Preview mode
+- Button has tooltip: "Insert link to current tab"
+- Respects 5000 char limit
+- Typecheck passes, lint passes (only pre-existing warning)
+- File changed: `src/sidepanel/QuickNotes.tsx`
+
+There are still 9 stories with `passes: false` (US-022 through US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-022
+- Added analytics data collection to service worker with debounced writes
+- In-memory buffer tracks: opened/closed tab deltas, domain visit deltas, workspace time deltas
+- Buffer flushed to `chrome.storage.local` under `analytics` key every 30 seconds via `setInterval`
+- Data structure: `{daily: {[YYYY-MM-DD]: {opened, closed, domains: {domain: count}, workspaceMinutes: {wsId: minutes}}}}`
+- `chrome.tabs.onCreated`: calls `analyticsTrackOpened()` to increment opened count
+- `chrome.tabs.onRemoved`: calls `analyticsTrackClosed()` to increment closed count
+- `chrome.tabs.onActivated`: calls `analyticsTrackWorkspaceTime()` to calculate time in previous workspace, then `analyticsTrackDomain(url)` for domain visit tracking
+- Workspace time capped at 30 minutes per activation to avoid idle inflation
+- Auto-prunes entries older than 30 days on each flush
+- All tracking functions are synchronous buffer operations (no async overhead on hot paths)
+- Files changed: `src/background/service-worker.ts`
+- **Learnings for future iterations:**
+  - Analytics buffer pattern: synchronous writes to in-memory buffer, async flush on interval — avoids storage thrashing
+  - Workspace time tracking uses "last activation" pattern: store timestamp+wsId on each activation, calculate delta on next activation
+  - `AnalyticsDailyEntry` type is local to service-worker.ts — US-023 (analytics dashboard) will read from the `analytics` storage key directly
+  - 30-minute cap on workspace time prevents unrealistic values from browser idle/sleep
 ---
