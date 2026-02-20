@@ -80,7 +80,14 @@ export type ServiceWorkerMessage =
     }
   | { type: "OPEN_COMMAND_PALETTE" }
   | { type: "tab-auto-routed"; tabId: number; workspaceId: string }
-  | { type: "workspace-suggestion-ready" };
+  | { type: "workspace-suggestion-ready" }
+  | {
+      type: "duplicate-tab-detected";
+      newTabId: number;
+      existingTabId: number;
+      existingWorkspaceId: string;
+      existingWorkspaceName: string;
+    };
 
 // Messages sent from side panel to service worker
 export type SidePanelMessage =

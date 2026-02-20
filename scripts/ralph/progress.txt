@@ -33,6 +33,8 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - `recentlyClosed` storage key holds `RecentlyClosedTab[]` (max 20, FIFO) — each entry has url, title, favicon, workspaceId, closedAt
 - `trackRecentlyClosed(tabId)` must be called BEFORE `removeTabFromMap` in onRemoved to capture the workspace ID
 - `RecentlyClosedSection` component reads from `recentlyClosed` storage key, listens for storage changes, and is placed between Archive and Quick Notes in App.tsx
+- `normalizeUrl(url)` in service worker strips trailing `/`, `www.` prefix, and hash fragment for dedup comparison
+- `duplicate-tab-detected` message includes `newTabId`, `existingTabId`, `existingWorkspaceId`, `existingWorkspaceName` — consumed by sidepanel (US-013)
 
 ---
 
@@ -390,4 +392,38 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - The component uses the same `formatTimeSince` helper pattern as ArchiveSection (local function)
   - `chrome.tabs.query({ url })` can find recently opened tabs to assign workspace after reopening
   - Entries are keyed by `${url}-${closedAt}` to ensure uniqueness
+---
+
+## Iteration 11 - Fri Feb 20 12:31:13 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-11.log
+---
+**US-011 is complete.** Committed as `d5ccc20`.
+
+**Summary:**
+- Created `src/sidepanel/RecentlyClosedSection.tsx` — new collapsible section component following the ArchiveSection pattern
+- Section header: "Recently closed (N)" with count badge and collapse toggle
+- Each entry shows: favicon (16px), title (truncated 40 chars), workspace emoji badge, relative time ("2m ago")
+- Clicking an entry reopens the URL in a new tab, assigns it to the original workspace, and removes it from the list
+- "Clear all" button empties the list (no confirmation per spec)
+- Section hidden entirely when the `recentlyClosed` array is empty
+- Listens for `chrome.storage.onChanged` for live updates
+- Placed between Archive and Quick Notes in `App.tsx`
+- Typecheck passes, lint passes
+
+There are still 19 stories with `passes: false` (US-012 through US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-012
+- Added `normalizeUrl()` function to service worker: strips trailing `/`, removes `www.` prefix, removes hash fragment
+- Added duplicate tab detection in `onUpdated` handler (status === 'complete'): normalizes new tab URL, compares against all other open tabs
+- If duplicate found, sends `duplicate-tab-detected` message to sidepanel with newTabId, existingTabId, existingWorkspaceId, existingWorkspaceName
+- Self-comparison excluded (skips same tabId), chrome://, extension://, about:blank URLs ignored
+- Added `duplicate-tab-detected` to `ServiceWorkerMessage` union type in types.ts
+- Only reports first duplicate found (breaks after first match)
+- Files changed: `src/background/service-worker.ts`, `src/shared/types.ts`
+- **Learnings for future iterations:**
+  - `normalizeUrl` uses `new URL()` for robust parsing — handles edge cases like ports, query strings
+  - Duplicate detection runs after auto-routing in the same async block, so routing happens first
+  - `existingWorkspaceName` is pre-formatted as "emoji name" for direct display in sidepanel UI
 ---

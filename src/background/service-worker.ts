@@ -240,6 +240,21 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
 
 // --- Air Traffic Control: URL routing rules ---
 
+/** Normalize a URL for deduplication: strip trailing slash, www. prefix, and hash fragment */
+function normalizeUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    // Remove www. prefix
+    const hostname = parsed.hostname.replace(/^www\./, "");
+    // Rebuild without hash fragment
+    const normalized = `${parsed.protocol}//${hostname}${parsed.port ? ":" + parsed.port : ""}${parsed.pathname}${parsed.search}`;
+    // Strip trailing slash (but keep root "/" as-is)
+    return normalized.length > 1 ? normalized.replace(/\/$/, "") : normalized;
+  } catch {
+    return url;
+  }
+}
+
 /** Returns true for URLs that should be ignored by auto-routing */
 function isIgnoredUrl(url: string): boolean {
   return (
@@ -398,6 +413,34 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
             });
           }
         }
+
+        // Duplicate tab detection
+        const normalizedNewUrl = normalizeUrl(tabUrl);
+        const allTabs = await chrome.tabs.query({ currentWindow: true });
+        for (const otherTab of allTabs) {
+          if (otherTab.id == null || otherTab.id === tabId) continue;
+          if (!otherTab.url || isIgnoredUrl(otherTab.url)) continue;
+          if (normalizeUrl(otherTab.url) === normalizedNewUrl) {
+            const dupTabMap = await getTabWorkspaceMap();
+            const existingWsId = dupTabMap[String(otherTab.id)] ?? "default";
+            const workspaces = await getWorkspaces();
+            const existingWs = workspaces.find((w) => w.id === existingWsId);
+            const dupMessage: ServiceWorkerMessage = {
+              type: "duplicate-tab-detected",
+              newTabId: tabId,
+              existingTabId: otherTab.id,
+              existingWorkspaceId: existingWsId,
+              existingWorkspaceName: existingWs
+                ? `${existingWs.emoji} ${existingWs.name}`
+                : "Default",
+            };
+            chrome.runtime.sendMessage(dupMessage).catch(() => {
+              // Side panel may not be open
+            });
+            break; // Only report first duplicate
+          }
+        }
+
         // Check for workspace suggestion (has built-in cooldown)
         await checkForWorkspaceSuggestion();
       })().catch(() => {});
