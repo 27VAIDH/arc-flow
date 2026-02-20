@@ -66,6 +66,9 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - Analytics entries auto-pruned to 30 days on each flush
 - `AnalyticsSection` in SettingsPanel.tsx is self-contained: reads from `analytics` and `focusStats` storage keys, listens for changes
 - Analytics dashboard uses pure CSS bars (no charting library) — `AnalyticsDailyEntry` type duplicated locally in SettingsPanel.tsx
+- `dailySnapshots` storage key maps `{[YYYY-MM-DD]: {workspaces, tabs, createdAt}}` — max 7 entries, captured via `arcflow-daily-snapshot` alarm
+- `DailySnapshot` type is local to service-worker.ts and SessionManager.tsx — captures workspace info + tabs grouped by workspace ID
+- Command palette entries added via `buildCommands()` in commandRegistry.ts — each new command needs handler in App.tsx + param in buildCommands
 
 ---
 
@@ -872,4 +875,48 @@ There are still 8 stories with `passes: false` (US-023 through US-030), so more 
   - Aggregation logic (all days) is computed inline — no caching needed since data is small (max 30 days)
   - Memory estimate is a rough heuristic (closed tabs * 50 MB) — not based on actual memory measurements
   - Focus stats chart is conditionally rendered only when there's at least one day with data > 0
+---
+
+## Iteration 23 - Fri Feb 20 13:05:59 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-23.log
+---
+**US-023 is complete.** Committed as `2299348` (code) + `ab5ae2b` (PRD/progress).
+
+**US-023 Summary:**
+- Added `AnalyticsSection` component to `SettingsPanel.tsx` — self-contained analytics dashboard
+- **Tabs chart:** 7 vertical bars showing opened (accent color) vs closed (muted gray) per day, labeled with day names
+- **Workspace time:** horizontal progress bars per workspace with emoji labels, hours/minutes display
+- **Top domains:** numbered list of top 5 domains sorted by visit count descending
+- **Memory saved:** estimated total MB from closed/suspended tabs (~50 MB per tab)
+- **Focus time:** 7 vertical green bars showing Deep Work minutes per day (conditional render)
+- **Clear Analytics** button with confirmation dialog: "Are you sure? This cannot be undone."
+- Shows "No data yet" when both analytics and focusStats are empty
+- All charts use pure CSS (Tailwind) — no charting library
+- Reads from `analytics` and `focusStats` storage keys with live `chrome.storage.onChanged` listener
+- Typecheck passes, lint passes
+- File changed: `src/sidepanel/SettingsPanel.tsx`
+
+There are still 7 stories with `passes: false` (US-024 through US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-024
+- Added automatic daily session snapshots in service worker
+- Created `chrome.alarms` for `arcflow-daily-snapshot` with `periodInMinutes: 1440` (24h)
+- `captureDailySnapshot()`: captures all workspaces (id, name, emoji), groups open tabs by workspace (url, title, favicon)
+- Stored in `chrome.storage.local` under `dailySnapshots` key as `{[YYYY-MM-DD]: {workspaces, tabs, createdAt}}`
+- Max 7 entries, oldest removed when exceeded (FIFO)
+- Added "Daily Snapshots" subsection to SessionManager.tsx with:
+  - "Restore yesterday's tabs" shortcut button at top (only shown if yesterday's snapshot exists)
+  - Each snapshot row: date, tab count, workspace names, "Restore" button
+  - Restore uses synthetic Session + existing onRestore callback with replace/add mode dialog
+- Added "Restore yesterday's tabs" command palette entry in commandRegistry.ts
+- Wired `restoreYesterdayTabs` callback in App.tsx: reads yesterday's snapshot from storage, opens all tabs
+- Files changed: `src/background/service-worker.ts`, `src/sidepanel/SessionManager.tsx`, `src/sidepanel/commandRegistry.ts`, `src/sidepanel/commandRegistry.test.ts`, `src/sidepanel/App.tsx`
+- **Learnings for future iterations:**
+  - `DailySnapshot` type is local to both service-worker.ts and SessionManager.tsx (duplicated, same shape)
+  - `dailySnapshots` storage key maps date strings (YYYY-MM-DD) to snapshot objects
+  - `captureDailySnapshot` reuses `getAnalyticsTodayKey()` for consistent date formatting
+  - Synthetic Session objects can be created for ad-hoc restore flows (no need to save to sessions storage)
+  - The alarm fires at 24h intervals from creation, not exactly at midnight — close enough for daily captures
 ---
