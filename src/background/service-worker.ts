@@ -22,6 +22,7 @@ import {
 import { getSettings } from "../shared/settingsStorage";
 import { addArchiveEntry, getArchiveEntries } from "../shared/archiveStorage";
 import { matchRoute } from "../shared/routingEngine";
+import { calculateEnergyScore } from "../shared/energyScore";
 
 const CONTEXT_MENU_ID = "arcflow-pin-toggle";
 const SAVE_TO_NOTES_MENU_ID = "arcflow-save-to-notes";
@@ -55,6 +56,9 @@ chrome.runtime.onInstalled.addListener(() => {
 
   // Register daily snapshot alarm (every 24 hours)
   chrome.alarms.create("arcflow-daily-snapshot", { periodInMinutes: 1440 });
+
+  // Register energy score recalculation alarm (every 5 minutes)
+  chrome.alarms.create("arcflow-energy-recalc", { periodInMinutes: 5 });
 });
 
 // Open side panel when the toolbar icon is clicked
@@ -531,6 +535,65 @@ setInterval(() => {
   flushAnalytics().catch(() => {});
 }, ANALYTICS_FLUSH_INTERVAL_MS);
 
+// --- Tab Energy Score tracking ---
+// Track activation counts per tab (in-memory, with timestamps for 24h window)
+const tabActivationCounts = new Map<number, number[]>();
+
+function trackTabActivation(tabId: number): void {
+  const timestamps = tabActivationCounts.get(tabId) ?? [];
+  timestamps.push(Date.now());
+  tabActivationCounts.set(tabId, timestamps);
+}
+
+function getActivationCountLast24h(tabId: number): number {
+  const timestamps = tabActivationCounts.get(tabId);
+  if (!timestamps) return 0;
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  // Prune old timestamps in place
+  const recent = timestamps.filter((t) => t >= cutoff);
+  tabActivationCounts.set(tabId, recent);
+  return recent.length;
+}
+
+async function recalculateEnergyScores(): Promise<void> {
+  const allTabs = await chrome.tabs.query({ currentWindow: true });
+  const workspaces = await getWorkspaces();
+
+  // Build lastActiveAt map from folder items
+  const tabLastActiveMap = new Map<number, number>();
+  for (const ws of workspaces) {
+    for (const folder of ws.folders) {
+      for (const item of folder.items) {
+        if (item.type === "tab" && item.tabId != null && item.lastActiveAt) {
+          tabLastActiveMap.set(item.tabId, item.lastActiveAt);
+        }
+      }
+    }
+  }
+
+  const scores: Record<string, number> = {};
+  for (const tab of allTabs) {
+    if (tab.id == null || !tab.url || isIgnoredUrl(tab.url)) continue;
+    const activationCount = getActivationCountLast24h(tab.id);
+    const lastActiveAt = tab.active ? Date.now() : (tabLastActiveMap.get(tab.id) ?? 0);
+    scores[String(tab.id)] = calculateEnergyScore(
+      { tabId: tab.id, url: tab.url, active: tab.active },
+      activationCount,
+      lastActiveAt
+    );
+  }
+
+  await chrome.storage.local.set({ tabEnergyScores: scores });
+
+  // Clean up activation counts for tabs that no longer exist
+  const currentTabIds = new Set(allTabs.map((t) => t.id).filter((id): id is number => id != null));
+  for (const tabId of tabActivationCounts.keys()) {
+    if (!currentTabIds.has(tabId)) {
+      tabActivationCounts.delete(tabId);
+    }
+  }
+}
+
 // Tab lifecycle event listeners
 chrome.tabs.onCreated.addListener((tab) => {
   // Increment tab opened counter for Morning Briefing
@@ -600,6 +663,8 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
   });
   // Update lastActiveAt for auto-archive tracking
   updateLastActiveAt(activeInfo.tabId).catch(() => {});
+  // Track activation for energy score
+  trackTabActivation(activeInfo.tabId);
 
   // Analytics: track workspace time (time spent in previous workspace) and domain visit
   analyticsTrackWorkspaceTime();
@@ -938,6 +1003,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
   if (alarm.name === "arcflow-daily-snapshot") {
     captureDailySnapshot().catch(() => {
+      // Silently fail — will retry on next alarm
+    });
+  }
+  if (alarm.name === "arcflow-energy-recalc") {
+    recalculateEnergyScores().catch(() => {
       // Silently fail — will retry on next alarm
     });
   }
