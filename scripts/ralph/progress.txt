@@ -69,6 +69,9 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - `dailySnapshots` storage key maps `{[YYYY-MM-DD]: {workspaces, tabs, createdAt}}` — max 7 entries, captured via `arcflow-daily-snapshot` alarm
 - `DailySnapshot` type is local to service-worker.ts and SessionManager.tsx — captures workspace info + tabs grouped by workspace ID
 - Command palette entries added via `buildCommands()` in commandRegistry.ts — each new command needs handler in App.tsx + param in buildCommands
+- `tabEnergyScores` storage key maps `{[tabId]: number}` (score 1-100) — recalculated every 5 min by service worker alarm
+- `calculateEnergyScore()` in `shared/energyScore.ts` is a pure function: takes tab info, activation count, lastActiveAt → returns 1-100
+- `tabActivationCounts` in service worker is in-memory Map<number, number[]> tracking activation timestamps per tab (24h window)
 
 ---
 
@@ -919,4 +922,49 @@ There are still 7 stories with `passes: false` (US-024 through US-030), so more 
   - `captureDailySnapshot` reuses `getAnalyticsTodayKey()` for consistent date formatting
   - Synthetic Session objects can be created for ad-hoc restore flows (no need to save to sessions storage)
   - The alarm fires at 24h intervals from creation, not exactly at midnight — close enough for daily captures
+---
+
+## Iteration 24 - Fri Feb 20 13:10:03 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-24.log
+---
+**US-024 is complete.** Committed as `6f6af82` (code) + `7dd6b9b` (PRD/progress).
+
+**US-024 Summary:**
+- Added `chrome.alarms.create` for `arcflow-daily-snapshot` with `periodInMinutes: 1440` (24h)
+- `captureDailySnapshot()`: captures all workspaces (id, name, emoji) and groups open tabs by workspace ID (url, title, favicon)
+- Stored in `chrome.storage.local` under `dailySnapshots` as `{[YYYY-MM-DD]: {workspaces, tabs, createdAt}}`
+- Max 7 entries (FIFO), oldest removed when exceeded
+- **SessionManager.tsx**: Added "Daily Snapshots" subsection with:
+  - "Restore yesterday's tabs" shortcut button (shown only if yesterday's snapshot exists)
+  - Each snapshot row: date, tab count, workspace names, "Restore" button
+  - Restore creates synthetic Session and uses existing replace/add mode dialog
+- **Command palette**: Added "Restore yesterday's tabs" entry
+- **App.tsx**: Wired `restoreYesterdayTabs` callback that reads yesterday's snapshot and opens all tabs
+- All 8 tests pass, typecheck passes, lint passes
+- Files changed: `src/background/service-worker.ts`, `src/sidepanel/SessionManager.tsx`, `src/sidepanel/commandRegistry.ts`, `src/sidepanel/commandRegistry.test.ts`, `src/sidepanel/App.tsx`
+
+There are still 6 stories with `passes: false` (US-025 through US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-025
+- Created `src/shared/energyScore.ts` with `calculateEnergyScore(tab, activationCount, lastActiveAt)` function
+- Score = freshness (0-40) + visitFrequency (0-30) + memoryEstimate (0-30), clamped to 1-100
+- Freshness: active=40, <1h=35, <4h=25, <1d=15, <3d=5, >3d=0
+- Visit frequency: 10+=30, 5+=20, 2+=10, 1=5, 0=0
+- Memory estimate: media sites (youtube, netflix, etc.)=10, unknown/general=20, simple=30 (simple not explicitly detected, defaults to 20)
+- Added in-memory `tabActivationCounts` Map in service worker tracking activation timestamps per tab
+- `trackTabActivation(tabId)` called from `onActivated` listener to record each activation
+- `getActivationCountLast24h(tabId)` prunes timestamps older than 24h and returns count
+- `recalculateEnergyScores()` queries all tabs, builds lastActiveAt from folder items, calculates scores, stores in `tabEnergyScores` storage key
+- `chrome.alarms.create("arcflow-energy-recalc", { periodInMinutes: 5 })` registered in onInstalled
+- Alarm handler triggers `recalculateEnergyScores()` every 5 minutes
+- Cleans up activation counts for removed tabs during recalculation
+- Files changed: `src/shared/energyScore.ts` (new), `src/background/service-worker.ts`
+- **Learnings for future iterations:**
+  - `tabActivationCounts` is in-memory only (Map<number, number[]>) — lost on service worker restart, but rebuilds naturally as tabs are activated
+  - `tabEnergyScores` storage key maps `{[tabId]: number}` — used by UI components (US-026) to show energy dots
+  - Energy scores are recalculated every 5 minutes, not on every event — UI reads from storage
+  - `calculateEnergyScore` is a pure function in shared/ — can be unit tested independently
+  - Media domains list is a simple Set — can be extended as needed
 ---
