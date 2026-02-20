@@ -74,6 +74,8 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - `tabActivationCounts` in service worker is in-memory Map<number, number[]> tracking activation timestamps per tab (24h window)
 - `tabEnergyScores` state in App.tsx is `Record<string, number>` (string tab ID → score 1-100) — loaded from storage on mount, updated reactively via storage change listener
 - WorkspaceSwitcher accepts `tabEnergyScores` and `tabWorkspaceMap` props for health bar computation — `getWorkspaceAverageEnergy()` is a standalone helper
+- Workspace export JSON format: `{version: "2.0", type: "arcflow-workspace", name, emoji, accentColor, pinnedApps, folders, notes}` — used for export/import (US-027/US-028)
+- File download in sidepanel: `URL.createObjectURL(blob)` + temporary `<a>` element + click + `URL.revokeObjectURL(url)`
 
 ---
 
@@ -1006,4 +1008,40 @@ There are still 5 stories with `passes: false` (US-026 through US-030), so more 
   - `tabEnergyScores` keys are string tab IDs (from storage), so use `String(tab.id)` when looking up
   - Health bar uses `getWorkspaceAverageEnergy()` inline — no caching needed since workspace count is small
   - WorkspaceSwitcher workspace buttons are now wrapped in a `<div>` container to stack the button + health bar
+---
+
+## Iteration 26 - Fri Feb 20 13:18:24 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-26.log
+---
+**US-026 is complete.** Committed as `86074c8` (code) + `4f62a02` (PRD/progress).
+
+**US-026 Summary:**
+- Added 8px colored energy score dots to `DraggableTabItem` in `App.tsx`, rendered left of favicon
+- Dot color: `bg-green-400` (70-100), `bg-yellow-400` (40-69), `bg-red-400` (1-39)
+- Tooltip on hover: "Energy: XX — [description]" with context-appropriate descriptions
+- Scores read from `tabEnergyScores` in `chrome.storage.local`, loaded on mount and updated reactively via storage change listener
+- Added thin health bar (`h-0.5`) below each workspace emoji button in `WorkspaceSwitcher.tsx`
+- Bar color based on average energy score of tabs in that workspace, with `bg-gray-700` background
+- Both virtualized and non-virtualized tab rendering paths pass the energy score prop
+- All 8 tests pass, typecheck passes, lint passes
+- Files changed: `src/sidepanel/App.tsx`, `src/sidepanel/WorkspaceSwitcher.tsx`
+
+There are still 4 stories with `passes: false` (US-027 through US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-027
+- Added workspace export functionality via JSON file download
+- Context menu on workspace emoji: "Export Workspace" option in WorkspaceSwitcher.tsx
+- Command palette entry: "Export current workspace" in commandRegistry.ts
+- Export JSON includes: version '2.0', type 'arcflow-workspace', name, emoji, accentColor, pinnedApps, folders (with items), notes
+- Does NOT include: open tab states, openRouterApiKey, settings, tabWorkspaceMap
+- File downloaded as `arcflow-workspace-[name]-[YYYY-MM-DD].json` via `URL.createObjectURL` + anchor click
+- Export logic duplicated in both WorkspaceSwitcher (for context menu) and App.tsx (for command palette) — kept simple since it's a small pure function
+- Files changed: `src/sidepanel/WorkspaceSwitcher.tsx`, `src/sidepanel/App.tsx`, `src/sidepanel/commandRegistry.ts`, `src/sidepanel/commandRegistry.test.ts`
+- **Learnings for future iterations:**
+  - `handleExportWorkspace` takes a `Workspace` object directly — all needed data (pinnedApps, folders, notes) is already on the Workspace type
+  - File download pattern: `URL.createObjectURL(blob)` + temporary anchor + click + `URL.revokeObjectURL(url)` — works in Chrome extension sidepanel
+  - Workspace name is sanitized for filename via `toLowerCase().replace(/[^a-z0-9]+/g, "-")`
+  - US-028 (import) will need to validate the JSON structure and create a new workspace from it
 ---
