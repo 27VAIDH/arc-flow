@@ -408,10 +408,132 @@ async function incrementTabCounter(field: "opened" | "closed"): Promise<void> {
   await chrome.storage.local.set({ tabSessionCounters: counters });
 }
 
+// --- Analytics data collection ---
+// Track browsing analytics: tabs opened/closed, domain visits, workspace time
+// All writes debounced (batch every 30 seconds)
+
+interface AnalyticsDailyEntry {
+  opened: number;
+  closed: number;
+  domains: Record<string, number>;
+  workspaceMinutes: Record<string, number>;
+}
+
+interface AnalyticsData {
+  daily: Record<string, AnalyticsDailyEntry>;
+}
+
+// In-memory analytics buffer — flushed to storage every 30 seconds
+let analyticsDirty = false;
+const analyticsBuffer: {
+  openedDelta: number;
+  closedDelta: number;
+  domainDeltas: Record<string, number>;
+  workspaceMinutesDeltas: Record<string, number>;
+} = { openedDelta: 0, closedDelta: 0, domainDeltas: {}, workspaceMinutesDeltas: {} };
+
+// Track last activation for workspace time calculation
+let lastActivationTime: number = 0;
+let lastActivationWorkspaceId: string | null = null;
+
+function getAnalyticsTodayKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function analyticsTrackOpened(): void {
+  analyticsBuffer.openedDelta += 1;
+  analyticsDirty = true;
+}
+
+function analyticsTrackClosed(): void {
+  analyticsBuffer.closedDelta += 1;
+  analyticsDirty = true;
+}
+
+function analyticsTrackDomain(url: string): void {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, "");
+    if (!hostname) return;
+    analyticsBuffer.domainDeltas[hostname] = (analyticsBuffer.domainDeltas[hostname] ?? 0) + 1;
+    analyticsDirty = true;
+  } catch {
+    // Malformed URL
+  }
+}
+
+function analyticsTrackWorkspaceTime(): void {
+  if (lastActivationTime > 0 && lastActivationWorkspaceId) {
+    const elapsedMs = Date.now() - lastActivationTime;
+    const elapsedMinutes = elapsedMs / 60_000;
+    // Cap at 30 minutes to avoid inflated values from idle
+    const capped = Math.min(elapsedMinutes, 30);
+    if (capped > 0.01) {
+      analyticsBuffer.workspaceMinutesDeltas[lastActivationWorkspaceId] =
+        (analyticsBuffer.workspaceMinutesDeltas[lastActivationWorkspaceId] ?? 0) + capped;
+      analyticsDirty = true;
+    }
+  }
+}
+
+function pruneAnalyticsOlderThan30Days(data: AnalyticsData): void {
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  for (const dateKey of Object.keys(data.daily)) {
+    const d = new Date(dateKey);
+    if (d.getTime() < cutoff) {
+      delete data.daily[dateKey];
+    }
+  }
+}
+
+async function flushAnalytics(): Promise<void> {
+  if (!analyticsDirty) return;
+
+  const todayKey = getAnalyticsTodayKey();
+  const result = await chrome.storage.local.get("analytics");
+  const analytics: AnalyticsData = (result.analytics as AnalyticsData) ?? { daily: {} };
+
+  if (!analytics.daily[todayKey]) {
+    analytics.daily[todayKey] = { opened: 0, closed: 0, domains: {}, workspaceMinutes: {} };
+  }
+
+  const today = analytics.daily[todayKey];
+  today.opened += analyticsBuffer.openedDelta;
+  today.closed += analyticsBuffer.closedDelta;
+
+  for (const [domain, count] of Object.entries(analyticsBuffer.domainDeltas)) {
+    today.domains[domain] = (today.domains[domain] ?? 0) + count;
+  }
+
+  for (const [wsId, minutes] of Object.entries(analyticsBuffer.workspaceMinutesDeltas)) {
+    today.workspaceMinutes[wsId] = (today.workspaceMinutes[wsId] ?? 0) + minutes;
+  }
+
+  // Prune old entries
+  pruneAnalyticsOlderThan30Days(analytics);
+
+  await chrome.storage.local.set({ analytics });
+
+  // Reset buffer
+  analyticsBuffer.openedDelta = 0;
+  analyticsBuffer.closedDelta = 0;
+  analyticsBuffer.domainDeltas = {};
+  analyticsBuffer.workspaceMinutesDeltas = {};
+  analyticsDirty = false;
+}
+
+// Debounced flush: every 30 seconds
+const ANALYTICS_FLUSH_INTERVAL_MS = 30_000;
+setInterval(() => {
+  flushAnalytics().catch(() => {});
+}, ANALYTICS_FLUSH_INTERVAL_MS);
+
 // Tab lifecycle event listeners
 chrome.tabs.onCreated.addListener((tab) => {
   // Increment tab opened counter for Morning Briefing
   incrementTabCounter("opened").catch(() => {});
+  // Analytics: track tab opened
+  analyticsTrackOpened();
 
   if (tab.id != null) {
     const tabUrl = tab.url ?? tab.pendingUrl ?? "";
@@ -446,6 +568,8 @@ chrome.tabs.onCreated.addListener((tab) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   // Increment tab closed counter for Morning Briefing
   incrementTabCounter("closed").catch(() => {});
+  // Analytics: track tab closed
+  analyticsTrackClosed();
 
   // Track recently closed tab before cleanup
   trackRecentlyClosed(tabId).catch(() => {});
@@ -473,6 +597,26 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
   });
   // Update lastActiveAt for auto-archive tracking
   updateLastActiveAt(activeInfo.tabId).catch(() => {});
+
+  // Analytics: track workspace time (time spent in previous workspace) and domain visit
+  analyticsTrackWorkspaceTime();
+  (async () => {
+    try {
+      const tab = await chrome.tabs.get(activeInfo.tabId);
+      if (tab.url && !isIgnoredUrl(tab.url)) {
+        analyticsTrackDomain(tab.url);
+      }
+      // Update last activation tracking for next workspace time calculation
+      const tabMap = await getTabWorkspaceMap();
+      lastActivationTime = Date.now();
+      lastActivationWorkspaceId = tabMap[String(activeInfo.tabId)] ?? "default";
+    } catch {
+      // Tab may not exist
+      lastActivationTime = Date.now();
+      lastActivationWorkspaceId = null;
+    }
+  })().catch(() => {});
+
   debouncedRefresh();
 });
 
