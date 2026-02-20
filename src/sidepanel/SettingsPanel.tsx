@@ -10,7 +10,6 @@ import {
   AUTO_ARCHIVE_OPTIONS,
   SUSPEND_THRESHOLD_OPTIONS,
   THEME_OPTIONS,
-  AI_PROVIDER_OPTIONS,
 } from "../shared/constants";
 import { applyPanelColor } from "./useTheme";
 
@@ -47,6 +46,67 @@ function SelectField({
           </option>
         ))}
       </select>
+    </div>
+  );
+}
+
+function TestConnectionButton({ apiKey }: { apiKey: string }) {
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const handleTest = async () => {
+    if (!apiKey) {
+      setStatus("error");
+      setErrorMsg("Enter an API key first");
+      return;
+    }
+    setStatus("loading");
+    setErrorMsg("");
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    try {
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          "HTTP-Referer": "chrome-extension://arcflow",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.0-flash-001",
+          max_tokens: 5,
+          messages: [{ role: "user", content: "Say hi" }],
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(body || `HTTP ${res.status}`);
+      }
+      setStatus("success");
+    } catch (e) {
+      clearTimeout(timeoutId);
+      setStatus("error");
+      setErrorMsg(e instanceof Error ? e.message : "Connection failed");
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        onClick={handleTest}
+        disabled={status === "loading"}
+        className="text-sm text-arc-accent dark:text-arc-accent-hover hover:text-indigo-700 dark:hover:text-indigo-300 disabled:opacity-50"
+      >
+        {status === "loading" ? "Testing..." : "Test Connection"}
+      </button>
+      {status === "success" && (
+        <span className="text-green-500 text-sm" title="Connection successful">&#10003;</span>
+      )}
+      {status === "error" && (
+        <span className="text-red-500 text-xs" title={errorMsg}>&#10007; {errorMsg}</span>
+      )}
     </div>
   );
 }
@@ -417,94 +477,30 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
           </div>
         </section>
 
-        {/* AI Grouping */}
+        {/* AI / OpenRouter */}
         <section>
           <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
-            AI-Enhanced Grouping
+            AI (OpenRouter)
           </h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-4">
               <label className="text-sm text-gray-700 dark:text-arc-text-primary shrink-0">
-                Enable AI grouping
+                OpenRouter API Key
               </label>
-              <button
-                onClick={() =>
-                  handleUpdate({
-                    aiGrouping: {
-                      ...settings.aiGrouping,
-                      enabled: !settings.aiGrouping.enabled,
-                    },
-                  })
+              <input
+                type="password"
+                value={settings.openRouterApiKey}
+                onChange={(e) =>
+                  handleUpdate({ openRouterApiKey: e.target.value })
                 }
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-                  settings.aiGrouping.enabled
-                    ? "bg-arc-accent"
-                    : "bg-gray-300 dark:bg-arc-surface-hover"
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                    settings.aiGrouping.enabled
-                      ? "translate-x-4"
-                      : "translate-x-0"
-                  }`}
-                />
-              </button>
+                placeholder="sk-or-..."
+                className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 min-w-[120px] w-full max-w-[180px]"
+              />
             </div>
-            {settings.aiGrouping.enabled && (
-              <>
-                <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
-                  <p className="text-xs text-amber-700 dark:text-amber-300">
-                    Privacy: Only tab titles and URLs are sent to the AI
-                    provider. No page content is shared.
-                  </p>
-                </div>
-                <SelectField
-                  label="Provider"
-                  value={settings.aiGrouping.provider ?? ""}
-                  options={AI_PROVIDER_OPTIONS}
-                  onChange={(v) =>
-                    handleUpdate({
-                      aiGrouping: {
-                        ...settings.aiGrouping,
-                        provider:
-                          v === "anthropic" || v === "openai" ? v : null,
-                      },
-                    })
-                  }
-                />
-                {settings.aiGrouping.provider && (
-                  <>
-                    <div className="flex items-center justify-between gap-4">
-                      <label className="text-sm text-gray-700 dark:text-arc-text-primary shrink-0">
-                        API Key
-                      </label>
-                      <input
-                        type="password"
-                        value={settings.aiGrouping.apiKey}
-                        onChange={(e) =>
-                          handleUpdate({
-                            aiGrouping: {
-                              ...settings.aiGrouping,
-                              apiKey: e.target.value,
-                            },
-                          })
-                        }
-                        placeholder={
-                          settings.aiGrouping.provider === "anthropic"
-                            ? "sk-ant-..."
-                            : "sk-..."
-                        }
-                        className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 min-w-[120px] w-full max-w-[180px]"
-                      />
-                    </div>
-                    <p className="text-xs text-gray-400 dark:text-arc-text-secondary">
-                      Your API key is stored locally on your device without encryption. It is never sent anywhere except the selected AI provider.
-                    </p>
-                  </>
-                )}
-              </>
-            )}
+            <p className="text-xs text-gray-400 dark:text-arc-text-secondary">
+              Your API key is stored locally on your device. It is only sent to OpenRouter for AI features.
+            </p>
+            <TestConnectionButton apiKey={settings.openRouterApiKey} />
           </div>
         </section>
 

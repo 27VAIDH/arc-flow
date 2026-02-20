@@ -188,11 +188,7 @@ export default function OrganizeTabsModal({
     let cancelled = false;
     async function tryAIGrouping() {
       const settings = await getSettings();
-      if (
-        !settings.aiGrouping.enabled ||
-        !settings.aiGrouping.provider ||
-        !settings.aiGrouping.apiKey
-      ) {
+      if (!settings.openRouterApiKey) {
         return;
       }
 
@@ -219,7 +215,7 @@ export default function OrganizeTabsModal({
       setLoading(true);
       const result = await getAIGroupingSuggestions(
         ungroupedTabs,
-        settings.aiGrouping
+        settings.openRouterApiKey
       );
 
       if (cancelled) return;

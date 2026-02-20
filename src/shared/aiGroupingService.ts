@@ -1,5 +1,4 @@
 import type { TabInfo } from "./types";
-import type { Settings } from "./types";
 
 interface AIGroupSuggestion {
   name: string;
@@ -82,16 +81,16 @@ function parseAIResponse(text: string): AIGroupSuggestion[] {
 
 export async function getAIGroupingSuggestions(
   tabs: TabInfo[],
-  settings: Settings["aiGrouping"]
+  openRouterApiKey: string
 ): Promise<AIGroupingResult> {
-  if (!settings.enabled || !settings.apiKey) {
+  if (!openRouterApiKey) {
     return { groups: [], source: "fallback" };
   }
 
   const tabPayload = tabs.map((t) => ({ title: t.title, url: t.url }));
 
   try {
-    const suggestions = await callOpenRouterAPI(settings.apiKey, tabPayload);
+    const suggestions = await callOpenRouterAPI(openRouterApiKey, tabPayload);
 
     // Convert indices to actual tab objects
     const groups = suggestions

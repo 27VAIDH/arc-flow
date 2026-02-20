@@ -1,0 +1,63 @@
+# Ralph Progress Log
+Started: Fri Feb 20 12:01:29 IST 2026
+---
+
+## Codebase Patterns
+- AI service is in `src/shared/aiGroupingService.ts` — exports `getAIGroupingSuggestions(tabs, openRouterApiKey)` consumed by `OrganizeTabsModal.tsx`
+- Settings type is in `src/shared/types.ts` — `Settings` interface defines all extension settings
+- Settings now uses `openRouterApiKey: string` (flat field) instead of old nested `aiGrouping` object
+- `settingsStorage.ts` has `migrateSettings()` that converts old `aiGrouping.apiKey` → `openRouterApiKey`
+- OpenRouter API uses OpenAI-compatible response format (`data.choices[0].message.content`)
+- Typecheck: `npx tsc --noEmit`, Lint: `npx eslint <file>`
+- SettingsPanel.tsx uses local component pattern (e.g., `TestConnectionButton`) for self-contained UI sections
+
+---
+
+## 2026-02-20 - US-001
+- Replaced Anthropic and OpenAI API backends with single OpenRouter.ai backend
+- Single function `callOpenRouterAPI` replaces `callAnthropicAPI` and `callOpenAIAPI`
+- Endpoint: `https://openrouter.ai/api/v1/chat/completions`, model: `google/gemini-2.0-flash-001`
+- Headers: Authorization Bearer, Content-Type application/json, HTTP-Referer chrome-extension://arcflow
+- 10-second timeout via AbortController preserved
+- Fallback to heuristic grouping on failure preserved
+- Removed provider check — no longer needed since there's a single backend
+- Files changed: `src/shared/aiGroupingService.ts`
+- **Learnings for future iterations:**
+  - The `settings.aiGrouping` parameter still has `provider` field — US-002 will clean this up
+  - OpenRouter uses OpenAI-compatible response format, so `data.choices[0].message.content` works
+  - The `enabled` check in `getAIGroupingSuggestions` still guards against calls when AI is disabled
+---
+
+## Iteration 1 - Fri Feb 20 12:03:22 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-1.log
+---
+US-001 is complete. There are still 29 stories with `passes: false`, so more iterations are needed.
+
+**US-001 Summary:**
+- Replaced `callAnthropicAPI` and `callOpenAIAPI` with a single `callOpenRouterAPI` function
+- Endpoint: `https://openrouter.ai/api/v1/chat/completions` with model `google/gemini-2.0-flash-001`
+- Headers: `Authorization: Bearer <key>`, `Content-Type: application/json`, `HTTP-Referer: chrome-extension://arcflow`
+- 10-second timeout via AbortController preserved
+- Fallback to heuristic grouping on failure preserved
+- Error logged to console with descriptive message
+- Typecheck passes, lint passes
+- Committed: `ef7376d`
+---
+
+## 2026-02-20 - US-002
+- Replaced nested `aiGrouping` settings with flat `openRouterApiKey: string` field
+- Removed provider dropdown (anthropic/openai) from SettingsPanel
+- Added single "OpenRouter API Key" password input field
+- Added "Test Connection" button that calls OpenRouter with minimal prompt and shows green checkmark/red X
+- Updated `Settings` type in `shared/types.ts`
+- Updated `DEFAULT_SETTINGS` in `constants.ts`, removed `AI_PROVIDER_OPTIONS`
+- Added migration in `settingsStorage.ts` that converts old `aiGrouping.apiKey` → `openRouterApiKey`
+- Updated `aiGroupingService.ts` to accept `openRouterApiKey: string` directly
+- Updated `OrganizeTabsModal.tsx` to pass `settings.openRouterApiKey` instead of `settings.aiGrouping`
+- Files changed: `src/shared/types.ts`, `src/shared/constants.ts`, `src/shared/settingsStorage.ts`, `src/shared/aiGroupingService.ts`, `src/sidepanel/SettingsPanel.tsx`, `src/sidepanel/OrganizeTabsModal.tsx`
+- **Learnings for future iterations:**
+  - Settings migration runs on every `getSettings()` call — lightweight but handles legacy data transparently
+  - `TestConnectionButton` is a self-contained component within SettingsPanel (not exported)
+  - AI grouping is now implicitly enabled whenever `openRouterApiKey` is non-empty (no separate toggle)
+---

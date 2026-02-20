@@ -8,11 +8,7 @@ export const DEFAULT_SETTINGS: Settings = {
     enabled: false,
     redirectRules: [],
   },
-  aiGrouping: {
-    enabled: false,
-    provider: null,
-    apiKey: "",
-  },
+  openRouterApiKey: "",
   routingRules: [],
   accentColor: "#6366f1",
   panelColor: "",
@@ -44,8 +40,3 @@ export const THEME_OPTIONS = [
   { label: "Dark", value: "dark" },
 ] as const;
 
-export const AI_PROVIDER_OPTIONS = [
-  { label: "Select provider...", value: "" },
-  { label: "Anthropic (Claude)", value: "anthropic" },
-  { label: "OpenAI (GPT)", value: "openai" },
-] as const;

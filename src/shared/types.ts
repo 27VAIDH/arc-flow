@@ -119,11 +119,7 @@ export interface Settings {
     enabled: boolean;
     redirectRules: { blockedPattern: string; redirectUrl: string }[];
   };
-  aiGrouping: {
-    enabled: boolean;
-    provider: "anthropic" | "openai" | null;
-    apiKey: string;
-  };
+  openRouterApiKey: string;
   routingRules: { pattern: string; workspaceId: string }[];
   accentColor: string;
   panelColor: string;
