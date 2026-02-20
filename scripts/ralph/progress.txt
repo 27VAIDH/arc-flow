@@ -29,6 +29,9 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - `checkForWorkspaceSuggestion()` in service worker has 10-min cooldown — safe to call from hot paths
 - Workspace suggestion card in App.tsx uses `pendingWorkspaceSuggestion` storage key; dismissal tracked via `suggestionDismissedAt` (24h cooldown)
 - `assignTabToWorkspace(tabId, wsId)` from workspaceStorage.ts moves a tab to a workspace in the tab-workspace map
+- Service worker maintains `tabInfoCache` (Map<number, {url, title, favIconUrl}>) for recently closed tab tracking — populated on init and updated on create/update events
+- `recentlyClosed` storage key holds `RecentlyClosedTab[]` (max 20, FIFO) — each entry has url, title, favicon, workspaceId, closedAt
+- `trackRecentlyClosed(tabId)` must be called BEFORE `removeTabFromMap` in onRemoved to capture the workspace ID
 
 ---
 
@@ -317,4 +320,39 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - `createWorkspace` sets a default emoji, so call `updateWorkspace` right after to set the suggested emoji
   - `loadWorkspaceSuggestion` is a stable callback (via useCallback) so it can be used in the mount-once useEffect dependency array
   - 24h dismissal uses `suggestionDismissedAt` key in chrome.storage.local
+---
+
+## Iteration 9 - Fri Feb 20 12:26:07 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-9.log
+---
+**US-009 is complete.** Committed as `cf09dff`. There are still 21 stories with `passes: false` (US-010 through US-030), so more iterations are needed.
+
+**US-009 Summary:**
+- Added AI auto-workspace suggestion card to the sidebar in `App.tsx`
+- Listens for `workspace-suggestion-ready` message from service worker and loads `pendingWorkspaceSuggestion` from storage
+- Also loads pending suggestion on mount (in case message arrived before sidepanel opened)
+- Card appears below search bar with emoji, suggested name, and AI-generated reason
+- "Create" button: creates workspace with suggested name/emoji, moves relevant tabs into it, switches user to the new workspace
+- "Dismiss" button: hides card, stores dismissal timestamp, suppresses re-showing for 24 hours
+- Card styled with rounded corners, subtle shadow, accent border, matching the onboarding card aesthetic
+- Uses existing toast system for success/error feedback
+- Typecheck passes, lint passes
+- File changed: `src/sidepanel/App.tsx`
+---
+
+## 2026-02-20 - US-010
+- Added recently closed tabs tracking to the service worker
+- Added `RecentlyClosedTab` type to `shared/types.ts` with url, title, favicon, workspaceId, closedAt fields
+- Added in-memory `tabInfoCache` (Map) to cache tab info since `chrome.tabs.get()` doesn't work after removal
+- Cache populated on `initialize()`, updated on `onCreated` and `onUpdated` events, cleaned up on `onRemoved`
+- `trackRecentlyClosed(tabId)`: captures tab info from cache, checks for ignored URLs, checks for auto-archived tabs (same URL archived within 2 seconds), stores in `recentlyClosed` storage key
+- `recentlyClosed` array capped at 20 entries (FIFO), newest first
+- `trackRecentlyClosed` called BEFORE `removeTabFromMap` in `onRemoved` to capture workspace ID
+- Files changed: `src/background/service-worker.ts`, `src/shared/types.ts`
+- **Learnings for future iterations:**
+  - `chrome.tabs.get(tabId)` fails after tab removal — must cache tab info proactively
+  - `tabInfoCache` is in-memory only, so it's lost on service worker restart; `initialize()` repopulates it from current tabs
+  - Auto-archive detection uses a 2-second window: if the same URL was archived within 2s, the closure was likely from auto-archive
+  - `trackRecentlyClosed` must run before `removeTabFromMap` to read the workspace mapping while it still exists
 ---

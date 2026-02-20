@@ -4,6 +4,7 @@ import type {
   ServiceWorkerMessage,
   SidePanelMessage,
   WorkspaceSuggestion,
+  RecentlyClosedTab,
 } from "../shared/types";
 import {
   getPinnedApps,
@@ -18,7 +19,7 @@ import {
   removeTabFromMap,
 } from "../shared/workspaceStorage";
 import { getSettings } from "../shared/settingsStorage";
-import { addArchiveEntry } from "../shared/archiveStorage";
+import { addArchiveEntry, getArchiveEntries } from "../shared/archiveStorage";
 import { matchRoute } from "../shared/routingEngine";
 
 const CONTEXT_MENU_ID = "arcflow-pin-toggle";
@@ -53,6 +54,12 @@ const STORAGE_KEY = "tabList";
 const DEBOUNCE_MS = 50;
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+// --- Recently closed tabs: in-memory tab info cache ---
+// We cache tab info because chrome.tabs.get() doesn't work after a tab is removed.
+const tabInfoCache = new Map<number, { url: string; title: string; favIconUrl: string }>();
+const RECENTLY_CLOSED_KEY = "recentlyClosed";
+const MAX_RECENTLY_CLOSED = 20;
 
 function mapTab(tab: chrome.tabs.Tab): TabInfo {
   return {
@@ -146,6 +153,17 @@ async function initialize(): Promise<void> {
   const tabs = await queryCurrentWindowTabs();
   await persistTabs(tabs);
   broadcastTabs(tabs);
+
+  // Populate tab info cache for recently closed tracking
+  for (const tab of tabs) {
+    if (tab.id > 0) {
+      tabInfoCache.set(tab.id, {
+        url: tab.url,
+        title: tab.title,
+        favIconUrl: tab.favIconUrl,
+      });
+    }
+  }
 
   // Reconcile: assign any unmapped tabs to the active workspace
   await reconcileTabWorkspaceMap();
@@ -241,11 +259,57 @@ async function getWorkspaceForUrl(url: string): Promise<string | null> {
   return matchRoute(url, settings.routingRules);
 }
 
+// --- Recently closed tabs tracking ---
+
+/**
+ * Track a closed tab for recovery, unless it's an ignored URL or was auto-archived.
+ */
+async function trackRecentlyClosed(tabId: number): Promise<void> {
+  const cached = tabInfoCache.get(tabId);
+  if (!cached || !cached.url) return;
+
+  // Skip ignored URLs
+  if (isIgnoredUrl(cached.url)) return;
+
+  // Skip tabs closed by auto-archive: check if the same URL was archived in the last 2 seconds
+  const archiveEntries = await getArchiveEntries();
+  const now = Date.now();
+  const recentlyArchived = archiveEntries.some(
+    (entry) => entry.url === cached.url && now - entry.archivedAt < 2000
+  );
+  if (recentlyArchived) return;
+
+  // Get workspace ID for this tab
+  const tabMap = await getTabWorkspaceMap();
+  const workspaceId = tabMap[String(tabId)] ?? "default";
+
+  const entry: RecentlyClosedTab = {
+    url: cached.url,
+    title: cached.title,
+    favicon: cached.favIconUrl,
+    workspaceId,
+    closedAt: now,
+  };
+
+  const result = await chrome.storage.local.get(RECENTLY_CLOSED_KEY);
+  const existing = (result[RECENTLY_CLOSED_KEY] as RecentlyClosedTab[] | undefined) ?? [];
+  existing.unshift(entry);
+  const capped = existing.slice(0, MAX_RECENTLY_CLOSED);
+  await chrome.storage.local.set({ [RECENTLY_CLOSED_KEY]: capped });
+}
+
 // Tab lifecycle event listeners
 chrome.tabs.onCreated.addListener((tab) => {
   if (tab.id != null) {
     const tabUrl = tab.url ?? tab.pendingUrl ?? "";
     const tabId = tab.id;
+
+    // Cache tab info for recently closed tracking
+    tabInfoCache.set(tabId, {
+      url: tabUrl,
+      title: tab.title ?? "",
+      favIconUrl: tab.favIconUrl ?? "",
+    });
 
     // Try routing rules first, then fall back to active workspace
     const assignWorkspace = async () => {
@@ -267,10 +331,17 @@ chrome.tabs.onCreated.addListener((tab) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
+  // Track recently closed tab before cleanup
+  trackRecentlyClosed(tabId).catch(() => {});
+
   // Clean up tab-workspace mapping
   removeTabFromMap(tabId).then(() => {
     broadcastTabWorkspaceMap();
   });
+
+  // Clean up tab info cache
+  tabInfoCache.delete(tabId);
+
   debouncedRefresh();
 });
 
@@ -290,6 +361,16 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
 });
 
 chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+  // Update tab info cache on URL or title changes
+  if (tab.id != null && (changeInfo.url || changeInfo.title || changeInfo.favIconUrl)) {
+    const existing = tabInfoCache.get(tab.id) ?? { url: "", title: "", favIconUrl: "" };
+    tabInfoCache.set(tab.id, {
+      url: changeInfo.url ?? existing.url,
+      title: changeInfo.title ?? existing.title,
+      favIconUrl: changeInfo.favIconUrl ?? existing.favIconUrl,
+    });
+  }
+
   // Auto-route tabs when navigation completes and URL has changed
   if (changeInfo.status === "complete" && tab.url && tab.id != null) {
     const tabId = tab.id;

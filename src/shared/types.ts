@@ -128,6 +128,14 @@ export interface WorkspaceSuggestion {
   createdAt: number;
 }
 
+export interface RecentlyClosedTab {
+  url: string;
+  title: string;
+  favicon: string;
+  workspaceId: string;
+  closedAt: number;
+}
+
 export interface Settings {
   theme: "system" | "light" | "dark";
   autoArchiveMinutes: number;
