@@ -15,6 +15,7 @@ export function buildCommands({
   onSaveSession,
   onRestoreSession,
   onFocusNotes,
+  onToggleDeepWork,
 }: {
   workspaces: Workspace[];
   onSwitchWorkspace: (workspaceId: string) => void;
@@ -29,6 +30,7 @@ export function buildCommands({
   onSaveSession: () => void;
   onRestoreSession: () => void;
   onFocusNotes: () => void;
+  onToggleDeepWork: () => void;
 }): Command[] {
   const commands: Command[] = [];
 
@@ -117,6 +119,13 @@ export function buildCommands({
     name: "Focus Workspace Notes",
     icon: "notes",
     action: onFocusNotes,
+  });
+
+  commands.push({
+    id: "toggle-deep-work",
+    name: "Toggle Deep Work Mode",
+    icon: "focus",
+    action: onToggleDeepWork,
   });
 
   return commands;

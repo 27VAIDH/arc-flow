@@ -16,6 +16,7 @@ const defaultHandlers = {
   onSaveSession: noop,
   onRestoreSession: noop,
   onFocusNotes: noop,
+  onToggleDeepWork: noop,
 };
 
 describe("buildCommands", () => {

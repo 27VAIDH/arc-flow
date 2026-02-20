@@ -592,6 +592,7 @@ export default function App() {
   const activeWorkspaceIdRef = useRef(activeWorkspaceId);
   const [swipeBounce, setSwipeBounce] = useState<"left" | "right" | null>(null);
   const [workspaceSuggestion, setWorkspaceSuggestion] = useState<WorkspaceSuggestion | null>(null);
+  const [deepWorkActive, setDeepWorkActive] = useState(false);
 
   // Sorted workspaces for swipe navigation
   const sortedWorkspaces = useMemo(
@@ -661,6 +662,15 @@ export default function App() {
     );
   }, []);
 
+  // Load Deep Work state from storage on mount
+  useEffect(() => {
+    chrome.storage.local.get("deepWorkActive", (result) => {
+      if (result.deepWorkActive) {
+        setDeepWorkActive(true);
+      }
+    });
+  }, []);
+
   // Check if onboarding is needed on mount
   useEffect(() => {
     isOnboardingCompleted().then((completed) => {
@@ -699,7 +709,7 @@ export default function App() {
     }
   }, [dupNotification]);
 
-  // Listen for Ctrl+Shift+K to open command palette
+  // Listen for Ctrl+Shift+K to open command palette, Ctrl+Shift+D for Deep Work
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "K") {
@@ -745,6 +755,9 @@ export default function App() {
         if (changes.workspaces) {
           const updated = (changes.workspaces.newValue as Workspace[]) ?? [];
           setWorkspaces(updated.sort((a, b) => a.sortOrder - b.sortOrder));
+        }
+        if (changes.deepWorkActive) {
+          setDeepWorkActive(!!changes.deepWorkActive.newValue);
         }
       }
     };
@@ -1087,6 +1100,47 @@ export default function App() {
     setTabPreview(null);
   }, []);
 
+  // Toggle Deep Work Mode
+  const toggleDeepWork = useCallback(async () => {
+    const newActive = !deepWorkActive;
+    setDeepWorkActive(newActive);
+    await chrome.storage.local.set({ deepWorkActive: newActive });
+
+    if (newActive) {
+      // Enable focus mode in settings
+      const s = await getSettings();
+      await updateSettings({
+        focusMode: { ...s.focusMode, enabled: true },
+      });
+      chrome.runtime.sendMessage({
+        type: "UPDATE_FOCUS_MODE",
+        enabled: true,
+        redirectRules: s.focusMode.redirectRules,
+      });
+      // Suspend all non-active tabs
+      for (const tab of filteredTabs) {
+        if (!tab.active && !tab.discarded) {
+          chrome.runtime.sendMessage({ type: "SUSPEND_TAB", tabId: tab.id });
+        }
+      }
+      // Expand Quick Notes
+      if (activeWorkspace?.notesCollapsed) {
+        updateWorkspace(activeWorkspaceId, { notesCollapsed: false });
+      }
+    } else {
+      // Disable focus mode in settings (don't unsuspend tabs)
+      const s = await getSettings();
+      await updateSettings({
+        focusMode: { ...s.focusMode, enabled: false },
+      });
+      chrome.runtime.sendMessage({
+        type: "UPDATE_FOCUS_MODE",
+        enabled: false,
+        redirectRules: s.focusMode.redirectRules,
+      });
+    }
+  }, [deepWorkActive, filteredTabs, activeWorkspace, activeWorkspaceId]);
+
   // Focus Notes command
   const focusNotes = useCallback(() => {
     if (activeWorkspace?.notesCollapsed) {
@@ -1162,6 +1216,7 @@ export default function App() {
         onSaveSession: handleSaveSession,
         onRestoreSession: openSessionManager,
         onFocusNotes: focusNotes,
+        onToggleDeepWork: toggleDeepWork,
       }),
     [
       workspaces,
@@ -1177,6 +1232,7 @@ export default function App() {
       handleSaveSession,
       openSessionManager,
       focusNotes,
+      toggleDeepWork,
     ]
   );
 
@@ -1642,30 +1698,57 @@ export default function App() {
           `. ${suspendedCount} suspended, ~${estimatedMBSaved} MB saved`}
       </div>
 
-      <header className="flex items-center justify-between px-4 py-3 pb-2">
+      <header className={`flex items-center justify-between px-4 py-3 pb-2${deepWorkActive ? " ring-1 ring-arc-accent/30 rounded-lg" : ""}`}>
         <h1 className="text-sm font-semibold tracking-tight text-gray-800 dark:text-arc-text-primary">
           ArcFlow
         </h1>
-        <button
-          onClick={() => setShowOrganizeTabs(true)}
-          className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-200"
-          title="Organize Tabs"
-          aria-label="Organize Tabs"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            className="w-4 h-4"
+        <div className="flex items-center gap-1">
+          <button
+            onClick={toggleDeepWork}
+            className={`flex items-center gap-1 px-2 py-1 text-xs rounded-lg transition-colors duration-200 ${
+              deepWorkActive
+                ? "bg-arc-accent/15 text-arc-accent dark:text-arc-accent-hover"
+                : "hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary"
+            }`}
+            title={deepWorkActive ? "Exit Deep Work Mode (Ctrl+Shift+D)" : "Enter Deep Work Mode (Ctrl+Shift+D)"}
+            aria-label={deepWorkActive ? "Exit Deep Work Mode" : "Enter Deep Work Mode"}
+            aria-pressed={deepWorkActive}
           >
-            <path
-              fillRule="evenodd"
-              d="M2 3.75A.75.75 0 0 1 2.75 3h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 3.75Zm0 4.167a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Zm0 4.166a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Zm0 4.167a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Z"
-              clipRule="evenodd"
-            />
-          </svg>
-          Organize
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="w-4 h-4"
+            >
+              <path d="M12 2a7 7 0 0 0-7 7c0 3.5 2.5 6.5 4 8 .5.5 1 1.5 1 2.5V21h4v-1.5c0-1 .5-2 1-2.5 1.5-1.5 4-4.5 4-8a7 7 0 0 0-7-7Z" />
+              <path d="M10 21h4" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setShowOrganizeTabs(true)}
+            className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-200"
+            title="Organize Tabs"
+            aria-label="Organize Tabs"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="w-4 h-4"
+            >
+              <path
+                fillRule="evenodd"
+                d="M2 3.75A.75.75 0 0 1 2.75 3h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 3.75Zm0 4.167a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Zm0 4.166a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Zm0 4.167a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Z"
+                clipRule="evenodd"
+              />
+            </svg>
+            Organize
+          </button>
+        </div>
       </header>
 
       {/* Search bar (Zone 1) */}
