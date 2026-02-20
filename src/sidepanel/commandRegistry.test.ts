@@ -18,6 +18,7 @@ const defaultHandlers = {
   onFocusNotes: noop,
   onToggleDeepWork: noop,
   onRestoreYesterdayTabs: noop,
+  onExportWorkspace: noop,
 };
 
 describe("buildCommands", () => {

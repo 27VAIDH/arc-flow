@@ -298,6 +298,31 @@ export default function WorkspaceSwitcher({
     setShowPanelColorPicker(null);
   }, [activeWorkspaceId]);
 
+  const handleExportWorkspace = useCallback((ws: Workspace) => {
+    const exportData = {
+      version: "2.0",
+      type: "arcflow-workspace",
+      name: ws.name,
+      emoji: ws.emoji,
+      accentColor: ws.accentColor,
+      pinnedApps: ws.pinnedApps,
+      folders: ws.folders,
+      notes: ws.notes,
+    };
+    const json = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const today = new Date().toISOString().slice(0, 10);
+    const safeName = ws.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `arcflow-workspace-${safeName}-${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, []);
+
   const handleContextMenu = useCallback(
     (e: React.MouseEvent, ws: Workspace) => {
       e.preventDefault();
@@ -339,6 +364,11 @@ export default function WorkspaceSwitcher({
         onClick: () => handleClone(ws),
       });
 
+      items.push({
+        label: "Export Workspace",
+        onClick: () => handleExportWorkspace(ws),
+      });
+
       if (onSaveSession) {
         items.push({
           label: "Save Session",
@@ -355,7 +385,7 @@ export default function WorkspaceSwitcher({
 
       onContextMenu({ x: e.clientX, y: e.clientY, items });
     },
-    [onContextMenu, handleDelete, handleClone, onSaveSession]
+    [onContextMenu, handleDelete, handleClone, handleExportWorkspace, onSaveSession]
   );
 
   return (

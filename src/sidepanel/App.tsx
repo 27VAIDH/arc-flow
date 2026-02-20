@@ -1273,6 +1273,33 @@ export default function App() {
     await chrome.storage.local.remove("pendingWorkspaceSuggestion");
   }, []);
 
+  const exportCurrentWorkspace = useCallback(() => {
+    const ws = workspaces.find((w) => w.id === activeWorkspaceId);
+    if (!ws) return;
+    const exportData = {
+      version: "2.0",
+      type: "arcflow-workspace",
+      name: ws.name,
+      emoji: ws.emoji,
+      accentColor: ws.accentColor,
+      pinnedApps: ws.pinnedApps,
+      folders: ws.folders,
+      notes: ws.notes,
+    };
+    const json = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const today = new Date().toISOString().slice(0, 10);
+    const safeName = ws.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `arcflow-workspace-${safeName}-${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [workspaces, activeWorkspaceId]);
+
   // Build command palette commands
   const commands = useMemo(
     () =>
@@ -1292,6 +1319,7 @@ export default function App() {
         onFocusNotes: focusNotes,
         onToggleDeepWork: toggleDeepWork,
         onRestoreYesterdayTabs: restoreYesterdayTabs,
+        onExportWorkspace: exportCurrentWorkspace,
       }),
     [
       workspaces,
@@ -1309,6 +1337,7 @@ export default function App() {
       focusNotes,
       toggleDeepWork,
       restoreYesterdayTabs,
+      exportCurrentWorkspace,
     ]
   );
 
