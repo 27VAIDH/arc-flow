@@ -78,6 +78,11 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - File download in sidepanel: `URL.createObjectURL(blob)` + temporary `<a>` element + click + `URL.revokeObjectURL(url)`
 - File upload from command palette: programmatic `document.createElement("input")` with type=file + `.click()` — works in sidepanel context
 - Workspace import validates `{version: "2.0", type: "arcflow-workspace"}` and remaps all IDs (folders, items, pinnedApps) to fresh UUIDs
+- `Snippet` type in `shared/types.ts` has `id, text, annotation, sourceUrl, sourceTitle, savedAt` fields
+- Snippets stored per workspace: `snippets_[workspaceId]` key in chrome.storage.local, array of `Snippet[]`
+- Max 50 snippets per workspace (FIFO) — oldest removed when exceeded
+- `ARCFLOW_CAPTURE_SNIPPET` message type in content script reuses `createOverlayPopup` — Cancel dismisses without saving (unlike notes where Skip saves without annotation)
+- `snippet-saved` message type notifies sidepanel to show toast
 
 ---
 
@@ -1085,4 +1090,42 @@ There are still 3 stories with `passes: false` (US-028, US-029, US-030), so more
   - `ImportWorkspaceSection` is self-contained in SettingsPanel (reads/writes storage directly, no props needed)
   - Folder ID remapping is critical for import — old IDs must map to new UUIDs, and parentId references must also be updated
   - Import duplicates the workspace creation + update pattern: `createWorkspace(name)` then `updateWorkspace(id, data)` to apply all imported fields
+---
+
+## Iteration 28 - Fri Feb 20 13:26:34 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-28.log
+---
+**US-028 is complete.** Committed as `68fbf21` (code) + `e71990d` (PRD/progress).
+
+**US-028 Summary:**
+- Added `ImportWorkspaceSection` component to `SettingsPanel.tsx` with file input accepting `.json`
+- Validates JSON structure: `version === "2.0"`, `type === "arcflow-workspace"`, required `name` field
+- If workspace name already exists, appends " (imported)" to avoid collision
+- Creates new workspace with imported pinnedApps, folders (with items), and notes — all IDs remapped to fresh UUIDs
+- Success toast: "Workspace [emoji] [name] imported with X pinned apps and Y folders"
+- Invalid file shows error toast: "Invalid workspace file"
+- User switched to newly imported workspace after import
+- Command palette entry: "Import workspace" (triggers file picker)
+- All 8 tests pass, typecheck passes
+- Files changed: `src/sidepanel/SettingsPanel.tsx`, `src/sidepanel/App.tsx`, `src/sidepanel/commandRegistry.ts`, `src/sidepanel/commandRegistry.test.ts`
+
+There are still 2 stories with `passes: false` (US-029, US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-029
+- Added contextual snippets storage and content script for saving text snippets from any webpage
+- Added `Snippet` type to `shared/types.ts` with id, text, annotation, sourceUrl, sourceTitle, savedAt fields
+- Added `SAVE_SNIPPET_MENU_ID` context menu item "Save Snippet to ArcFlow" with `contexts: ['selection']` in service worker
+- Added `handleSaveSnippet()` in service worker: sends `ARCFLOW_CAPTURE_SNIPPET` message to content script for annotation popup, saves to `snippets_[workspaceId]` storage key
+- Content script handles `ARCFLOW_CAPTURE_SNIPPET` by reusing existing `createOverlayPopup` — Cancel dismisses without saving, Save stores with annotation
+- Snippets stored as `Snippet[]` in chrome.storage.local under `snippets_[activeWorkspaceId]`
+- Max 50 entries per workspace; on exceed, oldest removed and warning logged
+- Enter key in annotation field triggers save, Escape closes popup without saving
+- Added `snippet-saved` message type to `ServiceWorkerMessage` union — sidepanel shows toast on receipt
+- Files changed: `src/shared/types.ts`, `src/background/service-worker.ts`, `src/content/capture.ts`, `src/sidepanel/App.tsx`
+- **Learnings for future iterations:**
+  - Snippet storage is per-workspace using dynamic key `snippets_[wsId]` — SnippetsSection (US-030) reads from this key
+  - Content script `createOverlayPopup` is reusable for different capture flows — just handle Save/Cancel differently per message type
+  - `chrome.storage.local.get()` returns `Record<string, any>` — cast result explicitly (e.g., `as Snippet[] | undefined`) to satisfy TypeScript
 ---
