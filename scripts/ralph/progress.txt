@@ -32,6 +32,7 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - Service worker maintains `tabInfoCache` (Map<number, {url, title, favIconUrl}>) for recently closed tab tracking — populated on init and updated on create/update events
 - `recentlyClosed` storage key holds `RecentlyClosedTab[]` (max 20, FIFO) — each entry has url, title, favicon, workspaceId, closedAt
 - `trackRecentlyClosed(tabId)` must be called BEFORE `removeTabFromMap` in onRemoved to capture the workspace ID
+- `RecentlyClosedSection` component reads from `recentlyClosed` storage key, listens for storage changes, and is placed between Archive and Quick Notes in App.tsx
 
 ---
 
@@ -355,4 +356,38 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - `tabInfoCache` is in-memory only, so it's lost on service worker restart; `initialize()` repopulates it from current tabs
   - Auto-archive detection uses a 2-second window: if the same URL was archived within 2s, the closure was likely from auto-archive
   - `trackRecentlyClosed` must run before `removeTabFromMap` to read the workspace mapping while it still exists
+---
+
+## Iteration 10 - Fri Feb 20 12:28:57 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-10.log
+---
+**US-010 is complete.** Committed as `25ab3c0`. There are still 20 stories with `passes: false` (US-011 through US-030), so more iterations are needed.
+
+**US-010 Summary:**
+- Added `RecentlyClosedTab` type to `shared/types.ts` with `url`, `title`, `favicon`, `workspaceId`, `closedAt` fields
+- Added in-memory `tabInfoCache` (Map) in the service worker to cache tab info since `chrome.tabs.get()` doesn't work after removal
+- Cache populated on `initialize()`, updated on `onCreated` and `onUpdated`, cleaned up on `onRemoved`
+- `trackRecentlyClosed(tabId)`: captures tab info from cache, skips ignored URLs (chrome://, extension://), skips auto-archived tabs (same URL archived within 2 seconds), stores in `recentlyClosed` storage key
+- Array capped at 20 entries (FIFO), newest first
+- Called before `removeTabFromMap` in `onRemoved` to capture workspace ID while it still exists
+- Typecheck passes, lint passes
+- Files changed: `src/background/service-worker.ts`, `src/shared/types.ts`
+---
+
+## 2026-02-20 - US-011
+- Created `RecentlyClosedSection.tsx` component following collapsible section pattern (like ArchiveSection)
+- Section placed between Archive and Quick Notes in App.tsx
+- Section header: 'Recently closed' with count badge and collapse toggle
+- Each entry shows: favicon (16px), title (truncated 40 chars), workspace emoji, relative time
+- Clicking entry: opens URL in new tab, assigns to original workspaceId via MOVE_TAB_TO_WORKSPACE message, removes from list
+- 'Clear all' button empties the list with no confirmation
+- Section hidden entirely when recentlyClosed array is empty
+- Reads from `recentlyClosed` storage key, listens for chrome.storage.onChanged for live updates
+- Files changed: `src/sidepanel/RecentlyClosedSection.tsx` (new), `src/sidepanel/App.tsx`
+- **Learnings for future iterations:**
+  - `RecentlyClosedSection` receives `workspaces` prop to resolve workspace emoji from workspaceId
+  - The component uses the same `formatTimeSince` helper pattern as ArchiveSection (local function)
+  - `chrome.tabs.query({ url })` can find recently opened tabs to assign workspace after reopening
+  - Entries are keyed by `${url}-${closedAt}` to ensure uniqueness
 ---

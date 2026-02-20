@@ -45,6 +45,7 @@ import Onboarding from "./Onboarding";
 import { isOnboardingCompleted } from "../shared/onboardingStorage";
 import { createSessionFromState } from "../shared/sessionStorage";
 import { updateWorkspace } from "../shared/workspaceStorage";
+import RecentlyClosedSection from "./RecentlyClosedSection";
 import QuickNotes from "./QuickNotes";
 import TabPreviewCard from "./TabPreviewCard";
 import type { TabPreviewInfo } from "./TabPreviewCard";
@@ -1840,6 +1841,9 @@ export default function App() {
 
         {/* Archive Section (Zone 4) */}
         <ArchiveSection />
+
+        {/* Recently Closed Section */}
+        <RecentlyClosedSection workspaces={workspaces} />
       </main>
 
       {/* Quick Notes */}
