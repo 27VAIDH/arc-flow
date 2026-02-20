@@ -50,6 +50,9 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - `briefingDismissedDate` stores YYYY-MM-DD string in chrome.storage.local — used by MorningBriefing to show once per day
 - `tabSessionCounters` in chrome.storage.local tracks `{opened: number, closed: number}` since last sidebar hide — reset on visibilitychange hidden
 - `lastSessionTimestamp` stored in chrome.storage.local on sidebar visibilitychange (hidden) — marks session boundaries
+- QuickNotes has `MAX_CHARS = 5000` (increased from 2000) and Edit/Preview toggle — preview uses simple regex-based markdown renderer (no library)
+- `renderMarkdown()` in QuickNotes.tsx supports: **bold**, *italic*, # headers, - bullet lists, - [ ] checklists, [links](url)
+- Checklist toggle in preview mode works via `data-check-line` attribute on checkbox inputs + click handler on container div
 
 ---
 
@@ -664,4 +667,39 @@ There are still 13 stories with `passes: false` (US-018 through US-030), so more
   - OpenRouter API calls in sidepanel components follow same pattern: fetch + AbortController timeout + try/catch silencing errors
   - `analytics.daily[YYYY-MM-DD]` structure has `opened`, `closed`, `domains`, `workspaceMinutes` fields (may be undefined if US-022 analytics collection not yet implemented)
   - The AI tip gracefully handles missing analytics data — builds summary from whatever is available (tabs, workspaces, focus stats)
+---
+
+## Iteration 18 - Fri Feb 20 12:50:21 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-18.log
+---
+**US-018 is complete.** Committed as `55ee765`.
+
+**US-018 Summary:**
+- Added AI-generated productivity tip to the Morning Briefing card in `MorningBriefing.tsx`
+- If `openRouterApiKey` is configured, sends yesterday's browsing summary (top domains, tab counts, workspace names, focus time) to OpenRouter with prompt asking for one short tip under 20 words
+- Tip displayed as italicized text at the bottom of the briefing card
+- 5-second timeout via AbortController; on timeout or error, tip section simply hidden
+- If no API key configured, no API call made and no tip shown
+- Typecheck passes, lint passes
+
+There are still 12 stories with `passes: false` (US-019 through US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-019
+- Added Edit/Preview toggle to QuickNotes.tsx with markdown rendering support
+- Edit mode: existing textarea behavior with raw markdown
+- Preview mode: renders markdown as styled HTML using simple regex-based renderer (no external library)
+- Supported syntax: **bold** → `<strong>`, *italic* → `<em>`, # headers → `<h1>`/`<h2>`/`<h3>`, - bullet lists → `<ul><li>`, - [ ] checklists → clickable checkboxes, [text](url) → `<a>` links
+- Checklist items clickable in preview: clicking toggles `- [ ]` ↔ `- [x]` in underlying text via `data-check-line` attribute
+- Character limit increased from 2000 to 5000; counter threshold updated to 4000
+- Character counter shows `X / 5,000` format with locale formatting
+- Preview state resets to Edit when switching workspaces (tracked via state with wsId to avoid lint errors)
+- HTML is escaped before inline formatting to prevent XSS via `escapeHtml()` helper
+- Files changed: `src/sidepanel/QuickNotes.tsx`
+- **Learnings for future iterations:**
+  - React 19 strict lint rules disallow `setState` in effects and ref access during render — use state-based tracking (wsId in state) instead
+  - `dangerouslySetInnerHTML` is used for preview — all user content goes through `escapeHtml()` before markdown processing
+  - The `formatRelativeTime` export warning is pre-existing and can be ignored
+  - Markdown renderer is intentionally simple — covers 90% of use cases without a heavy library
 ---
