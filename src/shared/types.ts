@@ -87,7 +87,8 @@ export type ServiceWorkerMessage =
       existingTabId: number;
       existingWorkspaceId: string;
       existingWorkspaceName: string;
-    };
+    }
+  | { type: "notes-saved-from-page"; workspaceName: string };
 
 // Messages sent from side panel to service worker
 export type SidePanelMessage =

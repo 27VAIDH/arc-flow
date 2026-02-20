@@ -870,6 +870,10 @@ export default function App() {
           existingWorkspaceId: message.existingWorkspaceId,
           existingWorkspaceName: message.existingWorkspaceName,
         });
+      } else if (message.type === "notes-saved-from-page") {
+        setToast(`Saved to ${message.workspaceName} notes`);
+        // Reload workspaces to reflect updated notes
+        getWorkspaces().then(setWorkspaces);
       }
     };
 

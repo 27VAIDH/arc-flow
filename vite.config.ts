@@ -33,6 +33,10 @@ export default defineConfig({
           __dirname,
           "src/background/service-worker.ts"
         ),
+        "content-capture": resolve(
+          __dirname,
+          "src/content/capture.ts"
+        ),
       },
       output: {
         entryFileNames: "[name].js",

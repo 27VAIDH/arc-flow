@@ -53,6 +53,12 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - QuickNotes has `MAX_CHARS = 5000` (increased from 2000) and Edit/Preview toggle — preview uses simple regex-based markdown renderer (no library)
 - `renderMarkdown()` in QuickNotes.tsx supports: **bold**, *italic*, # headers, - bullet lists, - [ ] checklists, [links](url)
 - Checklist toggle in preview mode works via `data-check-line` attribute on checkbox inputs + click handler on container div
+- Content script (`src/content/capture.ts`) is a separate build entry in vite.config.ts — outputs as `content-capture.js`
+- Context menu items for selection (`contexts: ['selection']`) are registered in service worker `onInstalled` — menu ID: `SAVE_TO_NOTES_MENU_ID`
+- `handleSaveToNotes()` in service worker sends message to content script, gets annotation back, appends to workspace notes via `updateWorkspace()`
+- Note entry format: `\n\n> [text]\n— [title](url)\n📝 [annotation]` — annotation line omitted if empty
+- `notes-saved-from-page` message type notifies sidepanel to show toast and refresh workspaces
+- Content script overlay popup uses inline styles (no CSS file needed) with z-index 99999
 
 ---
 
@@ -702,4 +708,45 @@ There are still 12 stories with `passes: false` (US-019 through US-030), so more
   - `dangerouslySetInnerHTML` is used for preview — all user content goes through `escapeHtml()` before markdown processing
   - The `formatRelativeTime` export warning is pre-existing and can be ignored
   - Markdown renderer is intentionally simple — covers 90% of use cases without a heavy library
+---
+
+## Iteration 19 - Fri Feb 20 12:53:49 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-19.log
+---
+**US-019 is complete.** Committed as `fd5105f`.
+
+**US-019 Summary:**
+- Added Edit/Preview toggle to `QuickNotes.tsx` with markdown rendering
+- Edit mode: existing textarea with raw markdown
+- Preview mode: renders markdown as styled HTML using a simple regex-based renderer (no external library)
+- Supported syntax: `**bold**`, `*italic*`, `#` headers, `- ` bullet lists, `- [ ]`/`- [x]` checklists (clickable), `[text](url)` links
+- Checklist items clickable in preview: clicking toggles `- [ ]` ↔ `- [x]` in underlying text
+- Character limit increased from 2000 to 5000; counter threshold updated to 4000
+- Existing plain text notes render correctly (plain text is valid markdown)
+- HTML escaped before processing to prevent XSS
+- Typecheck passes, lint passes (only pre-existing warning)
+- File changed: `src/sidepanel/QuickNotes.tsx`
+
+There are still 11 stories with `passes: false` (US-020 through US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-020
+- Added content script for capturing selected text from any page and saving to ArcFlow workspace notes
+- Created `src/content/capture.ts` content script with overlay popup for optional annotation
+- Added `content_scripts` entry to `manifest.json` matching `<all_urls>`
+- Added `content-capture` build entry to `vite.config.ts`
+- Registered context menu item `Save to ArcFlow Notes` with `contexts: ['selection']` in service worker
+- Added `handleSaveToNotes()` in service worker: sends message to content script for annotation popup, appends to workspace notes via `updateWorkspace()`
+- Note format: `\n\n> [text]\n— [title](url)\n📝 [annotation]` (annotation line omitted if empty)
+- If notes would exceed 5000 chars, content script shows alert: "Notes full"
+- Added `notes-saved-from-page` message type to `ServiceWorkerMessage` union
+- App.tsx handles `notes-saved-from-page` to show toast and refresh workspaces
+- Files changed: `public/manifest.json`, `vite.config.ts`, `src/content/capture.ts` (new), `src/background/service-worker.ts`, `src/shared/types.ts`, `src/sidepanel/App.tsx`
+- **Learnings for future iterations:**
+  - Content scripts are separate build entries in vite — must add to `rollupOptions.input` in vite.config.ts
+  - Content scripts communicate with service worker via `chrome.runtime.onMessage` / `chrome.tabs.sendMessage`
+  - `chrome.tabs.sendMessage(tabId, msg)` sends to the content script in a specific tab; `chrome.runtime.sendMessage(msg)` sends to the service worker
+  - Content script overlay popup uses inline styles (no CSS framework available in content scripts)
+  - `info.selectionText` in context menu click handler provides the selected text directly
 ---

@@ -17,12 +17,14 @@ import {
   setActiveWorkspace,
   assignTabToWorkspace,
   removeTabFromMap,
+  updateWorkspace,
 } from "../shared/workspaceStorage";
 import { getSettings } from "../shared/settingsStorage";
 import { addArchiveEntry, getArchiveEntries } from "../shared/archiveStorage";
 import { matchRoute } from "../shared/routingEngine";
 
 const CONTEXT_MENU_ID = "arcflow-pin-toggle";
+const SAVE_TO_NOTES_MENU_ID = "arcflow-save-to-notes";
 
 // Register side panel on install
 chrome.runtime.onInstalled.addListener(() => {
@@ -36,6 +38,13 @@ chrome.runtime.onInstalled.addListener(() => {
     id: CONTEXT_MENU_ID,
     title: "Pin to ArcFlow",
     contexts: ["page"],
+  });
+
+  // Create context menu for saving selected text to notes
+  chrome.contextMenus.create({
+    id: SAVE_TO_NOTES_MENU_ID,
+    title: "Save to ArcFlow Notes",
+    contexts: ["selection"],
   });
 
   // Register auto-archive alarm (every 5 minutes)
@@ -198,32 +207,108 @@ async function updateContextMenuTitle(tabId: number): Promise<void> {
   }
 }
 
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId !== CONTEXT_MENU_ID || !tab?.id) return;
+const MAX_NOTES_CHARS = 5000;
 
-  const tabUrl = tab.url ?? info.pageUrl ?? "";
-  const tabOrigin = getOrigin(tabUrl);
-  if (!tabOrigin) return;
+/**
+ * Handle "Save to ArcFlow Notes" context menu action.
+ * Sends message to content script for optional annotation, then appends to workspace notes.
+ */
+async function handleSaveToNotes(
+  tabId: number,
+  selectedText: string,
+  pageTitle: string,
+  pageUrl: string
+): Promise<void> {
+  // Get the active workspace for this tab
+  const tabMap = await getTabWorkspaceMap();
+  const wsId = tabMap[String(tabId)] ?? "default";
+  const workspaces = await getWorkspaces();
+  const ws = workspaces.find((w) => w.id === wsId);
+  const wsName = ws ? `${ws.emoji} ${ws.name}` : "Default";
+  const currentNotes = ws?.notes ?? "";
 
-  const apps = await getPinnedApps();
-  const existing = apps.find((app) => getOrigin(app.url) === tabOrigin);
+  // Send message to content script to show annotation popup
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, {
+      type: "ARCFLOW_CAPTURE_SELECTION",
+      selectedText,
+    }) as { action: string; annotation?: string } | undefined;
 
-  if (existing) {
-    await removePinnedApp(existing.id);
-  } else {
-    await addPinnedApp({
-      id: crypto.randomUUID(),
-      url: tabUrl,
-      title: tab.title ?? tabUrl,
-      favicon: tab.favIconUrl ?? "",
-    }).catch(() => {
-      // Max pinned apps reached
+    if (!response || response.action === "cancel") return;
+
+    const annotation = response.annotation ?? "";
+
+    // Build the note entry
+    let noteEntry = `\n\n> ${selectedText}\n— [${pageTitle}](${pageUrl})`;
+    if (annotation) {
+      noteEntry += `\n📝 ${annotation}`;
+    }
+
+    // Check if appending would exceed the limit
+    const newNotes = currentNotes + noteEntry;
+    if (newNotes.length > MAX_NOTES_CHARS) {
+      // Notify content script that notes are full
+      chrome.tabs.sendMessage(tabId, { type: "ARCFLOW_NOTES_FULL" }).catch(() => {});
+      return;
+    }
+
+    // Append to workspace notes
+    await updateWorkspace(wsId, {
+      notes: newNotes,
+      notesLastEditedAt: Date.now(),
     });
+
+    // Notify sidepanel about the notes update
+    const notifyMessage: ServiceWorkerMessage = {
+      type: "notes-saved-from-page",
+      workspaceName: wsName,
+    };
+    chrome.runtime.sendMessage(notifyMessage).catch(() => {
+      // Side panel may not be open
+    });
+  } catch {
+    // Content script may not be injected (e.g., chrome:// pages)
+    console.error("Failed to save to ArcFlow Notes — content script not available");
+  }
+}
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  // --- Pin/Unpin to ArcFlow ---
+  if (info.menuItemId === CONTEXT_MENU_ID && tab?.id) {
+    const tabUrl = tab.url ?? info.pageUrl ?? "";
+    const tabOrigin = getOrigin(tabUrl);
+    if (!tabOrigin) return;
+
+    const apps = await getPinnedApps();
+    const existing = apps.find((app) => getOrigin(app.url) === tabOrigin);
+
+    if (existing) {
+      await removePinnedApp(existing.id);
+    } else {
+      await addPinnedApp({
+        id: crypto.randomUUID(),
+        url: tabUrl,
+        title: tab.title ?? tabUrl,
+        favicon: tab.favIconUrl ?? "",
+      }).catch(() => {
+        // Max pinned apps reached
+      });
+    }
+
+    // Update menu title after toggle
+    if (tab.id) {
+      await updateContextMenuTitle(tab.id);
+    }
+    return;
   }
 
-  // Update menu title after toggle
-  if (tab.id) {
-    await updateContextMenuTitle(tab.id);
+  // --- Save to ArcFlow Notes ---
+  if (info.menuItemId === SAVE_TO_NOTES_MENU_ID && tab?.id) {
+    const selectedText = info.selectionText ?? "";
+    if (!selectedText) return;
+
+    await handleSaveToNotes(tab.id, selectedText, tab.title ?? "", tab.url ?? "");
+    return;
   }
 });
 
