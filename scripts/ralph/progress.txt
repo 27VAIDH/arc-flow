@@ -40,6 +40,10 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - `deepWorkActive` boolean stored in chrome.storage.local — persists across sidebar close/reopen, synced via storage change listener
 - Deep Work Mode toggle: suspends non-active tabs, enables focusMode, expands Quick Notes; deactivation disables focusMode but does NOT unsuspend tabs
 - Header gets `ring-1 ring-arc-accent/30` when Deep Work is active
+- `PomodoroTimer.tsx` renders below header when deepWorkActive=true — uses `pomodoroState` key in chrome.storage.local
+- Pomodoro uses `chrome.alarms` (alarm name `arcflow-pomodoro`) for accuracy + setInterval for 1s display ticks
+- Pomodoro state: `{phase, sessionNumber, startedAt, pausedAt, remainingMs}` — remaining calculated from startedAt on resume
+- `chrome.notifications.create` used for phase transitions (break/work notifications)
 
 ---
 
@@ -499,4 +503,44 @@ There are still 17 stories with `passes: false` (US-014 through US-030), so more
   - The header conditionally applies `ring-1 ring-arc-accent/30 rounded-lg` classes when active
   - Deep Work activation suspends tabs at point-in-time; new tabs opened after aren't auto-suspended (Pomodoro timer in US-015 will add ongoing focus)
   - `toggleDeepWork` callback depends on `filteredTabs` and `activeWorkspace` for tab suspension and notes expansion
+---
+
+## Iteration 14 - Fri Feb 20 12:39:01 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-14.log
+---
+**US-014 is complete.** Committed as `d7eb089`.
+
+**US-014 Summary:**
+- Added brain/lightbulb icon button to sidebar header (right side, next to Organize button)
+- Button toggles `deepWorkActive` state in `chrome.storage.local`
+- When activated: `focusMode.enabled` set to `true`, all non-active tabs suspended via `SUSPEND_TAB`, Quick Notes section expanded
+- When deactivated: `focusMode.enabled` set to `false`, tabs NOT unsuspended
+- Header gets subtle accent glow (`ring-1 ring-arc-accent/30`) when Deep Work is active
+- State persists across sidebar close/reopen via storage + storage change listener
+- Command palette entry: "Toggle Deep Work Mode"
+- Typecheck passes, lint passes
+- Files changed: `src/sidepanel/App.tsx`, `src/sidepanel/commandRegistry.ts`, `src/sidepanel/commandRegistry.test.ts`
+
+There are still 16 stories with `passes: false` (US-015 through US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-015
+- Created `PomodoroTimer.tsx` component — renders below header when Deep Work is active
+- Compact single-line design: [MM:SS] [Session X/4 · Work/Break] [pause] [skip]
+- Default: 25 min work / 5 min break / 4 sessions before 15 min long break
+- Timer uses `chrome.alarms` API (`arcflow-pomodoro` alarm, periodInMinutes: 1) for accuracy
+- Remaining time calculated from `startedAt` timestamp, displayed via 1s setInterval tick
+- Pause/resume toggle: on pause stores remaining ms; on resume recalculates startedAt
+- Skip button advances to next phase immediately
+- Phase transitions trigger `chrome.notifications.create` (break time / back to work messages)
+- After session 4: long break notification, then resets to session 1
+- State persisted in chrome.storage.local under `pomodoroState` key
+- Wired into App.tsx: renders between header and search bar when `deepWorkActive === true`
+- Files changed: `src/sidepanel/PomodoroTimer.tsx` (new), `src/sidepanel/App.tsx`
+- **Learnings for future iterations:**
+  - PomodoroTimer manages its own state independently — no props needed
+  - `chrome.alarms` + `setInterval` combo: alarms for reliable minute-level ticks even when service worker sleeps, interval for smooth per-second display updates
+  - Phase completion detection happens in both the interval tick and alarm handler for reliability
+  - `chrome.notifications` may not be available in all contexts — wrapped in try/catch
 ---
