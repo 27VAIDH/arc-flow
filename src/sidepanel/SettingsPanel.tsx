@@ -5,7 +5,7 @@ import {
   updateSettings,
   resetSettings,
 } from "../shared/settingsStorage";
-import { getWorkspaces } from "../shared/workspaceStorage";
+import { getWorkspaces, createWorkspace, updateWorkspace, setActiveWorkspace } from "../shared/workspaceStorage";
 import {
   AUTO_ARCHIVE_OPTIONS,
   SUSPEND_THRESHOLD_OPTIONS,
@@ -618,6 +618,137 @@ function RoutingRulesSection({
   );
 }
 
+function ImportWorkspaceSection() {
+  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  const [message, setMessage] = useState("");
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setStatus("idle");
+    setMessage("");
+
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+
+      // Validate structure
+      if (data.version !== "2.0" || data.type !== "arcflow-workspace") {
+        setStatus("error");
+        setMessage("Invalid workspace file");
+        return;
+      }
+      if (!data.name || typeof data.name !== "string") {
+        setStatus("error");
+        setMessage("Invalid workspace file");
+        return;
+      }
+
+      // Check for name collision
+      const workspaces = await getWorkspaces();
+      let name = data.name;
+      if (workspaces.some((ws) => ws.name === name)) {
+        name = `${name} (imported)`;
+      }
+
+      // Create workspace
+      const ws = await createWorkspace(name);
+
+      // Apply imported data
+      const pinnedApps = Array.isArray(data.pinnedApps)
+        ? data.pinnedApps.map((app: { url?: string; title?: string; favicon?: string }, i: number) => ({
+            id: crypto.randomUUID(),
+            url: app.url || "",
+            title: app.title || "",
+            favicon: app.favicon || "",
+            sortOrder: i,
+          }))
+        : [];
+
+      const folderIdMap = new Map<string, string>();
+      const importedFolders = Array.isArray(data.folders) ? data.folders : [];
+      for (const folder of importedFolders) {
+        if (folder.id) folderIdMap.set(folder.id, crypto.randomUUID());
+      }
+
+      const folders = importedFolders.map((folder: { id?: string; name?: string; parentId?: string | null; items?: Array<{ url?: string; title?: string; favicon?: string; type?: string; isArchived?: boolean; lastActiveAt?: number }>; isCollapsed?: boolean; sortOrder?: number }, i: number) => ({
+        id: folderIdMap.get(folder.id || "") || crypto.randomUUID(),
+        name: folder.name || "Untitled",
+        parentId: folder.parentId ? (folderIdMap.get(folder.parentId) ?? null) : null,
+        items: Array.isArray(folder.items)
+          ? folder.items.map((item) => ({
+              id: crypto.randomUUID(),
+              type: item.type || "link",
+              tabId: null,
+              url: item.url || "",
+              title: item.title || "",
+              favicon: item.favicon || "",
+              isArchived: item.isArchived || false,
+              lastActiveAt: item.lastActiveAt || 0,
+            }))
+          : [],
+        isCollapsed: folder.isCollapsed ?? false,
+        sortOrder: folder.sortOrder ?? i,
+      }));
+
+      await updateWorkspace(ws.id, {
+        emoji: data.emoji || ws.emoji,
+        accentColor: data.accentColor || ws.accentColor,
+        pinnedApps,
+        folders,
+        notes: typeof data.notes === "string" ? data.notes : "",
+      });
+
+      // Switch to imported workspace
+      await setActiveWorkspace(ws.id);
+
+      const pinnedCount = pinnedApps.length;
+      const folderCount = folders.length;
+      setStatus("success");
+      setMessage(`Workspace ${data.emoji || ""} ${name} imported with ${pinnedCount} pinned app${pinnedCount !== 1 ? "s" : ""} and ${folderCount} folder${folderCount !== 1 ? "s" : ""}`);
+    } catch {
+      setStatus("error");
+      setMessage("Invalid workspace file");
+    }
+
+    // Reset file input so same file can be re-selected
+    e.target.value = "";
+  };
+
+  return (
+    <section>
+      <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
+        Import Workspace
+      </h3>
+      <div className="space-y-3">
+        <label className="flex items-center justify-center gap-2 text-sm text-arc-accent dark:text-arc-accent-hover hover:bg-gray-100 dark:hover:bg-arc-surface-hover rounded-lg px-3 py-2 cursor-pointer transition-colors duration-200 border border-dashed border-gray-300 dark:border-arc-border">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
+            <path d="M7.25 10.25a.75.75 0 0 0 1.5 0V4.56l2.22 2.22a.75.75 0 1 0 1.06-1.06l-3.5-3.5a.75.75 0 0 0-1.06 0l-3.5 3.5a.75.75 0 0 0 1.06 1.06l2.22-2.22v5.69Z" />
+            <path d="M3.5 9.75a.75.75 0 0 0-1.5 0v1.5A2.75 2.75 0 0 0 4.75 14h6.5A2.75 2.75 0 0 0 14 11.25v-1.5a.75.75 0 0 0-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5Z" />
+          </svg>
+          Choose .json file
+          <input
+            type="file"
+            accept=".json"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+        </label>
+        {status === "success" && (
+          <p className="text-xs text-green-600 dark:text-green-400">{message}</p>
+        )}
+        {status === "error" && (
+          <p className="text-xs text-red-500 dark:text-red-400">{message}</p>
+        )}
+        <p className="text-xs text-gray-500 dark:text-arc-text-secondary">
+          Import an ArcFlow workspace (.json) exported from another browser or device
+        </p>
+      </div>
+    </section>
+  );
+}
+
 export default function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -1020,6 +1151,9 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         {/* Analytics */}
         <AnalyticsSection workspaces={workspaces} />
+
+        {/* Import Workspace */}
+        <ImportWorkspaceSection />
 
         {/* Omnibox */}
         <section>

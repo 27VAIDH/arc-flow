@@ -1300,6 +1300,78 @@ export default function App() {
     URL.revokeObjectURL(url);
   }, [workspaces, activeWorkspaceId]);
 
+  const importWorkspace = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (data.version !== "2.0" || data.type !== "arcflow-workspace" || !data.name) {
+          setToast("Invalid workspace file");
+          return;
+        }
+        const allWs = await getWorkspaces();
+        let name = data.name;
+        if (allWs.some((ws) => ws.name === name)) {
+          name = `${name} (imported)`;
+        }
+        const ws = await createWorkspace(name);
+        const pinnedApps = Array.isArray(data.pinnedApps)
+          ? data.pinnedApps.map((app: { url?: string; title?: string; favicon?: string }, i: number) => ({
+              id: crypto.randomUUID(),
+              url: app.url || "",
+              title: app.title || "",
+              favicon: app.favicon || "",
+              sortOrder: i,
+            }))
+          : [];
+        const folderIdMap = new Map<string, string>();
+        const importedFolders = Array.isArray(data.folders) ? data.folders : [];
+        for (const folder of importedFolders) {
+          if (folder.id) folderIdMap.set(folder.id, crypto.randomUUID());
+        }
+        const folders = importedFolders.map((folder: { id?: string; name?: string; parentId?: string | null; items?: Array<{ url?: string; title?: string; favicon?: string; type?: string; isArchived?: boolean; lastActiveAt?: number }>; isCollapsed?: boolean; sortOrder?: number }, i: number) => ({
+          id: folderIdMap.get(folder.id || "") || crypto.randomUUID(),
+          name: folder.name || "Untitled",
+          parentId: folder.parentId ? (folderIdMap.get(folder.parentId) ?? null) : null,
+          items: Array.isArray(folder.items)
+            ? folder.items.map((item) => ({
+                id: crypto.randomUUID(),
+                type: item.type || "link",
+                tabId: null,
+                url: item.url || "",
+                title: item.title || "",
+                favicon: item.favicon || "",
+                isArchived: item.isArchived || false,
+                lastActiveAt: item.lastActiveAt || 0,
+              }))
+            : [],
+          isCollapsed: folder.isCollapsed ?? false,
+          sortOrder: folder.sortOrder ?? i,
+        }));
+        await updateWorkspace(ws.id, {
+          emoji: data.emoji || ws.emoji,
+          accentColor: data.accentColor || ws.accentColor,
+          pinnedApps,
+          folders,
+          notes: typeof data.notes === "string" ? data.notes : "",
+        });
+        setActiveWorkspaceId(ws.id);
+        setActiveWorkspaceStorage(ws.id);
+        const pinnedCount = pinnedApps.length;
+        const folderCount = folders.length;
+        setToast(`Workspace ${data.emoji || ""} ${name} imported with ${pinnedCount} pinned app${pinnedCount !== 1 ? "s" : ""} and ${folderCount} folder${folderCount !== 1 ? "s" : ""}`);
+      } catch {
+        setToast("Invalid workspace file");
+      }
+    };
+    input.click();
+  }, []);
+
   // Build command palette commands
   const commands = useMemo(
     () =>
@@ -1320,6 +1392,7 @@ export default function App() {
         onToggleDeepWork: toggleDeepWork,
         onRestoreYesterdayTabs: restoreYesterdayTabs,
         onExportWorkspace: exportCurrentWorkspace,
+        onImportWorkspace: importWorkspace,
       }),
     [
       workspaces,
@@ -1338,6 +1411,7 @@ export default function App() {
       toggleDeepWork,
       restoreYesterdayTabs,
       exportCurrentWorkspace,
+      importWorkspace,
     ]
   );
 

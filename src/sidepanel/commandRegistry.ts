@@ -18,6 +18,7 @@ export function buildCommands({
   onToggleDeepWork,
   onRestoreYesterdayTabs,
   onExportWorkspace,
+  onImportWorkspace,
 }: {
   workspaces: Workspace[];
   onSwitchWorkspace: (workspaceId: string) => void;
@@ -35,6 +36,7 @@ export function buildCommands({
   onToggleDeepWork: () => void;
   onRestoreYesterdayTabs: () => void;
   onExportWorkspace: () => void;
+  onImportWorkspace: () => void;
 }): Command[] {
   const commands: Command[] = [];
 
@@ -144,6 +146,13 @@ export function buildCommands({
     name: "Export current workspace",
     icon: "save",
     action: onExportWorkspace,
+  });
+
+  commands.push({
+    id: "import-workspace",
+    name: "Import workspace",
+    icon: "restore",
+    action: onImportWorkspace,
   });
 
   return commands;

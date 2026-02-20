@@ -19,6 +19,7 @@ const defaultHandlers = {
   onToggleDeepWork: noop,
   onRestoreYesterdayTabs: noop,
   onExportWorkspace: noop,
+  onImportWorkspace: noop,
 };
 
 describe("buildCommands", () => {
