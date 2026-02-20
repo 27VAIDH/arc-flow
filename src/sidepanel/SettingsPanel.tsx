@@ -216,6 +216,270 @@ function SortableRoutingRuleRow({
   );
 }
 
+interface AnalyticsDailyEntry {
+  opened: number;
+  closed: number;
+  domains: Record<string, number>;
+  workspaceMinutes: Record<string, number>;
+}
+
+interface AnalyticsData {
+  daily: Record<string, AnalyticsDailyEntry>;
+}
+
+type FocusStatsData = Record<string, { totalMinutes: number; sessions: number }>;
+
+function getDateKey(daysAgo: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function getDayLabel(daysAgo: number): string {
+  if (daysAgo === 0) return "Today";
+  if (daysAgo === 1) return "Yesterday";
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return d.toLocaleDateString("en-US", { weekday: "short" });
+}
+
+function AnalyticsSection({ workspaces }: { workspaces: Workspace[] }) {
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [focusStats, setFocusStats] = useState<FocusStatsData>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    chrome.storage.local.get(["analytics", "focusStats"], (result) => {
+      setAnalytics((result.analytics as AnalyticsData) ?? { daily: {} });
+      setFocusStats((result.focusStats as FocusStatsData) ?? {});
+      setLoading(false);
+    });
+
+    const handleChange = (changes: { [key: string]: chrome.storage.StorageChange }, area: string) => {
+      if (area !== "local") return;
+      if (changes.analytics) {
+        setAnalytics((changes.analytics.newValue as AnalyticsData) ?? { daily: {} });
+      }
+      if (changes.focusStats) {
+        setFocusStats((changes.focusStats.newValue as FocusStatsData) ?? {});
+      }
+    };
+    chrome.storage.onChanged.addListener(handleChange);
+    return () => chrome.storage.onChanged.removeListener(handleChange);
+  }, []);
+
+  const handleClear = () => {
+    if (window.confirm("Are you sure? This cannot be undone.")) {
+      chrome.storage.local.remove(["analytics", "focusStats"]);
+      setAnalytics({ daily: {} });
+      setFocusStats({});
+    }
+  };
+
+  if (loading) return null;
+
+  const daily = analytics?.daily ?? {};
+  const hasData = Object.keys(daily).length > 0 || Object.keys(focusStats).length > 0;
+
+  if (!hasData) {
+    return (
+      <section>
+        <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
+          Analytics
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-arc-text-secondary">No data yet</p>
+      </section>
+    );
+  }
+
+  // 7-day tabs data
+  const last7 = Array.from({ length: 7 }, (_, i) => {
+    const key = getDateKey(6 - i);
+    const entry = daily[key];
+    return {
+      label: getDayLabel(6 - i),
+      opened: entry?.opened ?? 0,
+      closed: entry?.closed ?? 0,
+    };
+  });
+  const maxTabs = Math.max(1, ...last7.map((d) => Math.max(d.opened, d.closed)));
+
+  // Workspace time (aggregate all days)
+  const wsTimeMap: Record<string, number> = {};
+  for (const entry of Object.values(daily)) {
+    for (const [wsId, mins] of Object.entries(entry.workspaceMinutes)) {
+      wsTimeMap[wsId] = (wsTimeMap[wsId] ?? 0) + mins;
+    }
+  }
+  const wsTimeEntries = Object.entries(wsTimeMap)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 10);
+  const maxWsTime = Math.max(1, ...wsTimeEntries.map(([, m]) => m));
+
+  // Top 5 domains (aggregate all days)
+  const domainMap: Record<string, number> = {};
+  for (const entry of Object.values(daily)) {
+    for (const [domain, count] of Object.entries(entry.domains)) {
+      domainMap[domain] = (domainMap[domain] ?? 0) + count;
+    }
+  }
+  const topDomains = Object.entries(domainMap)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5);
+
+  // Memory saved estimate: each suspended tab saves ~50MB
+  let totalSuspended = 0;
+  for (const entry of Object.values(daily)) {
+    totalSuspended += entry.closed;
+  }
+  const memorySavedMB = Math.round(totalSuspended * 50);
+
+  // Focus time 7-day chart
+  const focusLast7 = Array.from({ length: 7 }, (_, i) => {
+    const key = getDateKey(6 - i);
+    return {
+      label: getDayLabel(6 - i),
+      minutes: focusStats[key]?.totalMinutes ?? 0,
+    };
+  });
+  const maxFocus = Math.max(1, ...focusLast7.map((d) => d.minutes));
+
+  const formatWsTime = (mins: number) => {
+    const h = Math.floor(mins / 60);
+    const m = Math.round(mins % 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  };
+
+  const getWsLabel = (wsId: string) => {
+    const ws = workspaces.find((w) => w.id === wsId);
+    return ws ? `${ws.emoji} ${ws.name}` : wsId.slice(0, 8);
+  };
+
+  return (
+    <section>
+      <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
+        Analytics
+      </h3>
+      <div className="space-y-5">
+        {/* Tabs opened/closed chart */}
+        <div>
+          <p className="text-xs text-gray-500 dark:text-arc-text-secondary mb-2">Tabs opened / closed (7 days)</p>
+          <div className="flex items-end gap-1 h-20">
+            {last7.map((day, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                <div className="flex gap-px items-end w-full h-14">
+                  <div
+                    className="flex-1 rounded-t-sm bg-arc-accent/80"
+                    style={{ height: `${(day.opened / maxTabs) * 100}%`, minHeight: day.opened > 0 ? 2 : 0 }}
+                    title={`Opened: ${day.opened}`}
+                  />
+                  <div
+                    className="flex-1 rounded-t-sm bg-gray-400/50 dark:bg-gray-600/50"
+                    style={{ height: `${(day.closed / maxTabs) * 100}%`, minHeight: day.closed > 0 ? 2 : 0 }}
+                    title={`Closed: ${day.closed}`}
+                  />
+                </div>
+                <span className="text-[9px] text-gray-400 dark:text-arc-text-secondary">{day.label}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 mt-1">
+            <span className="flex items-center gap-1 text-[9px] text-gray-400">
+              <span className="w-2 h-2 rounded-sm bg-arc-accent/80" /> Opened
+            </span>
+            <span className="flex items-center gap-1 text-[9px] text-gray-400">
+              <span className="w-2 h-2 rounded-sm bg-gray-400/50 dark:bg-gray-600/50" /> Closed
+            </span>
+          </div>
+        </div>
+
+        {/* Workspace time */}
+        {wsTimeEntries.length > 0 && (
+          <div>
+            <p className="text-xs text-gray-500 dark:text-arc-text-secondary mb-2">Time per workspace</p>
+            <div className="space-y-1.5">
+              {wsTimeEntries.map(([wsId, mins]) => (
+                <div key={wsId} className="flex items-center gap-2">
+                  <span className="text-xs text-gray-600 dark:text-arc-text-primary truncate w-24 shrink-0">
+                    {getWsLabel(wsId)}
+                  </span>
+                  <div className="flex-1 h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-arc-accent/70"
+                      style={{ width: `${(mins / maxWsTime) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-gray-400 dark:text-arc-text-secondary shrink-0 w-12 text-right">
+                    {formatWsTime(mins)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Top domains */}
+        {topDomains.length > 0 && (
+          <div>
+            <p className="text-xs text-gray-500 dark:text-arc-text-secondary mb-2">Top domains</p>
+            <div className="space-y-1">
+              {topDomains.map(([domain, count], i) => (
+                <div key={domain} className="flex items-center justify-between">
+                  <span className="text-xs text-gray-600 dark:text-arc-text-primary truncate">
+                    <span className="text-gray-400 dark:text-arc-text-secondary mr-1">{i + 1}.</span>
+                    {domain}
+                  </span>
+                  <span className="text-[10px] text-gray-400 dark:text-arc-text-secondary shrink-0 ml-2">
+                    {count.toLocaleString()} visits
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Memory saved */}
+        <div>
+          <p className="text-xs text-gray-500 dark:text-arc-text-secondary mb-1">Estimated memory saved</p>
+          <p className="text-sm font-medium text-gray-700 dark:text-arc-text-primary">
+            ~{memorySavedMB >= 1000 ? `${(memorySavedMB / 1000).toFixed(1)} GB` : `${memorySavedMB} MB`}
+          </p>
+          <p className="text-[10px] text-gray-400 dark:text-arc-text-secondary">from {totalSuspended.toLocaleString()} closed/suspended tabs (~50 MB each)</p>
+        </div>
+
+        {/* Focus time chart */}
+        {focusLast7.some((d) => d.minutes > 0) && (
+          <div>
+            <p className="text-xs text-gray-500 dark:text-arc-text-secondary mb-2">Deep Work focus time (7 days)</p>
+            <div className="flex items-end gap-1 h-20">
+              {focusLast7.map((day, i) => (
+                <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                  <div className="flex items-end w-full h-14 justify-center">
+                    <div
+                      className="w-full rounded-t-sm bg-green-500/70"
+                      style={{ height: `${(day.minutes / maxFocus) * 100}%`, minHeight: day.minutes > 0 ? 2 : 0 }}
+                      title={`${day.minutes} min`}
+                    />
+                  </div>
+                  <span className="text-[9px] text-gray-400 dark:text-arc-text-secondary">{day.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Clear analytics */}
+        <button
+          onClick={handleClear}
+          className="w-full text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg px-3 py-2 text-center transition-colors duration-200"
+        >
+          Clear Analytics
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function RoutingRulesSection({
   settings,
   workspaces,
@@ -753,6 +1017,9 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
           workspaces={workspaces}
           onUpdate={handleUpdate}
         />
+
+        {/* Analytics */}
+        <AnalyticsSection workspaces={workspaces} />
 
         {/* Omnibox */}
         <section>
