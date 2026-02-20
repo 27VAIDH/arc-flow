@@ -142,6 +142,7 @@ interface VirtualTabRowProps {
   onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
   tabNameOverrides: Record<number, string>;
   onTabRename: (tabId: number, newName: string) => void;
+  tabEnergyScores: Record<string, number>;
 }
 
 function VirtualTabRow({
@@ -151,6 +152,7 @@ function VirtualTabRow({
   onContextMenu,
   tabNameOverrides,
   onTabRename,
+  tabEnergyScores,
 }: {
   index: number;
   style: CSSProperties;
@@ -159,6 +161,7 @@ function VirtualTabRow({
   onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
   tabNameOverrides: Record<number, string>;
   onTabRename: (tabId: number, newName: string) => void;
+  tabEnergyScores: Record<string, number>;
 }) {
   const tab = tabs[index];
   if (!tab) return null;
@@ -170,6 +173,7 @@ function VirtualTabRow({
       style={style}
       displayName={tabNameOverrides[tab.id]}
       onTabRename={onTabRename}
+      energyScore={tabEnergyScores[String(tab.id)]}
     />
   );
 }
@@ -182,6 +186,7 @@ const DraggableTabItem = memo(function DraggableTabItem({
   onMouseLeave,
   displayName,
   onTabRename,
+  energyScore,
 }: {
   tab: TabInfo;
   onContextMenu: (e: React.MouseEvent, tab: TabInfo) => void;
@@ -190,6 +195,7 @@ const DraggableTabItem = memo(function DraggableTabItem({
   onMouseLeave?: () => void;
   displayName?: string;
   onTabRename?: (tabId: number, newName: string) => void;
+  energyScore?: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: `tab:${tab.id}` });
@@ -311,6 +317,25 @@ const DraggableTabItem = memo(function DraggableTabItem({
         <span className="w-1 h-1 rounded-full bg-arc-accent shrink-0" />
       ) : (
         <span className="w-1 h-1 shrink-0" />
+      )}
+      {/* Energy score dot */}
+      {energyScore != null && (
+        <span
+          className={`w-2 h-2 rounded-full shrink-0 ${
+            energyScore >= 70
+              ? "bg-green-400"
+              : energyScore >= 40
+                ? "bg-yellow-400"
+                : "bg-red-400"
+          }`}
+          title={`Energy: ${energyScore} — ${
+            energyScore >= 70
+              ? "Active, frequently visited"
+              : energyScore >= 40
+                ? "Moderate activity"
+                : "Inactive, consider closing"
+          }`}
+        />
       )}
       {tab.favIconUrl ? (
         <LazyFavicon src={tab.favIconUrl} alt="" />
@@ -595,6 +620,7 @@ export default function App() {
   const [swipeBounce, setSwipeBounce] = useState<"left" | "right" | null>(null);
   const [workspaceSuggestion, setWorkspaceSuggestion] = useState<WorkspaceSuggestion | null>(null);
   const [deepWorkActive, setDeepWorkActive] = useState(false);
+  const [tabEnergyScores, setTabEnergyScores] = useState<Record<string, number>>({});
 
   // Sorted workspaces for swipe navigation
   const sortedWorkspaces = useMemo(
@@ -669,6 +695,15 @@ export default function App() {
     chrome.storage.local.get("deepWorkActive", (result) => {
       if (result.deepWorkActive) {
         setDeepWorkActive(true);
+      }
+    });
+  }, []);
+
+  // Load tab energy scores from storage on mount
+  useEffect(() => {
+    chrome.storage.local.get("tabEnergyScores", (result) => {
+      if (result.tabEnergyScores) {
+        setTabEnergyScores(result.tabEnergyScores as Record<string, number>);
       }
     });
   }, []);
@@ -760,6 +795,11 @@ export default function App() {
         }
         if (changes.deepWorkActive) {
           setDeepWorkActive(!!changes.deepWorkActive.newValue);
+        }
+        if (changes.tabEnergyScores) {
+          setTabEnergyScores(
+            (changes.tabEnergyScores.newValue as Record<string, number>) ?? {}
+          );
         }
       }
     };
@@ -1991,6 +2031,7 @@ export default function App() {
                     onContextMenu: handleTabContextMenu,
                     tabNameOverrides,
                     onTabRename: handleTabRename,
+                    tabEnergyScores,
                   }}
                   overscanCount={5}
                 />
@@ -2009,6 +2050,7 @@ export default function App() {
                       onMouseLeave={handleTabHoverEnd}
                       displayName={tabNameOverrides[tab.id]}
                       onTabRename={handleTabRename}
+                      energyScore={tabEnergyScores[String(tab.id)]}
                     />
                   ))}
                 </ul>
@@ -2055,6 +2097,8 @@ export default function App() {
           onContextMenu={setContextMenu}
           onSaveSession={handleSaveSession}
           onOpenSettings={openSettings}
+          tabEnergyScores={tabEnergyScores}
+          tabWorkspaceMap={tabWorkspaceMap}
         />
       </footer>
 
