@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Workspace, TabInfo } from "../shared/types";
+import { getSettings } from "../shared/settingsStorage";
 
 interface FocusStatsDay {
   totalMinutes: number;
@@ -42,6 +43,7 @@ export default function MorningBriefing({
   const [visible, setVisible] = useState(false);
   const [yesterdayFocus, setYesterdayFocus] = useState<FocusStatsDay | null>(null);
   const [tabCounters, setTabCounters] = useState<{ opened: number; closed: number }>({ opened: 0, closed: 0 });
+  const [aiTip, setAiTip] = useState<string | null>(null);
 
   // Check if briefing should show (first open per calendar day)
   useEffect(() => {
@@ -74,6 +76,82 @@ export default function MorningBriefing({
       setTabCounters(counters);
     });
   }, [visible]);
+
+  // Fetch AI productivity tip
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+
+    async function fetchAiTip() {
+      try {
+        const settings = await getSettings();
+        if (!settings.openRouterApiKey) return;
+
+        // Build yesterday's browsing summary from analytics
+        const result = await chrome.storage.local.get("analytics");
+        const analytics = result.analytics as { daily?: Record<string, { opened?: number; closed?: number; domains?: Record<string, number>; workspaceMinutes?: Record<string, number> }> } | undefined;
+        const yesterday = getYesterdayKey();
+        const dayData = analytics?.daily?.[yesterday];
+
+        // Build summary parts
+        const summaryParts: string[] = [];
+        summaryParts.push(`Total tabs open: ${tabs.length}`);
+        if (dayData?.opened) summaryParts.push(`Tabs opened yesterday: ${dayData.opened}`);
+        if (dayData?.domains) {
+          const topDomains = Object.entries(dayData.domains)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([d, c]) => `${d} (${c})`);
+          if (topDomains.length > 0) summaryParts.push(`Top domains: ${topDomains.join(", ")}`);
+        }
+        if (workspaces.length > 0) {
+          summaryParts.push(`Workspaces: ${workspaces.map((w) => `${w.emoji} ${w.name}`).join(", ")}`);
+        }
+        if (yesterdayFocus) {
+          summaryParts.push(`Focus time yesterday: ${formatFocusTime(yesterdayFocus.totalMinutes)} (${yesterdayFocus.sessions} sessions)`);
+        }
+
+        const summary = summaryParts.join(". ");
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${settings.openRouterApiKey}`,
+            "HTTP-Referer": "chrome-extension://arcflow",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.0-flash-001",
+            max_tokens: 50,
+            messages: [
+              {
+                role: "user",
+                content: `Based on this browsing summary, give one short productivity tip (under 20 words).\n\n${summary}`,
+              },
+            ],
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) return;
+        const data = await response.json();
+        const tip = data.choices?.[0]?.message?.content?.trim();
+        if (tip && !cancelled) {
+          setAiTip(tip);
+        }
+      } catch {
+        // On timeout or any error, simply don't show the tip
+      }
+    }
+
+    fetchAiTip();
+    return () => { cancelled = true; };
+  }, [visible, tabs.length, workspaces, yesterdayFocus]);
 
   // Update lastSessionTimestamp on sidebar visibility change (hidden)
   useEffect(() => {
@@ -164,6 +242,13 @@ export default function MorningBriefing({
                   </p>
                 ))}
               </div>
+            )}
+
+            {/* AI productivity tip */}
+            {aiTip && (
+              <p className="mt-2 italic text-gray-500 dark:text-arc-text-secondary">
+                {aiTip}
+              </p>
             )}
           </div>
         </div>

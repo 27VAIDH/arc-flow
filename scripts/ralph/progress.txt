@@ -627,3 +627,41 @@ There are still 14 stories with `passes: false` (US-017 through US-030), so more
   - `FocusStatsData` type is duplicated locally in MorningBriefing.tsx (same as PomodoroTimer.tsx) — reads from same `focusStats` storage key
   - Morning Briefing receives `tabs`, `workspaces`, `tabWorkspaceMap` as props from App.tsx for real-time data
 ---
+
+## Iteration 17 - Fri Feb 20 12:48:32 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-17.log
+---
+**US-017 is complete.** Committed as `8a3c919`.
+
+**US-017 Summary:**
+- Created `src/sidepanel/MorningBriefing.tsx` — daily summary card shown at top of sidebar (above search bar) on first open per calendar day
+- Shows: total open tabs, per-workspace tab counts with emoji icons
+- Shows "X tabs opened, Y closed since last session" using `tabSessionCounters` tracked by service worker
+- Shows yesterday's focus time from `focusStats` storage (if > 0)
+- Shows first line of each workspace's notes as reminders
+- Dismiss (X) button stores today's date as `briefingDismissedDate` — hides for rest of day
+- `lastSessionTimestamp` updated on sidebar `visibilitychange` (hidden); tab session counters reset at same time
+- Added `incrementTabCounter()` to service worker for opened/closed tracking
+- Card styled with rounded corners, subtle shadow, accent border
+- Typecheck passes, lint passes
+- Files changed: `src/sidepanel/MorningBriefing.tsx` (new), `src/sidepanel/App.tsx`, `src/background/service-worker.ts`
+
+There are still 13 stories with `passes: false` (US-018 through US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-018
+- Added AI-generated productivity tip to the Morning Briefing card
+- If `openRouterApiKey` is configured, sends yesterday's browsing summary (top domains, tab counts, workspace names, focus time) to OpenRouter
+- Prompt asks for one short productivity tip under 20 words
+- Tip displayed as italicized text at the bottom of the Morning Briefing card
+- 5-second timeout via AbortController; on timeout or any error, tip section simply hidden (no error shown)
+- If no API key configured, tip section not shown (no error, no API call)
+- Uses `getSettings()` from settingsStorage.ts to get the API key
+- Reads analytics data from `analytics` storage key for yesterday's browsing summary
+- Files changed: `src/sidepanel/MorningBriefing.tsx`
+- **Learnings for future iterations:**
+  - OpenRouter API calls in sidepanel components follow same pattern: fetch + AbortController timeout + try/catch silencing errors
+  - `analytics.daily[YYYY-MM-DD]` structure has `opened`, `closed`, `domains`, `workspaceMinutes` fields (may be undefined if US-022 analytics collection not yet implemented)
+  - The AI tip gracefully handles missing analytics data — builds summary from whatever is available (tabs, workspaces, focus stats)
+---
