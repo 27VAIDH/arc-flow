@@ -79,7 +79,8 @@ export type ServiceWorkerMessage =
       tabWorkspaceMap: Record<string, string>;
     }
   | { type: "OPEN_COMMAND_PALETTE" }
-  | { type: "tab-auto-routed"; tabId: number; workspaceId: string };
+  | { type: "tab-auto-routed"; tabId: number; workspaceId: string }
+  | { type: "workspace-suggestion-ready" };
 
 // Messages sent from side panel to service worker
 export type SidePanelMessage =
@@ -116,6 +117,15 @@ export interface RoutingRule {
   pattern: string;
   workspaceId: string;
   enabled: boolean;
+}
+
+export interface WorkspaceSuggestion {
+  suggest: boolean;
+  name: string;
+  emoji: string;
+  reason: string;
+  tabIds: number[];
+  createdAt: number;
 }
 
 export interface Settings {

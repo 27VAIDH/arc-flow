@@ -24,6 +24,9 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - Context menu items can be async — `onClick` handler supports `async () => {}` pattern
 - To add routing rules from code: `getSettings()` → check existing → `updateSettings({ routingRules: [...existing, newRule] })`
 - App.tsx message listener is mount-once (`[]` deps) — use `useRef` + `useEffect` to access changing state (e.g., `activeWorkspaceIdRef`)
+- `pendingWorkspaceSuggestion` storage key holds AI/fallback workspace suggestion for sidepanel (US-009)
+- `WorkspaceSuggestion` type in types.ts has `tabIds` array for knowing which tabs to move into new workspace
+- `checkForWorkspaceSuggestion()` in service worker has 10-min cooldown — safe to call from hot paths
 
 ---
 
@@ -237,4 +240,42 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - The message listener in App.tsx is set up once with `[]` dependency — use refs to access changing state inside it
   - `getWorkspaces()` can be called inside the message handler to get fresh workspace data (name, emoji)
   - `animate-fade-in` class from `index.css` works well for entry animations on banners
+---
+
+## Iteration 7 - Fri Feb 20 12:20:30 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-7.log
+---
+**US-007 is complete.** Committed as `15b66c0`. There are still 23 stories with `passes: false`, so more iterations are needed.
+
+**US-007 Summary:**
+- Added auto-routing indicator banner in `App.tsx`, rendered below the search bar
+- Listens for `tab-auto-routed` message from service worker in the existing message handler
+- Uses `activeWorkspaceIdRef` (ref synced via `useEffect`) to correctly check the active workspace inside the mount-once listener
+- Banner shows: "Tab auto-routed to [emoji] [name]"
+- Auto-fades after 3 seconds via `useEffect` timer
+- Small X button for immediate dismissal
+- Only shows when user is currently viewing the target workspace
+- Styled with accent color background tint, `animate-fade-in` animation
+- Typecheck passes, lint passes
+- File changed: `src/sidepanel/App.tsx`
+---
+
+## 2026-02-20 - US-008
+- Added AI auto-workspace suggestion engine to service worker
+- `getUnorganizedTabs()`: finds tabs not matching routing rules and not in any folder
+- `getAISuggestion()`: calls OpenRouter API with unorganized tab titles/URLs, asks for JSON `{suggest, name, emoji, reason}`
+- `domainClusterFallback()`: fallback when AI unavailable — groups 3+ tabs from same domain into suggestion
+- `checkForWorkspaceSuggestion()`: orchestrates detection, enforces 10-minute cooldown
+- Suggestion stored in `chrome.storage.local` under `pendingWorkspaceSuggestion` key
+- Sends `workspace-suggestion-ready` message to sidepanel when suggestion is ready
+- Added `WorkspaceSuggestion` type to `shared/types.ts` with `suggest, name, emoji, reason, tabIds, createdAt`
+- Added `workspace-suggestion-ready` to `ServiceWorkerMessage` union type
+- Triggered on tab navigation complete (inside onUpdated handler) and via periodic alarm (every 5 min)
+- Files changed: `src/background/service-worker.ts`, `src/shared/types.ts`
+- **Learnings for future iterations:**
+  - `checkForWorkspaceSuggestion` has built-in cooldown (10 min) so it's safe to call from hot paths like onUpdated
+  - `pendingWorkspaceSuggestion` storage key holds the suggestion for the sidepanel (US-009) to consume
+  - `WorkspaceSuggestion.tabIds` tracks which tabs to move when the user accepts the suggestion
+  - Domain clustering fallback capitalizes the first part of the hostname as workspace name (e.g., "github.com" → "Github")
 ---

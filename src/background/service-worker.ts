@@ -3,6 +3,7 @@ import type {
   TabInfo,
   ServiceWorkerMessage,
   SidePanelMessage,
+  WorkspaceSuggestion,
 } from "../shared/types";
 import {
   getPinnedApps,
@@ -38,6 +39,9 @@ chrome.runtime.onInstalled.addListener(() => {
 
   // Register auto-archive alarm (every 5 minutes)
   chrome.alarms.create("arcflow-auto-archive", { periodInMinutes: 5 });
+
+  // Register workspace suggestion check alarm (every 5 minutes)
+  chrome.alarms.create("arcflow-workspace-suggestion", { periodInMinutes: 5 });
 });
 
 // Open side panel when the toolbar icon is clicked
@@ -313,6 +317,8 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
             });
           }
         }
+        // Check for workspace suggestion (has built-in cooldown)
+        await checkForWorkspaceSuggestion();
       })().catch(() => {});
     }
   }
@@ -484,7 +490,7 @@ async function runAutoSuspend(): Promise<void> {
   }
 }
 
-// Listen for the auto-archive alarm
+// Listen for alarms
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ARCHIVE_ALARM_NAME) {
     runAutoArchive().catch(() => {
@@ -494,7 +500,207 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       // Silently fail — will retry on next alarm
     });
   }
+  if (alarm.name === "arcflow-workspace-suggestion") {
+    checkForWorkspaceSuggestion().catch(() => {
+      // Silently fail — will retry on next alarm
+    });
+  }
 });
+
+// --- AI Auto-workspace suggestion engine ---
+
+const SUGGESTION_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+let lastSuggestionTimestamp = 0;
+
+/**
+ * Get tabs that are "unorganized" — not matching any routing rule and not in any folder.
+ */
+async function getUnorganizedTabs(): Promise<chrome.tabs.Tab[]> {
+  const allTabs = await chrome.tabs.query({ currentWindow: true });
+  const settings = await getSettings();
+  const workspaces = await getWorkspaces();
+
+  // Collect all tab IDs that are in folders
+  const tabIdsInFolders = new Set<number>();
+  for (const ws of workspaces) {
+    for (const folder of ws.folders) {
+      for (const item of folder.items) {
+        if (item.type === "tab" && item.tabId != null) {
+          tabIdsInFolders.add(item.tabId);
+        }
+      }
+    }
+  }
+
+  const unorganized: chrome.tabs.Tab[] = [];
+  for (const tab of allTabs) {
+    if (!tab.url || tab.id == null) continue;
+    if (isIgnoredUrl(tab.url)) continue;
+    // Skip tabs in folders
+    if (tabIdsInFolders.has(tab.id)) continue;
+    // Skip tabs matching a routing rule
+    if (matchRoute(tab.url, settings.routingRules)) continue;
+    unorganized.push(tab);
+  }
+
+  return unorganized;
+}
+
+/**
+ * Domain clustering fallback: if 3+ tabs share the same domain, suggest a workspace.
+ */
+function domainClusterFallback(
+  tabs: chrome.tabs.Tab[]
+): WorkspaceSuggestion | null {
+  const domainMap = new Map<string, chrome.tabs.Tab[]>();
+  for (const tab of tabs) {
+    try {
+      const hostname = new URL(tab.url!).hostname.replace(/^www\./, "");
+      const existing = domainMap.get(hostname) ?? [];
+      existing.push(tab);
+      domainMap.set(hostname, existing);
+    } catch {
+      // Skip malformed URLs
+    }
+  }
+
+  // Find first domain with 3+ tabs
+  for (const [domain, domainTabs] of domainMap) {
+    if (domainTabs.length >= 3) {
+      const shortName =
+        domain.split(".")[0].charAt(0).toUpperCase() +
+        domain.split(".")[0].slice(1);
+      return {
+        suggest: true,
+        name: shortName,
+        emoji: "🌐",
+        reason: `${domainTabs.length} tabs open from ${domain}`,
+        tabIds: domainTabs.map((t) => t.id!),
+        createdAt: Date.now(),
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Call OpenRouter API to get a workspace suggestion for unorganized tabs.
+ */
+async function getAISuggestion(
+  apiKey: string,
+  tabs: chrome.tabs.Tab[]
+): Promise<WorkspaceSuggestion | null> {
+  const tabSummary = tabs.map((t) => ({
+    title: t.title ?? "",
+    url: t.url ?? "",
+  }));
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          "HTTP-Referer": "chrome-extension://arcflow",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.0-flash-001",
+          max_tokens: 256,
+          messages: [
+            {
+              role: "user",
+              content: `These are unorganized browser tabs. Should they be grouped into a new workspace? If yes, suggest a short workspace name, a single emoji, and a brief reason. Return ONLY a JSON object: {"suggest": boolean, "name": string, "emoji": string, "reason": string}\n\nTabs:\n${JSON.stringify(tabSummary)}`,
+            },
+          ],
+        }),
+        signal: controller.signal,
+      }
+    );
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`OpenRouter API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const text: string = data.choices?.[0]?.message?.content ?? "";
+
+    // Parse JSON from response (may be wrapped in markdown code blocks)
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+
+    const parsed = JSON.parse(jsonMatch[0]) as {
+      suggest?: boolean;
+      name?: string;
+      emoji?: string;
+      reason?: string;
+    };
+
+    if (!parsed.suggest || !parsed.name) return null;
+
+    return {
+      suggest: true,
+      name: parsed.name,
+      emoji: parsed.emoji ?? "📁",
+      reason: parsed.reason ?? "Multiple related tabs detected",
+      tabIds: tabs.map((t) => t.id!),
+      createdAt: Date.now(),
+    };
+  } catch (e) {
+    clearTimeout(timeoutId);
+    console.error("AI workspace suggestion failed:", e);
+    return null;
+  }
+}
+
+/**
+ * Check for unorganized tabs and potentially suggest a new workspace.
+ */
+async function checkForWorkspaceSuggestion(): Promise<void> {
+  // Enforce cooldown
+  const now = Date.now();
+  if (now - lastSuggestionTimestamp < SUGGESTION_COOLDOWN_MS) return;
+
+  const unorganized = await getUnorganizedTabs();
+  if (unorganized.length < 3) return;
+
+  lastSuggestionTimestamp = now;
+
+  const settings = await getSettings();
+  let suggestion: WorkspaceSuggestion | null = null;
+
+  if (settings.openRouterApiKey) {
+    suggestion = await getAISuggestion(
+      settings.openRouterApiKey,
+      unorganized
+    );
+  }
+
+  // Fallback to domain clustering if AI unavailable or returned no suggestion
+  if (!suggestion) {
+    suggestion = domainClusterFallback(unorganized);
+  }
+
+  if (!suggestion) return;
+
+  // Store suggestion
+  await chrome.storage.local.set({ pendingWorkspaceSuggestion: suggestion });
+
+  // Notify sidepanel
+  const message: ServiceWorkerMessage = {
+    type: "workspace-suggestion-ready",
+  };
+  chrome.runtime.sendMessage(message).catch(() => {
+    // Side panel may not be open
+  });
+}
 
 // --- Split view: side-by-side windows ---
 
