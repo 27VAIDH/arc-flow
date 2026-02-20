@@ -37,6 +37,9 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - `duplicate-tab-detected` message includes `newTabId`, `existingTabId`, `existingWorkspaceName` — consumed by sidepanel (US-013)
 - Notification bars in App.tsx follow a pattern: state + auto-dismiss useEffect + inline JSX below search bar (see autoRouteIndicator and dupNotification)
 - `dupNotification` state handles duplicate tab detection UI — auto-dismisses after 8s, only one shown at a time (new replaces old)
+- `deepWorkActive` boolean stored in chrome.storage.local — persists across sidebar close/reopen, synced via storage change listener
+- Deep Work Mode toggle: suspends non-active tabs, enables focusMode, expands Quick Notes; deactivation disables focusMode but does NOT unsuspend tabs
+- Header gets `ring-1 ring-arc-accent/30` when Deep Work is active
 
 ---
 
@@ -460,4 +463,40 @@ There are still 18 stories with `passes: false` (US-013 through US-030), so more
   - Notification bars follow a consistent pattern in App.tsx: state variable + auto-dismiss useEffect + inline JSX
   - `handleDupSwitch` uses `activeWorkspaceIdRef.current` (not state) for workspace comparison since it may run inside stale closures
   - `CLOSE_TAB` and `SWITCH_TAB` messages are fire-and-forget — no need to await
+---
+
+## Iteration 13 - Fri Feb 20 12:35:32 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-13.log
+---
+**US-013 is complete.** Committed as `f6f6ee2`.
+
+**Summary:**
+- Added `dupNotification` state in App.tsx for duplicate tab detection UI
+- Listens for `duplicate-tab-detected` message in the existing message handler
+- Shows a yellow-tinted notification bar below the search bar: "Already open in [Workspace emoji+name]"
+- "Switch" button: closes the duplicate tab, activates the existing tab, switches workspace if needed
+- "Keep Both" button: dismisses the notification, keeps both tabs open
+- Bar auto-dismisses after 8 seconds with fade-out transition
+- Only one dedup notification shown at a time (new message replaces old)
+- Typecheck passes, lint passes
+- File changed: `src/sidepanel/App.tsx`
+
+There are still 17 stories with `passes: false` (US-014 through US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-014
+- Added Deep Work Mode toggle button (brain/lightbulb icon) to sidebar header, next to Organize button
+- Button toggles `deepWorkActive` state stored in chrome.storage.local
+- When activated: sets `focusMode.enabled = true` in settings, suspends all non-active tabs via `SUSPEND_TAB` messages, expands Quick Notes section
+- When deactivated: sets `focusMode.enabled = false`, does NOT unsuspend tabs
+- Header gets subtle accent glow (`ring-1 ring-arc-accent/30`) when Deep Work is active
+- State persists across sidebar close/reopen via chrome.storage.local + storage change listener
+- Command palette entry: "Toggle Deep Work Mode"
+- Files changed: `src/sidepanel/App.tsx`, `src/sidepanel/commandRegistry.ts`, `src/sidepanel/commandRegistry.test.ts`
+- **Learnings for future iterations:**
+  - `deepWorkActive` is a simple boolean in chrome.storage.local — not part of `Settings` object, for fast toggle without settings migration
+  - The header conditionally applies `ring-1 ring-arc-accent/30 rounded-lg` classes when active
+  - Deep Work activation suspends tabs at point-in-time; new tabs opened after aren't auto-suspended (Pomodoro timer in US-015 will add ongoing focus)
+  - `toggleDeepWork` callback depends on `filteredTabs` and `activeWorkspace` for tab suspension and notes expansion
 ---
