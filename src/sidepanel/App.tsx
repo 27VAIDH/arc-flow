@@ -8,6 +8,7 @@ import type {
   Folder,
   FolderItem,
   Session,
+  WorkspaceSuggestion,
 } from "../shared/types";
 import { useTheme, applyPanelColor } from "./useTheme";
 import {
@@ -29,6 +30,7 @@ import {
   getWorkspaces,
   createWorkspace,
   setActiveWorkspace as setActiveWorkspaceStorage,
+  assignTabToWorkspace,
 } from "../shared/workspaceStorage";
 import PinnedAppsRow from "./PinnedAppsRow";
 import FolderTree from "./FolderTree";
@@ -582,6 +584,7 @@ export default function App() {
   const mainContentRef = useRef<HTMLElement>(null);
   const activeWorkspaceIdRef = useRef(activeWorkspaceId);
   const [swipeBounce, setSwipeBounce] = useState<"left" | "right" | null>(null);
+  const [workspaceSuggestion, setWorkspaceSuggestion] = useState<WorkspaceSuggestion | null>(null);
 
   // Sorted workspaces for swipe navigation
   const sortedWorkspaces = useMemo(
@@ -633,6 +636,23 @@ export default function App() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  // Load pending workspace suggestion (check dismissal within 24h)
+  const loadWorkspaceSuggestion = useCallback(() => {
+    chrome.storage.local.get(
+      ["pendingWorkspaceSuggestion", "suggestionDismissedAt"],
+      (result) => {
+        const dismissedAt = result.suggestionDismissedAt as number | undefined;
+        if (dismissedAt && Date.now() - dismissedAt < 24 * 60 * 60 * 1000) {
+          return; // Dismissed within 24 hours
+        }
+        const suggestion = result.pendingWorkspaceSuggestion as WorkspaceSuggestion | undefined;
+        if (suggestion && suggestion.suggest) {
+          setWorkspaceSuggestion(suggestion);
+        }
+      }
+    );
+  }, []);
 
   // Check if onboarding is needed on mount
   useEffect(() => {
@@ -811,14 +831,19 @@ export default function App() {
             }
           });
         }
+      } else if (message.type === "workspace-suggestion-ready") {
+        loadWorkspaceSuggestion();
       }
     };
+
+    // Load any pending workspace suggestion on mount
+    loadWorkspaceSuggestion();
 
     chrome.runtime.onMessage.addListener(handleMessage);
     return () => {
       chrome.runtime.onMessage.removeListener(handleMessage);
     };
-  }, []);
+  }, [loadWorkspaceSuggestion]);
 
   const handleWorkspaceChange = useCallback((workspaceId: string) => {
     setActiveWorkspaceId(workspaceId);
@@ -1052,6 +1077,36 @@ export default function App() {
       textarea?.focus();
     }, 100);
   }, [activeWorkspaceId, activeWorkspace]);
+
+  // Workspace suggestion handlers
+  const handleAcceptSuggestion = useCallback(async () => {
+    if (!workspaceSuggestion) return;
+    try {
+      const ws = await createWorkspace(workspaceSuggestion.name);
+      // Update emoji and accent color
+      await updateWorkspace(ws.id, { emoji: workspaceSuggestion.emoji });
+      // Move suggested tabs to the new workspace
+      for (const tabId of workspaceSuggestion.tabIds) {
+        await assignTabToWorkspace(tabId, ws.id);
+      }
+      // Switch to the new workspace
+      await setActiveWorkspaceStorage(ws.id);
+      setActiveWorkspaceId(ws.id);
+      // Clear suggestion
+      setWorkspaceSuggestion(null);
+      await chrome.storage.local.remove("pendingWorkspaceSuggestion");
+      setToast(`Created ${workspaceSuggestion.emoji} ${workspaceSuggestion.name} workspace`);
+    } catch (err) {
+      console.error("Failed to create workspace from suggestion:", err);
+      setToast("Failed to create workspace");
+    }
+  }, [workspaceSuggestion]);
+
+  const handleDismissSuggestion = useCallback(async () => {
+    setWorkspaceSuggestion(null);
+    await chrome.storage.local.set({ suggestionDismissedAt: Date.now() });
+    await chrome.storage.local.remove("pendingWorkspaceSuggestion");
+  }, []);
 
   // Build command palette commands
   const commands = useMemo(
@@ -1622,6 +1677,37 @@ export default function App() {
               <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
             </svg>
           </button>
+        </div>
+      )}
+
+      {/* Workspace Suggestion Card */}
+      {workspaceSuggestion && (
+        <div className="mx-4 mb-2 p-3 rounded-xl border border-arc-accent/20 dark:border-arc-accent/15 bg-white/80 dark:bg-arc-surface/80 shadow-sm animate-fade-in">
+          <div className="flex items-start gap-2">
+            <span className="text-lg shrink-0">{workspaceSuggestion.emoji}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-800 dark:text-arc-text-primary">
+                Create &ldquo;{workspaceSuggestion.name}&rdquo; workspace?
+              </p>
+              <p className="text-xs text-gray-500 dark:text-arc-text-secondary mt-0.5">
+                {workspaceSuggestion.reason}
+              </p>
+              <div className="flex items-center gap-2 mt-2">
+                <button
+                  onClick={handleAcceptSuggestion}
+                  className="px-3 py-1 text-xs font-medium rounded-lg bg-arc-accent text-white hover:bg-arc-accent-hover transition-colors duration-200"
+                >
+                  Create
+                </button>
+                <button
+                  onClick={handleDismissSuggestion}
+                  className="px-3 py-1 text-xs font-medium rounded-lg text-gray-500 dark:text-arc-text-secondary hover:bg-gray-100 dark:hover:bg-arc-surface-hover transition-colors duration-200"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
