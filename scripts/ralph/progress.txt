@@ -44,6 +44,9 @@ Started: Fri Feb 20 12:01:29 IST 2026
 - Pomodoro uses `chrome.alarms` (alarm name `arcflow-pomodoro`) for accuracy + setInterval for 1s display ticks
 - Pomodoro state: `{phase, sessionNumber, startedAt, pausedAt, remainingMs}` — remaining calculated from startedAt on resume
 - `chrome.notifications.create` used for phase transitions (break/work notifications)
+- `focusStats` stored in chrome.storage.local as `{[YYYY-MM-DD]: {totalMinutes, sessions}}` — updated on Pomodoro work session completion
+- `recordWorkSessionComplete()` in PomodoroTimer.tsx handles focus stats recording + 30-day pruning
+- `FocusStatsData` and `FocusStatsDay` types are local to PomodoroTimer.tsx (not in shared/types.ts)
 
 ---
 
@@ -543,4 +546,42 @@ There are still 16 stories with `passes: false` (US-015 through US-030), so more
   - `chrome.alarms` + `setInterval` combo: alarms for reliable minute-level ticks even when service worker sleeps, interval for smooth per-second display updates
   - Phase completion detection happens in both the interval tick and alarm handler for reliability
   - `chrome.notifications` may not be available in all contexts — wrapped in try/catch
+---
+
+## Iteration 15 - Fri Feb 20 12:41:57 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-15.log
+---
+**US-015 is complete.** Committed as `0a13bb4`.
+
+**US-015 Summary:**
+- Created `src/sidepanel/PomodoroTimer.tsx` — new Pomodoro timer component with compact single-line design
+- Layout: `[MM:SS] [Session X/4 · Work/Break] [pause] [skip]`
+- Default durations: 25 min work / 5 min short break / 15 min long break after session 4
+- Timer uses `chrome.alarms` API (fires every minute) for accuracy + `setInterval` for smooth per-second display
+- Remaining time calculated from `startedAt` timestamp — handles pause/resume correctly
+- Pause/resume toggle and skip-to-next-phase buttons
+- Phase transitions trigger `chrome.notifications.create` ("Break time!" / "Back to work!")
+- State persisted in `chrome.storage.local` under `pomodoroState` key
+- Wired into `App.tsx`: renders below header when `deepWorkActive === true`
+- Typecheck passes, lint passes
+- Files changed: `src/sidepanel/PomodoroTimer.tsx` (new), `src/sidepanel/App.tsx`
+
+There are still 15 stories with `passes: false` (US-016 through US-030), so more iterations are needed.
+---
+
+## 2026-02-20 - US-016
+- Added focus stats tracking and display to PomodoroTimer.tsx
+- `focusStats` stored in chrome.storage.local with `{[YYYY-MM-DD]: {totalMinutes, sessions}}` structure
+- On each Pomodoro work session completion (advancePhase from "work" → "break"), `recordWorkSessionComplete()` increments totalMinutes by 25 and sessions by 1
+- Entries older than 30 days pruned on each write via `pruneOldEntries()`
+- Display shows "Today: Xh Ym (N sessions)" below the Pomodoro timer when Deep Work is active
+- Shows "0m (0 sessions)" if no focus time today
+- Listens for `chrome.storage.onChanged` to update display reactively when stats change
+- Files changed: `src/sidepanel/PomodoroTimer.tsx`
+- **Learnings for future iterations:**
+  - `FocusStatsData` type is local to PomodoroTimer.tsx — if other components need it (e.g., Morning Briefing US-017, Analytics US-023), they should read from `focusStats` storage key directly
+  - The storage key is `focusStats` — a flat object keyed by YYYY-MM-DD date strings
+  - `getTodayKey()` helper generates the date key in local timezone
+  - The stats display is part of PomodoroTimer, not a separate component — keeps it simple since it only shows during Deep Work
 ---
