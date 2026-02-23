@@ -340,7 +340,7 @@ export default function SearchBar({
   const showResults = isFocused && debouncedQuery.trim() && results.length > 0;
 
   return (
-    <div className="px-2 py-2 relative">
+    <div className="py-0 relative">
       <div className="relative">
         {/* Search icon */}
         <svg

@@ -87,7 +87,7 @@ export default function ContextMenu({
       ref={menuRef}
       role="menu"
       aria-label="Context menu"
-      className="fixed z-50 min-w-[160px] py-1 rounded-xl shadow-xl bg-white dark:bg-arc-surface border border-gray-200 dark:border-arc-border animate-slide-up"
+      className="fixed z-50 min-w-[160px] py-1 rounded-xl shadow-2xl bg-white dark:bg-[#1e1e2a] backdrop-frosted border border-gray-200 dark:border-white/10 animate-slide-up"
       style={{ left: x, top: y }}
       onKeyDown={handleMenuKeyDown}
     >

@@ -34,6 +34,7 @@
 
 body {
   background: transparent;
+  min-width: 200px;
 }
 
 /* Hide scrollbar for horizontal scroll areas */

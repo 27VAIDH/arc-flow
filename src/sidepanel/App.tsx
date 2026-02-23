@@ -1864,7 +1864,7 @@ export default function App() {
 
   return (
     <div
-      className="flex flex-col min-h-screen bg-gray-50 text-gray-900 dark:bg-[rgba(15,15,23,0.78)] dark:text-arc-text-primary backdrop-frosted"
+      className="flex flex-col h-screen overflow-hidden bg-gray-50 text-gray-900 dark:bg-[rgba(15,15,23,0.78)] dark:text-arc-text-primary backdrop-frosted"
       data-drag-type={activeDragType}
     >
       {/* Live region for screen reader announcements */}
@@ -1880,59 +1880,6 @@ export default function App() {
           `. ${suspendedCount} suspended, ~${estimatedMBSaved} MB saved`}
       </div>
 
-      <header className={`flex items-center justify-between px-4 py-3 pb-2${deepWorkActive ? " ring-1 ring-arc-accent/30 rounded-lg" : ""}`}>
-        <h1 className="text-sm font-semibold tracking-tight text-gray-800 dark:text-arc-text-primary">
-          ArcFlow
-        </h1>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={toggleDeepWork}
-            className={`flex items-center gap-1 px-2 py-1 text-xs rounded-lg transition-colors duration-200 ${
-              deepWorkActive
-                ? "bg-arc-accent/15 text-arc-accent dark:text-arc-accent-hover"
-                : "hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary"
-            }`}
-            title={deepWorkActive ? "Exit Deep Work Mode (Ctrl+Shift+D)" : "Enter Deep Work Mode (Ctrl+Shift+D)"}
-            aria-label={deepWorkActive ? "Exit Deep Work Mode" : "Enter Deep Work Mode"}
-            aria-pressed={deepWorkActive}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-4 h-4"
-            >
-              <path d="M12 2a7 7 0 0 0-7 7c0 3.5 2.5 6.5 4 8 .5.5 1 1.5 1 2.5V21h4v-1.5c0-1 .5-2 1-2.5 1.5-1.5 4-4.5 4-8a7 7 0 0 0-7-7Z" />
-              <path d="M10 21h4" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setShowOrganizeTabs(true)}
-            className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-200"
-            title="Organize Tabs"
-            aria-label="Organize Tabs"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className="w-4 h-4"
-            >
-              <path
-                fillRule="evenodd"
-                d="M2 3.75A.75.75 0 0 1 2.75 3h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 3.75Zm0 4.167a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Zm0 4.166a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Zm0 4.167a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Z"
-                clipRule="evenodd"
-              />
-            </svg>
-            Organize
-          </button>
-        </div>
-      </header>
-
       {/* Pomodoro Timer (Deep Work Mode) */}
       {deepWorkActive && <PomodoroTimer />}
 
@@ -1943,9 +1890,10 @@ export default function App() {
         tabWorkspaceMap={tabWorkspaceMap}
       />
 
-      {/* Search bar (Zone 1) */}
-      <nav aria-label="Tab search">
-        <SearchBar
+      {/* Search bar + action buttons (compact header) */}
+      <nav aria-label="Tab search" className={`flex items-center gap-1 px-2 pt-2 pb-1${deepWorkActive ? " ring-1 ring-arc-accent/30 rounded-lg mx-1" : ""}`}>
+        <div className="flex-1 min-w-0">
+          <SearchBar
           tabs={tabs}
           folders={folders}
           allTabs={tabs}
@@ -1966,11 +1914,56 @@ export default function App() {
             chrome.runtime.sendMessage({ type: "OPEN_URL", url });
           }}
         />
+        </div>
+        <button
+          onClick={toggleDeepWork}
+          className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-lg transition-colors duration-200 ${
+            deepWorkActive
+              ? "bg-arc-accent/15 text-arc-accent dark:text-arc-accent-hover"
+              : "hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary"
+          }`}
+          title={deepWorkActive ? "Exit Deep Work Mode (Ctrl+Shift+D)" : "Enter Deep Work Mode (Ctrl+Shift+D)"}
+          aria-label={deepWorkActive ? "Exit Deep Work Mode" : "Enter Deep Work Mode"}
+          aria-pressed={deepWorkActive}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="w-4 h-4"
+          >
+            <path d="M12 2a7 7 0 0 0-7 7c0 3.5 2.5 6.5 4 8 .5.5 1 1.5 1 2.5V21h4v-1.5c0-1 .5-2 1-2.5 1.5-1.5 4-4.5 4-8a7 7 0 0 0-7-7Z" />
+            <path d="M10 21h4" />
+          </svg>
+        </button>
+        <button
+          onClick={() => setShowOrganizeTabs(true)}
+          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-200"
+          title="Organize Tabs"
+          aria-label="Organize Tabs"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="w-4 h-4"
+          >
+            <path
+              fillRule="evenodd"
+              d="M2 3.75A.75.75 0 0 1 2.75 3h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 3.75Zm0 4.167a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Zm0 4.166a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Zm0 4.167a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </button>
       </nav>
 
       {/* Auto-routing indicator */}
       {autoRouteIndicator && (
-        <div className="mx-4 mb-1 flex items-center justify-between gap-2 px-3 py-1.5 text-xs rounded-lg bg-arc-accent/10 dark:bg-arc-accent/15 text-arc-accent dark:text-arc-accent-hover animate-fade-in transition-opacity duration-300">
+        <div className="mx-2 mb-1 flex items-center justify-between gap-2 px-2 py-1.5 text-xs rounded-lg bg-arc-accent/10 dark:bg-arc-accent/15 text-arc-accent dark:text-arc-accent-hover animate-fade-in transition-opacity duration-300">
           <span>
             Tab auto-routed to {autoRouteIndicator.workspaceEmoji}{" "}
             {autoRouteIndicator.workspaceName}
@@ -1994,7 +1987,7 @@ export default function App() {
 
       {/* Duplicate tab notification */}
       {dupNotification && (
-        <div className="mx-4 mb-1 flex items-center justify-between gap-2 px-3 py-1.5 text-xs rounded-lg bg-yellow-500/10 dark:bg-yellow-400/10 text-yellow-700 dark:text-yellow-300 animate-fade-in transition-opacity duration-300">
+        <div className="mx-2 mb-1 flex items-center justify-between gap-2 px-2 py-1.5 text-xs rounded-lg bg-yellow-500/10 dark:bg-yellow-400/10 text-yellow-700 dark:text-yellow-300 animate-fade-in transition-opacity duration-300">
           <span className="truncate">
             Already open in {dupNotification.existingWorkspaceName}
           </span>
@@ -2017,7 +2010,7 @@ export default function App() {
 
       {/* Workspace Suggestion Card */}
       {workspaceSuggestion && (
-        <div className="mx-4 mb-2 p-3 rounded-xl border border-arc-accent/20 dark:border-arc-accent/15 bg-white/80 dark:bg-arc-surface/80 shadow-sm animate-fade-in">
+        <div className="mx-2 mb-2 p-2 rounded-xl border border-arc-accent/20 dark:border-arc-accent/15 bg-white/80 dark:bg-arc-surface/80 shadow-sm animate-fade-in">
           <div className="flex items-start gap-2">
             <span className="text-lg shrink-0">{workspaceSuggestion.emoji}</span>
             <div className="flex-1 min-w-0">
@@ -2055,7 +2048,7 @@ export default function App() {
 
       <main
         ref={mainContentRef}
-        className={`flex-1 flex flex-col${swipeBounce === "left" ? " swipe-bounce-left" : swipeBounce === "right" ? " swipe-bounce-right" : ""}`}
+        className={`flex-1 flex flex-col overflow-y-auto${swipeBounce === "left" ? " swipe-bounce-left" : swipeBounce === "right" ? " swipe-bounce-right" : ""}`}
         aria-label="Tab management"
       >
         <DndContext
@@ -2090,7 +2083,7 @@ export default function App() {
           />
 
           {/* Tab list */}
-          <section className="flex-1 px-1 pt-3" aria-label="Open tabs" data-drop-section="tabs">
+          <section className="flex-1 px-1 pt-2" aria-label="Open tabs" data-drop-section="tabs">
             <div className="flex items-center justify-between px-2 py-1">
               <p
                 className="text-[11px] text-gray-400 dark:text-arc-text-secondary font-medium"
