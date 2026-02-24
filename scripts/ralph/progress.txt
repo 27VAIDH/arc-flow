@@ -19,6 +19,8 @@ Started: Tue Feb 24 18:49:55 IST 2026
 - Tree building: chain events via referrerTabId; best parent = most recent event on referrer tab before child's timestamp
 - getNavEventsSince() returns all events from a timestamp; filter client-side for end bound
 - Graph building: nodes keyed by URL, edges keyed by type:source|target; tabId→URL map built from sorted navEvents for resolving references
+- Content scripts: each content script gets its own entry in manifest.json content_scripts array and its own vite entry point (content-xxx naming convention)
+- IndexedDB for large data (nav events, page captures); chrome.storage.local for small data (annotations, settings, affinity)
 
 ## 2026-02-24 - INFRA-01
 - Implemented IndexedDB-backed navigation event tracking system
@@ -251,4 +253,33 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - Edges keyed by type:source|target to aggregate weights across multiple events
   - Nodes capped at 50 by highest visitCount
   - getDomain() uses URL constructor with try/catch for robustness
+---
+
+## Iteration 2 - Tue Feb 24 19:16:58 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-191248/iter-2.log
+---
+**US-G-01 is complete.** There are still stories with `passes: false` remaining (US-R-01 is next at priority 9).
+
+**US-G-01 Summary:**
+- Added `GraphNode`, `GraphEdge`, and `GraphData` interfaces to `types.ts`
+- Created `src/shared/tabGraphStorage.ts` with `buildGraphData(navEvents, affinityPairs, openTabs)` function
+- Nodes built from navigation events (visit counts) + open tabs (isOpen flag), capped at 50
+- Navigation edges derived from referrerTabId chains; switch edges from affinity pairs
+- Edges have correct type classification (`navigation` vs `switch`) with aggregated weights
+- Typecheck and tests pass
+---
+
+## 2026-02-24 - US-R-01
+- Implemented Research Mode Toggle & Page Text Capture
+- Files created: src/shared/researchDb.ts, src/content/research.ts
+- Files modified: src/shared/types.ts, public/manifest.json, vite.config.ts
+- **Learnings for future iterations:**
+  - Research data uses IndexedDB (like navigation events) since page text can be 50KB+ per capture
+  - Content script is a no-op until triggered by CAPTURE_PAGE_TEXT message — keeps overhead zero
+  - Content script returns text, title, and URL synchronously via sendResponse
+  - Manifest needs separate content_scripts entry for research.ts (not bundled with capture.ts)
+  - Vite config needs a separate entry point for each content script (content-research)
+  - ResearchSession stores pageIds as string array; captures reference sessionId via index
+  - deleteSession cascades to delete all associated page captures
 ---
