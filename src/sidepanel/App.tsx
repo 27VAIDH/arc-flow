@@ -486,8 +486,6 @@ function FolderPickerDropdown({
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
-  const [adjustedPos, setAdjustedPos] = useState({ left: x, top: y });
-
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
@@ -505,7 +503,8 @@ function FolderPickerDropdown({
     };
   }, [onClose]);
 
-  // Adjust position based on actual dropdown dimensions after render
+  // Adjust position based on actual dropdown dimensions after render.
+  // Uses direct DOM mutation to avoid setState-in-effect and ref-during-render lint violations.
   useLayoutEffect(() => {
     if (!ref.current) return;
     const rect = ref.current.getBoundingClientRect();
@@ -515,13 +514,14 @@ function FolderPickerDropdown({
     let top = y;
     if (left + rect.width > vw) left = Math.max(4, vw - rect.width - 4);
     if (top + rect.height > vh) top = Math.max(4, vh - rect.height - 4);
-    setAdjustedPos({ left, top });
+    ref.current.style.left = `${left}px`;
+    ref.current.style.top = `${top}px`;
   }, [x, y]);
 
   const style: React.CSSProperties = {
     position: "fixed",
-    left: adjustedPos.left,
-    top: adjustedPos.top,
+    left: x,
+    top: y,
     zIndex: 9990,
   };
 

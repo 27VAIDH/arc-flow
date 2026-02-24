@@ -83,15 +83,11 @@ export function useSwipeGesture(
       wheelTimeoutRef.current = setTimeout(() => {
         const accum = wheelAccumRef.current;
         wheelAccumRef.current = 0;
-        // deltaX positive = scroll right = swipe left (next)
-        // deltaX negative = scroll left = swipe right (prev)
-        if (Math.abs(accum) >= threshold) {
-          if (accum > 0) {
-            onSwipeLeft();
-          } else {
-            onSwipeRight();
-          }
-        }
+        // Route through handleSwipe so cooldown applies to trackpad swipes too.
+        // Negate accum because wheel deltaX has opposite sign convention:
+        // wheel deltaX positive = scroll right = swipe left, but
+        // handleSwipe deltaX positive = finger moved right = swipe right
+        handleSwipe(-accum, 0);
       }, 50);
     };
 
