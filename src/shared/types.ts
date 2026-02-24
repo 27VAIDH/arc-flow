@@ -91,6 +91,7 @@ export type ServiceWorkerMessage =
   | { type: "notes-saved-from-page"; workspaceName: string }
   | { type: "snippet-saved"; workspaceName: string }
   | { type: "PAGE_TEXT_CAPTURED"; data: PageCapture }
+  | { type: "ANNOTATIONS_LOADED"; annotations: Annotation[] }
   | { type: "AUTOPILOT_SWITCH"; workspaceId: string; workspaceName: string }
   | { type: "AUTOPILOT_UNDO" };
 
@@ -116,6 +117,8 @@ export type SidePanelMessage =
   | { type: "CAPTURE_PAGE_TEXT" }
   | { type: "SAVE_ANNOTATION"; annotation: Annotation }
   | { type: "DELETE_ANNOTATION"; id: string }
+  | { type: "GET_ANNOTATIONS"; url: string }
+  | { type: "SCROLL_TO_ANNOTATION"; annotationId: string }
   | { type: "AUTOPILOT_UNDO" };
 
 export interface Session {

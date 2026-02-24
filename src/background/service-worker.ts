@@ -26,7 +26,7 @@ import { matchRoute } from "../shared/routingEngine";
 import { calculateEnergyScore } from "../shared/energyScore";
 import { addNavEvent, pruneOldEvents } from "../shared/navigationDb";
 import { recordSwitch } from "../shared/affinityStorage";
-import { saveAnnotation, deleteAnnotation } from "../shared/annotationStorage";
+import { saveAnnotation, deleteAnnotation, getAnnotationsForUrl } from "../shared/annotationStorage";
 import { getBestMatch } from "../shared/autopilotEngine";
 import { savePageCapture } from "../shared/researchDb";
 import { summarizePage } from "../shared/aiResearchService";
@@ -1844,6 +1844,14 @@ chrome.runtime.onMessage.addListener(
       deleteAnnotation(message.id).catch(() => {
         // Annotation delete failed silently
       });
+    }
+    if (message.type === "GET_ANNOTATIONS") {
+      getAnnotationsForUrl(message.url).then((annotations) => {
+        sendResponse({ annotations });
+      }).catch(() => {
+        sendResponse({ annotations: [] });
+      });
+      return true; // async sendResponse
     }
     if (message.type === "AUTOPILOT_UNDO") {
       undoAutopilotSwitch().catch(() => {
