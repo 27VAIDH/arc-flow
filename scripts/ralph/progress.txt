@@ -484,3 +484,37 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - Mark elements use `background-color: ${color}40` (25% opacity) + `border-bottom: 2px solid` for subtle highlighting
   - Note indicators rendered as inline emoji after mark element with vertical-align: super
 ---
+
+## Iteration 3 - Tue Feb 24 21:09:18 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-205724/iter-3.log
+---
+**US-A-03 is complete.** There are still stories with `passes: false` remaining (US-A-04 is next at priority 16).
+
+**US-A-03 Summary:**
+- Modified `src/content/annotate.ts` to render saved annotations on page load:
+  - On load, queries service worker for annotations matching current URL via `GET_ANNOTATIONS` message
+  - Highlights rendered as `<mark>` wrappers with stored color (25% opacity background + 2px border-bottom)
+  - Note indicators (📝) visible on annotated text
+  - XPath resolution via `document.evaluate()` with text offset walking for precise location
+  - Fallback to `scrollY` with floating colored bar indicator when XPath fails
+  - `SCROLL_TO_ANNOTATION` message listener for scroll-to + highlight pulse animation
+- Extended `SidePanelMessage` with `GET_ANNOTATIONS` and `SCROLL_TO_ANNOTATION` types
+- Extended `ServiceWorkerMessage` with `ANNOTATIONS_LOADED` type
+- Added `GET_ANNOTATIONS` handler in service-worker.ts (async sendResponse pattern)
+- Typecheck and tests pass
+---
+
+## 2026-02-24 - US-A-04
+- Implemented Annotations Sidebar Section with annotations grouped by page
+- Files created: src/sidepanel/AnnotationsSection.tsx
+- Files modified: src/sidepanel/App.tsx, src/sidepanel/commandRegistry.ts, src/sidepanel/commandRegistry.test.ts
+- **Learnings for future iterations:**
+  - Annotations grouped by page URL using Map; groups sorted by lastAnnotatedAt descending
+  - PageGroup component is collapsible (default collapsed), shows pageTitle + count + date
+  - Delete button uses opacity-0 group-hover:opacity-100 for show-on-hover pattern
+  - Color dot rendered via Tailwind classes mapped from hex color constants (#FFEB3B → bg-yellow-400)
+  - chrome.storage.onChanged listener on `annotations` key for live updates
+  - Command registry pattern: add handler param + type signature + test defaultHandlers simultaneously
+  - Section placement in App.tsx: after TimeMachineSection, before RecentlyClosedSection
+---
