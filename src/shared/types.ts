@@ -154,6 +154,17 @@ export interface Snippet {
   savedAt: number;
 }
 
+export interface NavigationEvent {
+  id: string;
+  tabId: number;
+  url: string;
+  title: string;
+  timestamp: number;
+  transitionType: string;
+  referrerTabId?: number;
+  sessionId: string;
+}
+
 export interface Settings {
   theme: "system" | "light" | "dark";
   autoArchiveMinutes: number;

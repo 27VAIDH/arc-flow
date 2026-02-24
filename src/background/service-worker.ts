@@ -24,6 +24,8 @@ import { getSettings } from "../shared/settingsStorage";
 import { addArchiveEntry, getArchiveEntries } from "../shared/archiveStorage";
 import { matchRoute } from "../shared/routingEngine";
 import { calculateEnergyScore } from "../shared/energyScore";
+import { addNavEvent, pruneOldEvents } from "../shared/navigationDb";
+import type { NavigationEvent } from "../shared/types";
 
 const CONTEXT_MENU_ID = "arcflow-pin-toggle";
 const SAVE_TO_NOTES_MENU_ID = "arcflow-save-to-notes";
@@ -68,10 +70,61 @@ chrome.runtime.onInstalled.addListener(() => {
 
   // Register energy score recalculation alarm (every 5 minutes)
   chrome.alarms.create("arcflow-energy-recalc", { periodInMinutes: 5 });
+
+  // Register navigation event pruning alarm (daily)
+  chrome.alarms.create("arcflow-prune-nav-events", { periodInMinutes: 1440 });
 });
 
 // Open side panel when the toolbar icon is clicked
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+
+// --- Navigation event tracking ---
+
+// Session ID for grouping navigation events (regenerated on service worker restart)
+const navSessionId = crypto.randomUUID();
+
+chrome.webNavigation.onCommitted.addListener(async (details) => {
+  // Only track main frame navigations, ignore subframes
+  if (details.frameId !== 0) return;
+
+  // Skip internal Chrome pages
+  if (
+    details.url.startsWith("chrome://") ||
+    details.url.startsWith("chrome-extension://") ||
+    details.url.startsWith("about:")
+  ) {
+    return;
+  }
+
+  // Try to get the page title (may not be available yet)
+  let title = "";
+  try {
+    const tab = await chrome.tabs.get(details.tabId);
+    title = tab.title ?? "";
+  } catch {
+    // Tab may have been closed already
+  }
+
+  const event: NavigationEvent = {
+    id: crypto.randomUUID(),
+    tabId: details.tabId,
+    url: details.url,
+    title,
+    timestamp: Date.now(),
+    transitionType: details.transitionType,
+    sessionId: navSessionId,
+  };
+
+  addNavEvent(event).catch(() => {
+    // Silently fail — non-critical feature
+  });
+});
+
+// Update navigation event title when page finishes loading (title available now)
+chrome.webNavigation.onCompleted.addListener(async (details) => {
+  if (details.frameId !== 0) return;
+  // Title update is best-effort — the event was already recorded in onCommitted
+});
 
 // --- Tab tracking ---
 
@@ -1093,6 +1146,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
   if (alarm.name === "arcflow-energy-recalc") {
     recalculateEnergyScores().catch(() => {
+      // Silently fail — will retry on next alarm
+    });
+  }
+  if (alarm.name === "arcflow-prune-nav-events") {
+    pruneOldEvents().catch(() => {
       // Silently fail — will retry on next alarm
     });
   }
