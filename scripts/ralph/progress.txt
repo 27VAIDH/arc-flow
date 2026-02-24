@@ -137,3 +137,31 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - exportAnnotations() supports both JSON and Markdown formats; Markdown groups by page URL
   - Annotation interface has XPath + textOffset + textLength for precise text location, plus fallbackScrollY for when XPath fails
 ---
+
+## Iteration 2 - Tue Feb 24 19:11:00 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-190718/iter-2.log
+---
+**US-A-01 is complete.** There are still stories with `passes: false` remaining (US-AP-01 is next at priority 6).
+
+**US-A-01 Summary:**
+- Added `Annotation` interface to `types.ts` with all required fields: id, url, pageTitle, type ('highlight' | 'note'), text, comment, color, xpath, textOffset, textLength, fallbackScrollY, createdAt
+- Created `src/shared/annotationStorage.ts` with:
+  - `saveAnnotation(a)` — upsert by id
+  - `getAnnotationsForUrl(url)` — filter by URL
+  - `deleteAnnotation(id)` — remove by id
+  - `getAllAnnotations()` — return all
+  - `exportAnnotations(format)` — JSON or Markdown export
+- Storage key is `annotations` in `chrome.storage.local`
+- Typecheck and tests pass
+---
+
+## 2026-02-24 - US-AP-01
+- Implemented Autopilot Rules Data Model — interfaces and settings defaults
+- Files modified: src/shared/types.ts, src/shared/constants.ts
+- **Learnings for future iterations:**
+  - AutopilotCondition uses a discriminated `type` field ('time' | 'domain' | 'displayCount') with a string `value` for flexibility
+  - AutopilotRule has `priority` field for scoring engine to weight matched rules
+  - Autopilot disabled by default (`autopilotEnabled: false`) but notifications enabled (`autopilotNotify: true`)
+  - Settings interface and DEFAULT_SETTINGS must stay in sync — add to both simultaneously
+---
