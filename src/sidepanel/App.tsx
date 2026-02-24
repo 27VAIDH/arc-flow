@@ -14,6 +14,7 @@ import { useTheme, applyPanelColor } from "./useTheme";
 import {
   addPinnedApp,
   removePinnedApp,
+  reorderPinnedApps,
 } from "../shared/storage";
 import { getSettings, updateSettings } from "../shared/settingsStorage";
 import {
@@ -618,6 +619,7 @@ export default function App() {
   const [activeDragTab, setActiveDragTab] = useState<TabInfo | null>(null);
   const [activeDragFolder, setActiveDragFolder] = useState<Folder | null>(null);
   const [activeDragFolderItem, setActiveDragFolderItem] = useState<FolderItem | null>(null);
+  const [activeDragPinned, setActiveDragPinned] = useState<PinnedApp | null>(null);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState("default");
   const [tabWorkspaceMap, setTabWorkspaceMap] = useState<
     Record<string, string>
@@ -1714,9 +1716,15 @@ export default function App() {
             break;
           }
         }
+      } else if (id.startsWith("pinned:")) {
+        const pinnedId = id.replace("pinned:", "");
+        const app = pinnedApps.find((a) => a.id === pinnedId);
+        if (app) {
+          setActiveDragPinned(app);
+        }
       }
     },
-    [tabs, folders]
+    [tabs, folders, pinnedApps]
   );
 
   const handleDragEnd = useCallback(
@@ -1724,6 +1732,7 @@ export default function App() {
       setActiveDragTab(null);
       setActiveDragFolder(null);
       setActiveDragFolderItem(null);
+      setActiveDragPinned(null);
       setIsDraggingTabs(false);
       const { active, over } = event;
       if (!over) return;
@@ -1778,6 +1787,74 @@ export default function App() {
           title: tab.title || tab.url,
           favicon: tab.favIconUrl || "",
         });
+        return;
+      }
+
+      // Case 1c: Pinned app dropped onto a folder
+      if (activeId.startsWith("pinned:") && overId.startsWith("folder-drop:")) {
+        const pinnedId = activeId.replace("pinned:", "");
+        const folderId = overId.replace("folder-drop:", "");
+        const app = pinnedApps.find((a) => a.id === pinnedId);
+        if (!app) return;
+
+        // Duplicate check: skip if same URL already exists in target folder
+        const targetFolder = folders.find((f) => f.id === folderId);
+        if (targetFolder?.items.some((i) => i.url === app.url)) {
+          setToast("Already saved in this folder");
+          return;
+        }
+
+        const newItem: FolderItem = {
+          id: crypto.randomUUID(),
+          type: "link",
+          tabId: null,
+          url: app.url,
+          title: app.title,
+          favicon: app.favicon || "",
+          isArchived: false,
+          lastActiveAt: Date.now(),
+        };
+
+        await addItemToFolder(folderId, newItem);
+        return;
+      }
+
+      // Case 1d: Folder item dropped onto pinned apps zone
+      if (activeId.startsWith("folder-item:") && overId === "pinned-drop-zone") {
+        const itemId = activeId.replace("folder-item:", "");
+        let folderItem: FolderItem | undefined;
+        for (const folder of folders) {
+          folderItem = folder.items.find((i) => i.id === itemId);
+          if (folderItem) break;
+        }
+        if (!folderItem || !folderItem.url) return;
+
+        // Duplicate check: skip if URL already pinned
+        if (pinnedApps.some((app) => app.url === folderItem!.url)) {
+          setToast("Already pinned");
+          return;
+        }
+
+        await addPinnedApp({
+          id: crypto.randomUUID(),
+          url: folderItem.url,
+          title: folderItem.title || folderItem.url,
+          favicon: folderItem.favicon || "",
+        });
+        return;
+      }
+
+      // Case 1e: Reorder pinned apps
+      if (activeId.startsWith("pinned:") && overId.startsWith("pinned:")) {
+        const activePinnedId = activeId.replace("pinned:", "");
+        const overPinnedId = overId.replace("pinned:", "");
+
+        const oldIndex = pinnedApps.findIndex((a) => a.id === activePinnedId);
+        const newIndex = pinnedApps.findIndex((a) => a.id === overPinnedId);
+        if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+
+        const reordered = arrayMove(pinnedApps, oldIndex, newIndex);
+        await reorderPinnedApps(reordered.map((a) => a.id));
         return;
       }
 
@@ -1925,7 +2002,9 @@ export default function App() {
       ? "folder"
       : activeDragFolderItem
         ? "folder-item"
-        : undefined;
+        : activeDragPinned
+          ? "pinned"
+          : undefined;
 
   return (
     <div
@@ -2113,6 +2192,7 @@ export default function App() {
           setActiveDragTab(null);
           setActiveDragFolder(null);
           setActiveDragFolderItem(null);
+          setActiveDragPinned(null);
           setIsDraggingTabs(false);
         }}
       >
@@ -2233,6 +2313,23 @@ export default function App() {
               <FolderDragOverlay folder={activeDragFolder} />
             ) : activeDragFolderItem ? (
               <FolderItemDragOverlay item={activeDragFolderItem} />
+            ) : activeDragPinned ? (
+              <div className="flex flex-col items-center">
+                <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-arc-surface flex items-center justify-center shadow-lg border border-gray-200 dark:border-arc-border">
+                  {activeDragPinned.favicon ? (
+                    <img
+                      src={activeDragPinned.favicon}
+                      alt=""
+                      className="w-5 h-5 rounded-full"
+                      draggable={false}
+                    />
+                  ) : (
+                    <span className="text-xs font-bold text-gray-500 dark:text-arc-text-secondary">
+                      {activeDragPinned.title.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+              </div>
             ) : null}
           </DragOverlay>
 
