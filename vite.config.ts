@@ -41,6 +41,10 @@ export default defineConfig({
           __dirname,
           "src/content/research.ts"
         ),
+        "content-annotate": resolve(
+          __dirname,
+          "src/content/annotate.ts"
+        ),
       },
       output: {
         entryFileNames: "[name].js",

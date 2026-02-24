@@ -92,7 +92,7 @@ export type ServiceWorkerMessage =
   | { type: "snippet-saved"; workspaceName: string }
   | { type: "PAGE_TEXT_CAPTURED"; data: PageCapture };
 
-// Messages sent from side panel to service worker
+// Messages sent from side panel (or content scripts) to service worker
 export type SidePanelMessage =
   | { type: "GET_TABS" }
   | { type: "CLOSE_TAB"; tabId: number }
@@ -111,7 +111,9 @@ export type SidePanelMessage =
       redirectRules: { blockedPattern: string; redirectUrl: string }[];
     }
   | { type: "GET_TAB_INFO"; tabId: number }
-  | { type: "CAPTURE_PAGE_TEXT" };
+  | { type: "CAPTURE_PAGE_TEXT" }
+  | { type: "SAVE_ANNOTATION"; annotation: Annotation }
+  | { type: "DELETE_ANNOTATION"; id: string };
 
 export interface Session {
   id: string;

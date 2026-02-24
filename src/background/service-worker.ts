@@ -26,6 +26,7 @@ import { matchRoute } from "../shared/routingEngine";
 import { calculateEnergyScore } from "../shared/energyScore";
 import { addNavEvent, pruneOldEvents } from "../shared/navigationDb";
 import { recordSwitch } from "../shared/affinityStorage";
+import { saveAnnotation, deleteAnnotation } from "../shared/annotationStorage";
 import type { NavigationEvent } from "../shared/types";
 
 const CONTEXT_MENU_ID = "arcflow-pin-toggle";
@@ -1691,6 +1692,16 @@ chrome.runtime.onMessage.addListener(
         } else {
           chrome.tabs.create({ url: message.url }).catch(() => {});
         }
+      });
+    }
+    if (message.type === "SAVE_ANNOTATION") {
+      saveAnnotation(message.annotation).catch(() => {
+        // Annotation save failed silently
+      });
+    }
+    if (message.type === "DELETE_ANNOTATION") {
+      deleteAnnotation(message.id).catch(() => {
+        // Annotation delete failed silently
       });
     }
   }
