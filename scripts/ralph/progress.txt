@@ -414,3 +414,37 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - summarizePage(), connectPages(), generateBrief() each read API key from settings independently
   - 30-second timeout for AI calls (longer than 10s used in grouping service, since summarization prompts are larger)
 ---
+
+## Iteration 1 - Tue Feb 24 21:01:07 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-205724/iter-1.log
+---
+**US-R-02 is complete.** There are still stories with `passes: false` remaining (US-T1-03 is next at priority 14).
+
+**US-R-02 Summary:**
+- Created `src/shared/aiResearchService.ts` with:
+  - `summarizePage(text)` — summarizes page content in 2-3 paragraphs
+  - `connectPages(summaries)` — analyzes connections across multiple pages (themes, contradictions, gaps)
+  - `generateBrief(summaries, topic)` — generates comprehensive research brief with Summary/Key Findings/Sources
+- All functions follow the OpenRouter API pattern from `aiGroupingService.ts` (same base URL, auth, model)
+- 2-second minimum gap between API calls enforced via rate limiter
+- Service worker handles `CAPTURE_PAGE_TEXT` message: forwards to active tab content script, saves capture to IndexedDB, calls `summarizePage()`, stores summary alongside capture
+- Broadcasts `PAGE_TEXT_CAPTURED` twice: immediately (no summary) and after AI summarization completes
+- Handles API errors gracefully (logs error, does not crash)
+- Typecheck and tests pass
+---
+
+## 2026-02-24 - US-T1-03
+- Implemented Timeline View Section for Time Machine feature
+- Files created: src/sidepanel/TimeMachineSection.tsx
+- Files modified: src/sidepanel/App.tsx, src/sidepanel/commandRegistry.ts, src/sidepanel/commandRegistry.test.ts
+- **Learnings for future iterations:**
+  - Collapsible section pattern: `<section>` wrapper with toggle button, chevron icon with rotate-90, conditional content rendering
+  - Date range selector uses pill buttons with `bg-arc-accent text-white` for active state
+  - TreeNode component is recursive with `depth` prop for indentation (16px per level)
+  - Expand/collapse default: depth < 2 starts expanded
+  - getFaviconUrl uses `new URL(url).origin + /favicon.ico` pattern
+  - Command registry: add callback param to both destructured params and type signature, update test's defaultHandlers
+  - scrollIntoView with `behavior: "smooth"` for command palette scroll-to-section
+  - getTreesForTimeRange returns NavTreeNode[] sorted newest-first
+---
