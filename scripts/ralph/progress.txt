@@ -678,3 +678,30 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - Leaf nodes get a small dot indicator (1px rounded circle) instead of empty spacer
   - `transition-[grid-template-rows] duration-200 ease-in-out` for smooth animation
 ---
+
+## Iteration 3 - Tue Feb 24 22:21:26 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-220653/iter-3.log
+---
+**US-T1-05 is complete.** There are still stories with `passes: false` remaining (US-T1-06 is next at priority 22).
+
+**US-T1-05 Summary:**
+- Modified `src/sidepanel/TimeMachineSection.tsx` to add branching tree visualization:
+  - **CSS connector lines**: Vertical `border-left` lines connect parent to children, horizontal `border-top` lines connect each child to the vertical line
+  - **16px depth indentation**: Maintained existing `depth * 16` indentation with connector lines aligned to expand button centers
+  - **Branch points highlighted**: Nodes with children get accent-colored expand chevrons and `font-medium` text; leaf nodes get small dot indicators
+  - **Animated expand/collapse**: CSS grid `grid-template-rows` transition from `0fr` to `1fr` with 200ms ease-in-out for smooth expand/collapse animations
+- Typecheck and tests pass
+---
+
+## 2026-02-25 - US-T1-06
+- Implemented Search and Filter Timeline for Time Machine section
+- Files modified: src/sidepanel/TimeMachineSection.tsx
+- **Learnings for future iterations:**
+  - useDebounce custom hook pattern: useState + useEffect with setTimeout/clearTimeout for cleanup
+  - Tree filtering uses two-pass approach: treeHasMatch() checks if subtree contains any match, nodeMatchesFilter() checks individual node
+  - When filtering is active, auto-expand all matching subtrees (override manual expand state)
+  - Matching nodes highlighted with bg-yellow-100 dark:bg-yellow-900/30 for visual feedback
+  - Domain list collected by recursively walking all tree nodes and extracting hostnames via URL constructor
+  - Non-matching subtrees return null from TreeNode component (hidden entirely)
+---
