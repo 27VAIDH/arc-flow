@@ -165,6 +165,11 @@ export interface NavigationEvent {
   sessionId: string;
 }
 
+export interface NavTreeNode {
+  event: NavigationEvent;
+  children: NavTreeNode[];
+}
+
 export interface TabSwitchEntry {
   from: number;
   to: number;
