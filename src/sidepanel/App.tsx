@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, memo, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, memo, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { useSwipeGesture } from "./useSwipeGesture";
 import type {
   TabInfo,
@@ -485,6 +486,8 @@ function FolderPickerDropdown({
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
+  const [adjustedPos, setAdjustedPos] = useState({ left: x, top: y });
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
@@ -502,12 +505,24 @@ function FolderPickerDropdown({
     };
   }, [onClose]);
 
-  // Adjust position to stay within viewport
+  // Adjust position based on actual dropdown dimensions after render
+  useLayoutEffect(() => {
+    if (!ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let left = x;
+    let top = y;
+    if (left + rect.width > vw) left = Math.max(4, vw - rect.width - 4);
+    if (top + rect.height > vh) top = Math.max(4, vh - rect.height - 4);
+    setAdjustedPos({ left, top });
+  }, [x, y]);
+
   const style: React.CSSProperties = {
     position: "fixed",
-    left: Math.min(x, window.innerWidth - 200),
-    top: Math.min(y, window.innerHeight - 200),
-    zIndex: 1000,
+    left: adjustedPos.left,
+    top: adjustedPos.top,
+    zIndex: 9990,
   };
 
   const renderFolderOption = (
@@ -539,17 +554,18 @@ function FolderPickerDropdown({
 
   const topLevelFolders = folders.filter((f) => f.parentId === null);
 
-  return (
+  return createPortal(
     <div
       ref={ref}
       style={style}
-      className="min-w-[180px] max-w-[240px] bg-white dark:bg-arc-surface border border-gray-200 dark:border-arc-border rounded-xl shadow-xl py-1 max-h-[200px] overflow-y-auto"
+      className="min-w-[180px] max-w-[240px] bg-white dark:bg-[#1e1e2a] backdrop-frosted border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl py-1 max-h-[200px] overflow-y-auto"
     >
       <div className="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 font-medium">
         Save to folder
       </div>
       {topLevelFolders.map((folder) => renderFolderOption(folder, 0))}
-    </div>
+    </div>,
+    document.body
   );
 }
 
