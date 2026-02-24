@@ -272,6 +272,7 @@ const DraggableTabItem = memo(function DraggableTabItem({
       ref={setNodeRef}
       style={style}
       {...attributes}
+      {...listeners}
       role="option"
       aria-selected={tab.active}
       aria-label={srLabel}
@@ -298,11 +299,10 @@ const DraggableTabItem = memo(function DraggableTabItem({
           : ""
       } ${tab.discarded ? "opacity-40 italic" : ""}`}
     >
-      {/* Drag grip */}
+      {/* Drag grip (visual hint only — drag listeners on full row) */}
       <span
-        {...listeners}
-        className="shrink-0 flex items-center cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 touch-none opacity-0 group-hover:opacity-100 transition-opacity"
-        aria-label="Drag to reorder"
+        className="shrink-0 flex items-center text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-30 transition-opacity pointer-events-none"
+        aria-hidden="true"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"

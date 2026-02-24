@@ -229,6 +229,8 @@ function DraggableFolderItem({
     <div
       ref={setNodeRef}
       style={style}
+      {...attributes}
+      {...listeners}
       role="treeitem"
       aria-level={depth + 2}
       aria-label={`${item.type === "link" ? "Saved link: " : ""}${item.title || item.url}`}
@@ -245,12 +247,10 @@ function DraggableFolderItem({
       }}
       onContextMenu={(e) => onContextMenu?.(e, item, folderId)}
     >
-      {/* Drag grip */}
+      {/* Drag grip (visual hint only — drag listeners on full row) */}
       <span
-        {...attributes}
-        {...listeners}
-        className="shrink-0 flex items-center cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 touch-none opacity-0 group-hover:opacity-100 transition-opacity"
-        aria-label="Drag to reorder"
+        className="shrink-0 flex items-center text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-30 transition-opacity pointer-events-none"
+        aria-hidden="true"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
