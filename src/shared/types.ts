@@ -184,4 +184,6 @@ export interface Settings {
   accentColor: string;
   panelColor: string;
   omniboxEnabled: boolean;
+  timeMachineEnabled: boolean;
+  timeMachineRetentionDays: number;
 }

@@ -100,6 +100,10 @@ chrome.webNavigation.onCommitted.addListener(async (details) => {
     return;
   }
 
+  // Check if Time Machine tracking is enabled
+  const settings = await getSettings();
+  if (!settings.timeMachineEnabled) return;
+
   // Try to get the page title (may not be available yet)
   let title = "";
   try {
@@ -1160,9 +1164,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     });
   }
   if (alarm.name === "arcflow-prune-nav-events") {
-    pruneOldEvents().catch(() => {
-      // Silently fail — will retry on next alarm
-    });
+    getSettings()
+      .then((s) => pruneOldEvents(s.timeMachineRetentionDays))
+      .catch(() => {
+        // Silently fail — will retry on next alarm
+      });
   }
 });
 

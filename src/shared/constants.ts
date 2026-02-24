@@ -13,6 +13,8 @@ export const DEFAULT_SETTINGS: Settings = {
   accentColor: "#6366f1",
   panelColor: "",
   omniboxEnabled: true,
+  timeMachineEnabled: true,
+  timeMachineRetentionDays: 30,
 };
 
 export const AUTO_ARCHIVE_OPTIONS = [
@@ -38,5 +40,11 @@ export const THEME_OPTIONS = [
   { label: "System", value: "system" },
   { label: "Light", value: "light" },
   { label: "Dark", value: "dark" },
+] as const;
+
+export const TIME_MACHINE_RETENTION_OPTIONS = [
+  { label: "7 days", value: 7 },
+  { label: "14 days", value: 14 },
+  { label: "30 days", value: 30 },
 ] as const;
 

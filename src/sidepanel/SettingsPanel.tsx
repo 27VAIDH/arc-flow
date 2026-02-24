@@ -10,6 +10,7 @@ import {
   AUTO_ARCHIVE_OPTIONS,
   SUSPEND_THRESHOLD_OPTIONS,
   THEME_OPTIONS,
+  TIME_MACHINE_RETENTION_OPTIONS,
 } from "../shared/constants";
 import { applyPanelColor } from "./useTheme";
 import {
@@ -972,6 +973,49 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                 handleUpdate({ suspendAfterMinutes: parseInt(v, 10) })
               }
             />
+          </div>
+        </section>
+
+        {/* Time Machine */}
+        <section>
+          <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
+            Time Machine
+          </h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-4">
+              <label className="text-sm text-gray-700 dark:text-arc-text-primary shrink-0">
+                Enable tracking
+              </label>
+              <button
+                onClick={() =>
+                  handleUpdate({ timeMachineEnabled: !settings.timeMachineEnabled })
+                }
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                  settings.timeMachineEnabled
+                    ? "bg-arc-accent"
+                    : "bg-gray-300 dark:bg-arc-surface-hover"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                    settings.timeMachineEnabled
+                      ? "translate-x-4"
+                      : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+            <SelectField
+              label="Retention period"
+              value={settings.timeMachineRetentionDays}
+              options={TIME_MACHINE_RETENTION_OPTIONS}
+              onChange={(v) =>
+                handleUpdate({ timeMachineRetentionDays: parseInt(v, 10) })
+              }
+            />
+            <p className="text-xs text-gray-500 dark:text-arc-text-secondary">
+              Records your browsing history for the Time Machine timeline. Older events are automatically pruned.
+            </p>
           </div>
         </section>
 
