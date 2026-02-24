@@ -176,6 +176,21 @@ export interface TabSwitchEntry {
   timestamp: number;
 }
 
+export interface Annotation {
+  id: string;
+  url: string;
+  pageTitle: string;
+  type: 'highlight' | 'note';
+  text: string;
+  comment?: string;
+  color: string;
+  xpath: string;
+  textOffset: number;
+  textLength: number;
+  fallbackScrollY: number;
+  createdAt: number;
+}
+
 export interface Settings {
   theme: "system" | "light" | "dark";
   autoArchiveMinutes: number;
