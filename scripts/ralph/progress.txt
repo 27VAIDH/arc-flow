@@ -581,4 +581,3 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - Tooltip positioned relative to SVG bounding rect with pointer-events-none
   - Node click: if isOpen, finds tab by URL and switches to it; otherwise opens new tab
   - chrome.tabs.query({}) returns all tabs for mapping open tab URLs to graph nodes
----
