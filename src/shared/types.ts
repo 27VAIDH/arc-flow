@@ -245,6 +245,23 @@ export interface GraphData {
   edges: GraphEdge[];
 }
 
+export interface LayoutNode extends GraphNode {
+  x: number;
+  y: number;
+}
+
+export interface LayoutEdge extends GraphEdge {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+export interface LayoutResult {
+  nodes: LayoutNode[];
+  edges: LayoutEdge[];
+}
+
 export interface PageCapture {
   id: string;
   url: string;
