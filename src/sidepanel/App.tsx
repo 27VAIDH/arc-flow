@@ -60,6 +60,7 @@ import {
   KeyboardSensor,
   useSensor,
   useSensors,
+  useDroppable,
   type DragEndEvent,
   type DragStartEvent,
   DragOverlay,
@@ -557,7 +558,7 @@ interface ContextMenuState {
   items: ContextMenuItem[];
 }
 
-// Custom collision detection: prefer droppable folder targets, then fall back to closest center
+// Custom collision detection: prefer droppable folder targets, then zone targets, then fall back to closest center
 const customCollisionDetection: CollisionDetection = (args) => {
   // First check for pointer-within collisions (good for drop targets like folders)
   const pointerCollisions = pointerWithin(args);
@@ -567,11 +568,47 @@ const customCollisionDetection: CollisionDetection = (args) => {
       String(c.id).startsWith("folder-drop:")
     );
     if (folderDrops.length > 0) return folderDrops;
+    // Then check for pinned-drop-zone and tablist-drop-zone
+    const zoneDrops = pointerCollisions.filter((c) => {
+      const id = String(c.id);
+      return id === "pinned-drop-zone" || id === "tablist-drop-zone";
+    });
+    if (zoneDrops.length > 0) return zoneDrops;
     return pointerCollisions;
   }
   // Fall back to rect intersection for sortable items
   return rectIntersection(args);
 };
+
+// Droppable zone wrapper for pinned apps area
+function DroppablePinnedZone({ children }: { children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: "pinned-drop-zone" });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`transition-all duration-200 ${
+        isOver ? "ring-1 ring-arc-accent/30 rounded-xl" : ""
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Droppable zone wrapper for tab list area
+function DroppableTabListZone({ children }: { children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: "tablist-drop-zone" });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`transition-all duration-200 ${
+        isOver ? "ring-1 ring-arc-accent/30 rounded-xl" : ""
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
 
 export default function App() {
   const [tabs, setTabs] = useState<TabInfo[]>([]);
@@ -2039,30 +2076,32 @@ export default function App() {
         </div>
       )}
 
+      <DndContext
+        sensors={sensors}
+        collisionDetection={customCollisionDetection}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => {
+          setActiveDragTab(null);
+          setActiveDragFolder(null);
+          setActiveDragFolderItem(null);
+          setIsDraggingTabs(false);
+        }}
+      >
       {/* Pinned Apps Row (Zone 2) */}
-      <PinnedAppsRow
-        tabs={tabs}
-        pinnedApps={pinnedApps}
-        onContextMenu={setContextMenu}
-      />
+      <DroppablePinnedZone>
+        <PinnedAppsRow
+          tabs={tabs}
+          pinnedApps={pinnedApps}
+          onContextMenu={setContextMenu}
+        />
+      </DroppablePinnedZone>
 
       <main
         ref={mainContentRef}
         className={`flex-1 flex flex-col overflow-y-auto${swipeBounce === "left" ? " swipe-bounce-left" : swipeBounce === "right" ? " swipe-bounce-right" : ""}`}
         aria-label="Tab management"
       >
-        <DndContext
-          sensors={sensors}
-          collisionDetection={customCollisionDetection}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onDragCancel={() => {
-            setActiveDragTab(null);
-            setActiveDragFolder(null);
-            setActiveDragFolderItem(null);
-            setIsDraggingTabs(false);
-          }}
-        >
           {/* Folder Tree (Zone 3) */}
           <FolderTree
             onContextMenu={setContextMenu}
@@ -2083,6 +2122,7 @@ export default function App() {
           />
 
           {/* Tab list */}
+          <DroppableTabListZone>
           <section className="flex-1 px-1 pt-2" aria-label="Open tabs" data-drop-section="tabs">
             <div className="flex items-center justify-between px-2 py-1">
               <p
@@ -2156,6 +2196,7 @@ export default function App() {
               )}
             </SortableContext>
           </section>
+          </DroppableTabListZone>
 
           <DragOverlay>
             {activeDragTab ? (
@@ -2166,7 +2207,6 @@ export default function App() {
               <FolderItemDragOverlay item={activeDragFolderItem} />
             ) : null}
           </DragOverlay>
-        </DndContext>
 
         {/* Archive Section (Zone 4) */}
         <ArchiveSection />
@@ -2174,6 +2214,7 @@ export default function App() {
         {/* Recently Closed Section */}
         <RecentlyClosedSection workspaces={workspaces} />
       </main>
+      </DndContext>
 
       {/* Quick Notes */}
       {activeWorkspace && (
