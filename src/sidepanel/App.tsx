@@ -554,6 +554,23 @@ function FolderPickerDropdown({
 
   const topLevelFolders = folders.filter((f) => f.parentId === null);
 
+  const [isCreating, setIsCreating] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isCreating && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isCreating]);
+
+  const handleCreateFolder = async () => {
+    const trimmed = newFolderName.trim();
+    if (!trimmed) return;
+    const folder = await createFolder(trimmed, null);
+    onSelect(folder.id);
+  };
+
   return createPortal(
     <div
       ref={ref}
@@ -564,6 +581,66 @@ function FolderPickerDropdown({
         Save to folder
       </div>
       {topLevelFolders.map((folder) => renderFolderOption(folder, 0))}
+      <div className="border-t border-gray-200 dark:border-white/10 mt-1 pt-1">
+        {!isCreating ? (
+          <button
+            onClick={() => setIsCreating(true)}
+            className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-arc-surface-hover flex items-center gap-2 transition-colors duration-200"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="w-4 h-4 shrink-0 text-gray-500 dark:text-gray-400"
+            >
+              <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
+            </svg>
+            <span className="truncate">New Folder</span>
+          </button>
+        ) : (
+          <div className="px-3 py-1.5 flex items-center gap-1">
+            <input
+              ref={inputRef}
+              type="text"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.stopPropagation();
+                  handleCreateFolder();
+                } else if (e.key === "Escape") {
+                  e.stopPropagation();
+                  setIsCreating(false);
+                  setNewFolderName("");
+                }
+              }}
+              placeholder="Folder name"
+              className="flex-1 min-w-0 text-sm bg-transparent border border-gray-300 dark:border-white/20 rounded px-2 py-1 outline-none focus:border-arc-accent dark:text-white"
+            />
+            <button
+              onClick={handleCreateFolder}
+              className="p-1 text-green-500 hover:text-green-400 transition-colors"
+              title="Create"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+              </svg>
+            </button>
+            <button
+              onClick={() => {
+                setIsCreating(false);
+                setNewFolderName("");
+              }}
+              className="p-1 text-gray-400 hover:text-gray-300 transition-colors"
+              title="Cancel"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+              </svg>
+            </button>
+          </div>
+        )}
+      </div>
     </div>,
     document.body
   );
