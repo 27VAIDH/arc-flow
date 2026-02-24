@@ -21,6 +21,8 @@ Started: Tue Feb 24 18:49:55 IST 2026
 - Graph building: nodes keyed by URL, edges keyed by type:source|target; tabId→URL map built from sorted navEvents for resolving references
 - Content scripts: each content script gets its own entry in manifest.json content_scripts array and its own vite entry point (content-xxx naming convention)
 - IndexedDB for large data (nav events, page captures); chrome.storage.local for small data (annotations, settings, affinity)
+- Content script annotations: use imperative DOM (no React), XPath for text location with fallbackScrollY, messages to service worker for persistence
+- crypto.randomUUID() available in content scripts for generating annotation IDs
 
 ## 2026-02-24 - INFRA-01
 - Implemented IndexedDB-backed navigation event tracking system
@@ -282,4 +284,35 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - Vite config needs a separate entry point for each content script (content-research)
   - ResearchSession stores pageIds as string array; captures reference sessionId via index
   - deleteSession cascades to delete all associated page captures
+---
+
+## Iteration 3 - Tue Feb 24 19:20:07 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-191248/iter-3.log
+---
+**US-R-01 is complete.** There are still stories with `passes: false` remaining (US-A-02 is next at priority 10).
+
+**US-R-01 Summary:**
+- Added `PageCapture` interface (`id`, `url`, `title`, `text`, `sessionId`, `capturedAt`, `summary?`) and `ResearchSession` interface (`id`, `name`, `pageIds`, `createdAt`) to `types.ts`
+- Extended `ServiceWorkerMessage` with `PAGE_TEXT_CAPTURED` type and `SidePanelMessage` with `CAPTURE_PAGE_TEXT` type
+- Created `src/shared/researchDb.ts` with IndexedDB wrapper: `initResearchDb()`, `savePageCapture()`, `getCaptures(sessionId)`, `saveSession()`, `getSessions()`, `deleteSession(sessionId)` (cascades to captures)
+- Created `src/content/research.ts` — no-op content script that extracts `document.body.innerText` only when triggered by `CAPTURE_PAGE_TEXT` message
+- Registered research content script in `manifest.json` (all URLs, `document_idle`)
+- Added `content-research` entry point to `vite.config.ts`
+- Typecheck and tests pass
+---
+
+## 2026-02-24 - US-A-02
+- Implemented Content Script Annotation Toolbar with floating toolbar on text selection
+- Files created: src/content/annotate.ts
+- Files modified: src/shared/types.ts, src/background/service-worker.ts, public/manifest.json, vite.config.ts
+- **Learnings for future iterations:**
+  - Floating toolbar positioned relative to selection bounding rect (fixed positioning, translateX(-50%) for centering)
+  - XPath generation walks up DOM tree; text offset calculated via TreeWalker within parent element
+  - Content script uses mouseup + debounce for selection detection (100ms delay)
+  - Toolbar dismissed on mousedown outside via document-level listener
+  - Note input replaces toolbar in-place (same position) with input + save button
+  - SAVE_ANNOTATION and DELETE_ANNOTATION added to SidePanelMessage union type (content scripts use same message channel)
+  - Service worker imports annotationStorage and calls saveAnnotation/deleteAnnotation directly
+  - z-index 2147483647 (max 32-bit int) ensures toolbar is above all page content
 ---
