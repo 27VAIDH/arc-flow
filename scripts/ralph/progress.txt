@@ -651,3 +651,30 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - window.confirm() for confirmation dialog when restoring >5 tabs — simple and effective
   - restorePath() opens first URL via chrome.windows.create, then adds remaining tabs to that window
 ---
+
+## Iteration 2 - Tue Feb 24 22:18:40 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-220653/iter-2.log
+---
+**US-T1-04 is complete.** There are still stories with `passes: false` remaining (US-T1-05 is next at priority 21).
+
+**US-T1-04 Summary:**
+- Modified `src/sidepanel/TimeMachineSection.tsx` to add restore functionality:
+  - Restore button (refresh icon) appears on tree node hover via `opacity-0 group-hover:opacity-100`
+  - `collectPathUrls()` builds the full URL path from root to selected node by passing `ancestorUrls` prop recursively through TreeNode components
+  - `restorePath()` opens all URLs in a new window: first URL via `chrome.windows.create()`, remaining via `chrome.tabs.create()` with the new window's ID
+  - Confirmation dialog (`window.confirm`) shown when restoring >5 tabs
+- Typecheck and tests pass
+---
+
+## 2026-02-24 - US-T1-05
+- Implemented Branching Tree Visualization with CSS connector lines and animated expand/collapse
+- Files modified: src/sidepanel/TimeMachineSection.tsx
+- **Learnings for future iterations:**
+  - CSS connector lines: vertical border-left for parent-to-children, horizontal border-top for each child connector
+  - Vertical line positioned at `depth * 16 + 11` (center of expand button area), horizontal line 9px wide from vertical line to child content
+  - Animated expand/collapse uses CSS grid trick: `grid-template-rows` transitioning between `0fr` and `1fr` with `overflow-hidden` inner div
+  - Branch points (nodes with children) highlighted with accent-colored expand chevron and font-medium
+  - Leaf nodes get a small dot indicator (1px rounded circle) instead of empty spacer
+  - `transition-[grid-template-rows] duration-200 ease-in-out` for smooth animation
+---
