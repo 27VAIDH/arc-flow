@@ -111,3 +111,29 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - Orphan events (no referrer or no matching parent) become root nodes
   - eventsByTabId map is key for efficient parent lookup during tree construction
 ---
+
+## Iteration 1 - Tue Feb 24 19:09:10 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-190718/iter-1.log
+---
+**US-T1-02 is complete.** There are still stories with `passes: false` remaining (US-A-01 is next at priority 5).
+
+**US-T1-02 Summary:**
+- Added `NavTreeNode` interface to `types.ts`: `{ event: NavigationEvent, children: NavTreeNode[] }`
+- Created `src/shared/timeMachineStorage.ts` with:
+  - `buildNavigationTree(events)` — chains events via `referrerTabId`, orphans become roots, sorted newest-first
+  - `getTreesForTimeRange(start, end)` — fetches from IndexedDB and builds trees for a time window
+- Typecheck and tests pass
+---
+
+## 2026-02-24 - US-A-01
+- Implemented Annotation data model and chrome.storage.local-backed storage layer
+- Files created: src/shared/annotationStorage.ts
+- Files modified: src/shared/types.ts
+- **Learnings for future iterations:**
+  - Annotation storage uses chrome.storage.local (not IndexedDB) — annotations are small, don't need indexing
+  - Storage key is `annotations` — same pattern as other chrome.storage.local stores (tabSwitchLog, etc.)
+  - saveAnnotation() does upsert — checks by id, updates if exists, appends if new
+  - exportAnnotations() supports both JSON and Markdown formats; Markdown groups by page URL
+  - Annotation interface has XPath + textOffset + textLength for precise text location, plus fallbackScrollY for when XPath fails
+---
