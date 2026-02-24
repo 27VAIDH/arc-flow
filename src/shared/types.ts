@@ -90,7 +90,9 @@ export type ServiceWorkerMessage =
     }
   | { type: "notes-saved-from-page"; workspaceName: string }
   | { type: "snippet-saved"; workspaceName: string }
-  | { type: "PAGE_TEXT_CAPTURED"; data: PageCapture };
+  | { type: "PAGE_TEXT_CAPTURED"; data: PageCapture }
+  | { type: "AUTOPILOT_SWITCH"; workspaceId: string; workspaceName: string }
+  | { type: "AUTOPILOT_UNDO" };
 
 // Messages sent from side panel (or content scripts) to service worker
 export type SidePanelMessage =
@@ -113,7 +115,8 @@ export type SidePanelMessage =
   | { type: "GET_TAB_INFO"; tabId: number }
   | { type: "CAPTURE_PAGE_TEXT" }
   | { type: "SAVE_ANNOTATION"; annotation: Annotation }
-  | { type: "DELETE_ANNOTATION"; id: string };
+  | { type: "DELETE_ANNOTATION"; id: string }
+  | { type: "AUTOPILOT_UNDO" };
 
 export interface Session {
   id: string;

@@ -27,7 +27,9 @@ import { calculateEnergyScore } from "../shared/energyScore";
 import { addNavEvent, pruneOldEvents } from "../shared/navigationDb";
 import { recordSwitch } from "../shared/affinityStorage";
 import { saveAnnotation, deleteAnnotation } from "../shared/annotationStorage";
-import type { NavigationEvent } from "../shared/types";
+import { getBestMatch } from "../shared/autopilotEngine";
+import { getActiveWorkspaceId } from "../shared/workspaceStorage";
+import type { NavigationEvent, AutopilotRule } from "../shared/types";
 
 const CONTEXT_MENU_ID = "arcflow-pin-toggle";
 const SAVE_TO_NOTES_MENU_ID = "arcflow-save-to-notes";
@@ -75,6 +77,9 @@ chrome.runtime.onInstalled.addListener(() => {
 
   // Register navigation event pruning alarm (daily)
   chrome.alarms.create("arcflow-prune-nav-events", { periodInMinutes: 1440 });
+
+  // Register autopilot evaluation alarm (every 5 minutes)
+  chrome.alarms.create("arcflow-evaluate-autopilot", { periodInMinutes: 5 });
 });
 
 // Open side panel when the toolbar icon is clicked
@@ -1171,6 +1176,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
         // Silently fail — will retry on next alarm
       });
   }
+  if (alarm.name === "arcflow-evaluate-autopilot") {
+    evaluateAutopilot().catch(() => {
+      // Silently fail — will retry on next alarm
+    });
+  }
 });
 
 // --- AI Auto-workspace suggestion engine ---
@@ -1366,6 +1376,135 @@ async function checkForWorkspaceSuggestion(): Promise<void> {
   chrome.runtime.sendMessage(message).catch(() => {
     // Side panel may not be open
   });
+}
+
+// --- Autopilot workspace switching ---
+
+// Track previous workspace for undo
+let autopilotPreviousWorkspaceId: string | null = null;
+let autopilotSwitchTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function evaluateAutopilot(): Promise<void> {
+  const settings = await getSettings();
+  if (!settings.autopilotEnabled) return;
+
+  // Load autopilot rules from storage
+  const result = await chrome.storage.local.get("autopilotRules");
+  const rules: AutopilotRule[] = (result.autopilotRules as AutopilotRule[] | undefined) ?? [];
+  if (rules.length === 0) return;
+
+  // Build context: current time, active tab URL, display count
+  let activeTabUrl = "";
+  try {
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (activeTab?.url) {
+      activeTabUrl = activeTab.url;
+    }
+  } catch {
+    // No active tab
+  }
+
+  let displayCount = 1;
+  try {
+    const displays = await chrome.system.display.getInfo();
+    displayCount = displays.length;
+  } catch {
+    // Fallback to 1
+  }
+
+  const context = {
+    currentTime: new Date(),
+    activeTabUrl,
+    displayCount,
+  };
+
+  const bestMatch = getBestMatch(rules, context);
+  if (!bestMatch) return;
+
+  // Check if best match differs from current workspace
+  const currentWsId = await getActiveWorkspaceId();
+  if (bestMatch.targetWorkspaceId === currentWsId) return;
+
+  // Get workspace name for notification
+  const workspaces = await getWorkspaces();
+  const targetWs = workspaces.find((w) => w.id === bestMatch.targetWorkspaceId);
+  if (!targetWs) return;
+
+  const targetName = `${targetWs.emoji} ${targetWs.name}`;
+
+  // Show notification if enabled (with 5-second delay before actual switch)
+  if (settings.autopilotNotify) {
+    try {
+      chrome.notifications.create("arcflow-autopilot-switch", {
+        type: "basic",
+        iconUrl: "icon-128.png",
+        title: "ArcFlow Autopilot",
+        message: `Switching to ${targetName} in 5 seconds...`,
+        buttons: [{ title: "Cancel" }],
+        requireInteraction: true,
+      });
+    } catch {
+      // Notifications may not be available
+    }
+  }
+
+  // Store previous workspace for undo
+  autopilotPreviousWorkspaceId = currentWsId;
+
+  // Clear any existing pending switch
+  if (autopilotSwitchTimer !== null) {
+    clearTimeout(autopilotSwitchTimer);
+  }
+
+  // 5-second delay before actual switch
+  autopilotSwitchTimer = setTimeout(async () => {
+    autopilotSwitchTimer = null;
+    try {
+      await setActiveWorkspace(bestMatch.targetWorkspaceId);
+
+      // Clear notification
+      try {
+        chrome.notifications.clear("arcflow-autopilot-switch");
+      } catch {
+        // Ignore
+      }
+
+      // Notify sidepanel about the switch
+      const message: ServiceWorkerMessage = {
+        type: "AUTOPILOT_SWITCH",
+        workspaceId: bestMatch.targetWorkspaceId,
+        workspaceName: targetName,
+      };
+      chrome.runtime.sendMessage(message).catch(() => {
+        // Side panel may not be open
+      });
+    } catch {
+      // Switch failed
+    }
+  }, 5000);
+}
+
+// Handle notification button click (cancel autopilot switch)
+chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
+  if (notificationId === "arcflow-autopilot-switch" && buttonIndex === 0) {
+    // Cancel the pending switch
+    if (autopilotSwitchTimer !== null) {
+      clearTimeout(autopilotSwitchTimer);
+      autopilotSwitchTimer = null;
+    }
+    autopilotPreviousWorkspaceId = null;
+    chrome.notifications.clear("arcflow-autopilot-switch");
+  }
+});
+
+async function undoAutopilotSwitch(): Promise<void> {
+  if (!autopilotPreviousWorkspaceId) return;
+  try {
+    await setActiveWorkspace(autopilotPreviousWorkspaceId);
+  } catch {
+    // Previous workspace may no longer exist
+  }
+  autopilotPreviousWorkspaceId = null;
 }
 
 // --- Split view: side-by-side windows ---
@@ -1702,6 +1841,11 @@ chrome.runtime.onMessage.addListener(
     if (message.type === "DELETE_ANNOTATION") {
       deleteAnnotation(message.id).catch(() => {
         // Annotation delete failed silently
+      });
+    }
+    if (message.type === "AUTOPILOT_UNDO") {
+      undoAutopilotSwitch().catch(() => {
+        // Undo failed silently
       });
     }
   }
