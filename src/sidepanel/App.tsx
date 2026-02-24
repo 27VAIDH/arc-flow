@@ -2430,6 +2430,8 @@ export default function App() {
         <OrganizeTabsModal
           tabs={filteredTabs}
           folders={folders}
+          workspaces={workspaces}
+          activeWorkspaceId={activeWorkspaceId}
           onClose={() => setShowOrganizeTabs(false)}
         />
       )}
