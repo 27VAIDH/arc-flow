@@ -15,6 +15,8 @@ export const DEFAULT_SETTINGS: Settings = {
   omniboxEnabled: true,
   timeMachineEnabled: true,
   timeMachineRetentionDays: 30,
+  autopilotEnabled: false,
+  autopilotNotify: true,
 };
 
 export const AUTO_ARCHIVE_OPTIONS = [

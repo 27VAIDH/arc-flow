@@ -191,6 +191,21 @@ export interface Annotation {
   createdAt: number;
 }
 
+export interface AutopilotCondition {
+  type: 'time' | 'domain' | 'displayCount';
+  value: string;
+}
+
+export interface AutopilotRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  conditions: AutopilotCondition[];
+  targetWorkspaceId: string;
+  priority: number;
+  createdAt: number;
+}
+
 export interface Settings {
   theme: "system" | "light" | "dark";
   autoArchiveMinutes: number;
@@ -206,4 +221,6 @@ export interface Settings {
   omniboxEnabled: boolean;
   timeMachineEnabled: boolean;
   timeMachineRetentionDays: number;
+  autopilotEnabled: boolean;
+  autopilotNotify: boolean;
 }
