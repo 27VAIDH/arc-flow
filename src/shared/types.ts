@@ -217,6 +217,27 @@ export interface ScoredRule {
   score: number;
 }
 
+export interface GraphNode {
+  id: string;
+  url: string;
+  domain: string;
+  title: string;
+  visitCount: number;
+  isOpen: boolean;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  weight: number;
+  type: 'navigation' | 'switch';
+}
+
+export interface GraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
 export interface Settings {
   theme: "system" | "light" | "dark";
   autoArchiveMinutes: number;
