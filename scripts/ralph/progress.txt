@@ -23,6 +23,9 @@ Started: Tue Feb 24 18:49:55 IST 2026
 - IndexedDB for large data (nav events, page captures); chrome.storage.local for small data (annotations, settings, affinity)
 - Content script annotations: use imperative DOM (no React), XPath for text location with fallbackScrollY, messages to service worker for persistence
 - crypto.randomUUID() available in content scripts for generating annotation IDs
+- Autopilot rules stored in chrome.storage.local under key `autopilotRules` (AutopilotRule[])
+- Notification-based user confirmation: chrome.notifications.create with buttons, handle via onButtonClicked listener
+- Autopilot switch uses 5-second delay timer (cancellable via notification button or AUTOPILOT_UNDO message)
 
 ## 2026-02-24 - INFRA-01
 - Implemented IndexedDB-backed navigation event tracking system
@@ -315,4 +318,35 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - SAVE_ANNOTATION and DELETE_ANNOTATION added to SidePanelMessage union type (content scripts use same message channel)
   - Service worker imports annotationStorage and calls saveAnnotation/deleteAnnotation directly
   - z-index 2147483647 (max 32-bit int) ensures toolbar is above all page content
+---
+
+## Iteration 1 - Tue Feb 24 19:29:13 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-192530/iter-1.log
+---
+**US-A-02 is complete.** There are still stories with `passes: false` remaining (US-AP-03 is next at priority 11).
+
+**US-A-02 Summary:**
+- Created `src/content/annotate.ts` — floating annotation toolbar that appears on text selection
+  - 3 highlight color buttons: yellow (#FFEB3B), green (#81C784), blue (#64B5F6)
+  - Note button opens inline text input for adding comments
+  - XPath + fallbackScrollY captured for each annotation
+  - Toolbar dismissed on click outside
+- Extended `SidePanelMessage` with `SAVE_ANNOTATION` and `DELETE_ANNOTATION` message types in `types.ts`
+- Added service worker handlers for `SAVE_ANNOTATION` and `DELETE_ANNOTATION` using `annotationStorage`
+- Registered content script in `manifest.json` (all URLs, document_idle) and `vite.config.ts` (content-annotate entry)
+- Typecheck and tests pass
+---
+
+## 2026-02-24 - US-AP-03
+- Implemented Autopilot Background Worker — wired scoring engine into service worker with alarm-based evaluation
+- Files modified: src/shared/types.ts, src/background/service-worker.ts, public/manifest.json
+- **Learnings for future iterations:**
+  - Autopilot rules stored in chrome.storage.local under key `autopilotRules` (AutopilotRule[])
+  - chrome.notifications.create with buttons for user-facing confirmations; handle via onButtonClicked listener
+  - 5-second cancellable delay before workspace switch (clearTimeout pattern)
+  - autopilotPreviousWorkspaceId tracks last workspace for undo; cleared on successful undo or cancel
+  - AUTOPILOT_SWITCH sent as ServiceWorkerMessage (service worker → sidepanel), AUTOPILOT_UNDO sent as SidePanelMessage (sidepanel → service worker)
+  - evaluateAutopilot() is a no-op when autopilotEnabled is false or no rules exist
+  - Display count retrieved via chrome.system.display.getInfo() for multi-monitor condition matching
 ---
