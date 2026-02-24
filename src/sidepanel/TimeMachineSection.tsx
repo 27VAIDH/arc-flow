@@ -1,9 +1,61 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { NavTreeNode } from "../shared/types";
 import { getTreesForTimeRange } from "../shared/timeMachineStorage";
 import { getSettings } from "../shared/settingsStorage";
 
 type DateRange = "today" | "yesterday" | "week";
+
+function getDomain(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
+
+function collectDomains(trees: NavTreeNode[]): string[] {
+  const domains = new Set<string>();
+  function walk(node: NavTreeNode) {
+    domains.add(getDomain(node.event.url));
+    node.children.forEach(walk);
+  }
+  trees.forEach(walk);
+  return Array.from(domains).sort();
+}
+
+function nodeMatchesFilter(
+  node: NavTreeNode,
+  searchLower: string,
+  domainFilter: string,
+): boolean {
+  const titleMatch =
+    !searchLower ||
+    (node.event.title || "").toLowerCase().includes(searchLower) ||
+    node.event.url.toLowerCase().includes(searchLower);
+  const domainMatch =
+    !domainFilter || getDomain(node.event.url) === domainFilter;
+  return titleMatch && domainMatch;
+}
+
+function treeHasMatch(
+  node: NavTreeNode,
+  searchLower: string,
+  domainFilter: string,
+): boolean {
+  if (nodeMatchesFilter(node, searchLower, domainFilter)) return true;
+  return node.children.some((child) =>
+    treeHasMatch(child, searchLower, domainFilter),
+  );
+}
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debouncedValue;
+}
 
 function getTimeRange(range: DateRange): { start: number; end: number } {
   const now = new Date();
@@ -66,14 +118,33 @@ function TreeNode({
   node,
   depth,
   ancestorUrls,
+  searchLower,
+  domainFilter,
 }: {
   node: NavTreeNode;
   depth: number;
   ancestorUrls: string[];
+  searchLower: string;
+  domainFilter: string;
 }) {
+  const isFiltering = searchLower !== "" || domainFilter !== "";
   const [expanded, setExpanded] = useState(depth < 2);
   const hasChildren = node.children.length > 0;
   const pathUrls = collectPathUrls(ancestorUrls, node);
+
+  // Auto-expand when filtering and this subtree has matches
+  const hasMatchInSubtree = useMemo(
+    () => (isFiltering ? treeHasMatch(node, searchLower, domainFilter) : true),
+    [node, searchLower, domainFilter, isFiltering],
+  );
+
+  // Hide this entire subtree if no matches
+  if (isFiltering && !hasMatchInSubtree) return null;
+
+  const selfMatches = isFiltering
+    ? nodeMatchesFilter(node, searchLower, domainFilter)
+    : false;
+  const isExpanded = isFiltering ? true : expanded;
 
   const handleClick = useCallback(() => {
     chrome.tabs.create({ url: node.event.url });
@@ -104,20 +175,20 @@ function TreeNode({
       <div
         className={`flex items-center gap-1.5 px-1 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 group ${
           hasChildren ? "font-medium" : ""
-        }`}
+        } ${isFiltering && selfMatches ? "bg-yellow-100 dark:bg-yellow-900/30" : ""}`}
         style={{ paddingLeft: `${depth * 16 + 4}px` }}
       >
         {hasChildren ? (
           <button
             onClick={() => setExpanded((prev) => !prev)}
             className="w-3.5 h-3.5 shrink-0 flex items-center justify-center text-arc-accent dark:text-arc-accent"
-            aria-label={expanded ? "Collapse" : "Expand"}
+            aria-label={isExpanded ? "Collapse" : "Expand"}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 20 20"
               fill="currentColor"
-              className={`w-3 h-3 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
+              className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}
             >
               <path
                 fillRule="evenodd"
@@ -184,7 +255,7 @@ function TreeNode({
         <div
           className="grid transition-[grid-template-rows] duration-200 ease-in-out"
           style={{
-            gridTemplateRows: expanded ? "1fr" : "0fr",
+            gridTemplateRows: isExpanded ? "1fr" : "0fr",
           }}
         >
           <div className="overflow-hidden">
@@ -200,6 +271,8 @@ function TreeNode({
                   node={child}
                   depth={depth + 1}
                   ancestorUrls={pathUrls}
+                  searchLower={searchLower}
+                  domainFilter={domainFilter}
                 />
               ))}
             </div>
@@ -215,6 +288,12 @@ export default function TimeMachineSection() {
   const [dateRange, setDateRange] = useState<DateRange>("today");
   const [trees, setTrees] = useState<NavTreeNode[]>([]);
   const [enabled, setEnabled] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [domainFilter, setDomainFilter] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const debouncedSearch = useDebounce(searchQuery, 300);
+  const searchLower = debouncedSearch.toLowerCase();
+  const domains = useMemo(() => collectDomains(trees), [trees]);
 
   const loadTrees = useCallback(async () => {
     const settings = await getSettings();
@@ -309,6 +388,30 @@ export default function TimeMachineSection() {
             ))}
           </div>
 
+          {/* Search and domain filter */}
+          <div className="flex gap-1 px-2 pb-1.5">
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by title or URL..."
+              className="flex-1 text-[10px] px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 focus:outline-none focus:border-arc-accent placeholder-gray-400 dark:placeholder-gray-500"
+            />
+            <select
+              value={domainFilter}
+              onChange={(e) => setDomainFilter(e.target.value)}
+              className="text-[10px] px-1 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 focus:outline-none focus:border-arc-accent"
+            >
+              <option value="">All domains</option>
+              {domains.map((domain) => (
+                <option key={domain} value={domain}>
+                  {domain}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Tree list */}
           {trees.length === 0 ? (
             <p className="text-xs text-gray-400 dark:text-gray-500 px-2 py-2 text-center">
@@ -317,7 +420,14 @@ export default function TimeMachineSection() {
           ) : (
             <div className="flex flex-col gap-0.5">
               {trees.map((tree) => (
-                <TreeNode key={tree.event.id} node={tree} depth={0} ancestorUrls={[]} />
+                <TreeNode
+                  key={tree.event.id}
+                  node={tree}
+                  depth={0}
+                  ancestorUrls={[]}
+                  searchLower={searchLower}
+                  domainFilter={domainFilter}
+                />
               ))}
             </div>
           )}
