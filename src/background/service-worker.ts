@@ -28,6 +28,8 @@ import { addNavEvent, pruneOldEvents } from "../shared/navigationDb";
 import { recordSwitch } from "../shared/affinityStorage";
 import { saveAnnotation, deleteAnnotation } from "../shared/annotationStorage";
 import { getBestMatch } from "../shared/autopilotEngine";
+import { savePageCapture } from "../shared/researchDb";
+import { summarizePage } from "../shared/aiResearchService";
 import { getActiveWorkspaceId } from "../shared/workspaceStorage";
 import type { NavigationEvent, AutopilotRule } from "../shared/types";
 
@@ -1847,6 +1849,56 @@ chrome.runtime.onMessage.addListener(
       undoAutopilotSwitch().catch(() => {
         // Undo failed silently
       });
+    }
+    if (message.type === "CAPTURE_PAGE_TEXT") {
+      (async () => {
+        try {
+          const [activeTab] = await chrome.tabs.query({
+            active: true,
+            currentWindow: true,
+          });
+          if (!activeTab?.id) return;
+
+          const response = await chrome.tabs.sendMessage(activeTab.id, {
+            type: "CAPTURE_PAGE_TEXT",
+          }) as { text: string; title: string; url: string };
+
+          const capture: import("../shared/types").PageCapture = {
+            id: crypto.randomUUID(),
+            url: response.url,
+            title: response.title,
+            text: response.text,
+            sessionId: "",
+            capturedAt: Date.now(),
+          };
+
+          await savePageCapture(capture);
+
+          // Broadcast capture to sidepanel immediately (without summary)
+          const captureMsg: ServiceWorkerMessage = {
+            type: "PAGE_TEXT_CAPTURED",
+            data: capture,
+          };
+          chrome.runtime.sendMessage(captureMsg).catch(() => {});
+
+          // Summarize asynchronously and update capture
+          try {
+            const summary = await summarizePage(response.text);
+            capture.summary = summary;
+            await savePageCapture(capture);
+            // Broadcast updated capture with summary
+            const updatedMsg: ServiceWorkerMessage = {
+              type: "PAGE_TEXT_CAPTURED",
+              data: capture,
+            };
+            chrome.runtime.sendMessage(updatedMsg).catch(() => {});
+          } catch (e) {
+            console.error("AI summarization failed:", e);
+          }
+        } catch (e) {
+          console.error("Page text capture failed:", e);
+        }
+      })();
     }
   }
 );
