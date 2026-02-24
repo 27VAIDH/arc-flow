@@ -29,6 +29,7 @@ Started: Tue Feb 24 18:49:55 IST 2026
 - AI services: aiResearchService.ts has summarizePage(), connectPages(), generateBrief() — each reads API key from settings, enforces 2s rate limit
 - Annotation rendering: XPath + textOffset + textLength for precise location; fallback to scrollY floating indicator when XPath fails
 - Service worker GET_ANNOTATIONS uses sendResponse pattern (return true for async); content scripts use chrome.runtime.sendMessage with callback
+- Research sessions: managed via researchDb.ts (IndexedDB); sidepanel listens for PAGE_TEXT_CAPTURED via chrome.runtime.onMessage for live capture updates
 
 ## 2026-02-24 - INFRA-01
 - Implemented IndexedDB-backed navigation event tracking system
@@ -581,3 +582,39 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - Tooltip positioned relative to SVG bounding rect with pointer-events-none
   - Node click: if isOpen, finds tab by URL and switches to it; otherwise opens new tab
   - chrome.tabs.query({}) returns all tabs for mapping open tab URLs to graph nodes
+
+## Iteration 3 - Tue Feb 24 21:59:35 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-214252/iter-3.log
+---
+**US-G-03 is complete.** There are still stories with `passes: false` remaining (US-R-03 is next at priority 19).
+
+**US-G-03 Summary:**
+- Created `src/sidepanel/TabGraphSection.tsx` — collapsible sidebar section with:
+  - SVG graph rendering nodes as circles colored by domain (10-color palette)
+  - Edge opacity reflects weight (0.2 to 1.0 scale), dashed lines for switch edges
+  - Click node switches to tab (if open) or opens URL in new tab
+  - Hover tooltip shows full title + visit count + open status
+  - Open tabs get larger circles (7px vs 5px) with white stroke border
+  - Empty state when no browsing data exists
+  - Graph data loaded from last 7 days of navigation events + affinity pairs
+  - Live updates via `chrome.storage.onChanged`
+- Registered "Tab Graph" command in `commandRegistry.ts` with scroll-to-section action
+- Updated test file with `onTabGraph` handler
+- Section rendered in `App.tsx` after Annotations section
+- Typecheck and tests pass
+---
+
+## 2026-02-24 - US-R-03
+- Implemented Research Copilot Sidebar Section
+- Files created: src/sidepanel/ResearchCopilotSection.tsx
+- Files modified: src/sidepanel/App.tsx, src/sidepanel/commandRegistry.ts, src/sidepanel/commandRegistry.test.ts
+- **Learnings for future iterations:**
+  - ResearchCopilotSection manages active session state locally; sessions persisted via researchDb.ts (IndexedDB)
+  - Capture button sends CAPTURE_PAGE_TEXT message to service worker; listens for PAGE_TEXT_CAPTURED via chrome.runtime.onMessage
+  - Session history list collapsed by default; filters out active session from history
+  - Captured pages show summary with expand/collapse; "Summarizing..." shown while AI processes
+  - Uses crypto.randomUUID() for session IDs (available in sidepanel context)
+  - Section placement in App.tsx: after TabGraphSection, before RecentlyClosedSection
+  - Command registry: add onResearchCopilot handler + type signature + test defaultHandlers simultaneously
+---

@@ -23,6 +23,7 @@ const defaultHandlers = {
   onTimeMachine: noop,
   onAnnotations: noop,
   onTabGraph: noop,
+  onResearchCopilot: noop,
 };
 
 describe("buildCommands", () => {

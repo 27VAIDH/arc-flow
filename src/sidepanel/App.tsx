@@ -54,6 +54,7 @@ import SnippetsSection from "./SnippetsSection";
 import TimeMachineSection from "./TimeMachineSection";
 import AnnotationsSection from "./AnnotationsSection";
 import TabGraphSection from "./TabGraphSection";
+import ResearchCopilotSection from "./ResearchCopilotSection";
 import TabPreviewCard from "./TabPreviewCard";
 import type { TabPreviewInfo } from "./TabPreviewCard";
 import { buildCommands } from "./commandRegistry";
@@ -1499,6 +1500,10 @@ export default function App() {
           const el = document.querySelector('[aria-label="Tab Graph"]');
           el?.scrollIntoView({ behavior: "smooth" });
         },
+        onResearchCopilot: () => {
+          const el = document.querySelector('[aria-label="Research Copilot"]');
+          el?.scrollIntoView({ behavior: "smooth" });
+        },
       }),
     [
       workspaces,
@@ -2431,6 +2436,9 @@ export default function App() {
 
         {/* Tab Graph Section */}
         <TabGraphSection />
+
+        {/* Research Copilot Section */}
+        <ResearchCopilotSection />
 
         {/* Recently Closed Section */}
         <RecentlyClosedSection workspaces={workspaces} />

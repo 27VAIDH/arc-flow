@@ -22,6 +22,7 @@ export function buildCommands({
   onTimeMachine,
   onAnnotations,
   onTabGraph,
+  onResearchCopilot,
 }: {
   workspaces: Workspace[];
   onSwitchWorkspace: (workspaceId: string) => void;
@@ -43,6 +44,7 @@ export function buildCommands({
   onTimeMachine: () => void;
   onAnnotations: () => void;
   onTabGraph: () => void;
+  onResearchCopilot: () => void;
 }): Command[] {
   const commands: Command[] = [];
 
@@ -180,6 +182,13 @@ export function buildCommands({
     name: "Tab Graph",
     icon: "workspace",
     action: onTabGraph,
+  });
+
+  commands.push({
+    id: "research-copilot",
+    name: "Research Copilot",
+    icon: "search",
+    action: onResearchCopilot,
   });
 
   return commands;
