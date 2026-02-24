@@ -818,3 +818,39 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - Pattern detection groups by 2-hour time blocks and domains, suggests rule after 5+ consistent switches
   - Learning suggestions stored in `autopilotLearningSuggestion` key for sidepanel to display
 ---
+
+## Iteration 2 - Wed Feb 25 00:58:20 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260225-005010/iter-2.log
+---
+**US-AP-05 is complete.** There are still stories with `passes: false` remaining:
+
+- US-G-04 (priority 27) - Cluster Actions (Create Folder, AI Summarize)
+- US-G-05 (priority 28) - Graph List Fallback Toggle
+- US-R-04 (priority 29) - Cross-Page Analysis
+- US-R-05 (priority 30) - Generate Research Brief
+
+**US-AP-05 Summary:**
+- Created `AutopilotBanner.tsx` — shows "Switched to {workspace} — Undo (10s)" banner with countdown timer when autopilot switches workspace
+- Undo button sends `AUTOPILOT_UNDO` message to service worker to revert
+- Banner auto-dismisses after 10s countdown
+- Added `autopilotLearning: boolean` to Settings interface and DEFAULT_SETTINGS (defaults to false)
+- Learning mode in service worker tracks manual workspace switches (filtered from autopilot-initiated ones via `lastAutopilotSwitchedTo` flag)
+- Pattern detection groups switches by 2-hour time blocks and domains, suggests rule after 5+ consistent patterns
+- Banner rendered in App.tsx
+- Typecheck and tests pass
+---
+
+## 2026-02-25 01:01 - US-G-04
+- Implemented right-click context menu on graph node clusters (same domain group)
+- "Create Folder" action creates a folder with all pages from the domain cluster using folderStorage.ts
+- "AI Summarize" action sends cluster pages to OpenRouter API for a summary using same API pattern as aiGroupingService.ts
+- Context menu dismisses on click outside
+- Summary card displayed below graph with close button
+- Files changed: src/sidepanel/TabGraphSection.tsx
+- **Learnings for future iterations:**
+  - Graph nodes are LayoutNode which extends GraphNode with x,y — domain field available for clustering
+  - folderStorage.ts createFolder() + addItemToFolder() pattern for programmatically creating folders with items
+  - OpenRouter API pattern: same base URL, Bearer auth, model "google/gemini-2.0-flash-001" — used across aiGroupingService.ts and aiResearchService.ts
+  - Context menu positioning: use .closest(".relative")?.getBoundingClientRect() for container-relative positioning
+---
