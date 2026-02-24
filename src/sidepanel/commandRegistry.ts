@@ -19,6 +19,7 @@ export function buildCommands({
   onRestoreYesterdayTabs,
   onExportWorkspace,
   onImportWorkspace,
+  onTimeMachine,
 }: {
   workspaces: Workspace[];
   onSwitchWorkspace: (workspaceId: string) => void;
@@ -37,6 +38,7 @@ export function buildCommands({
   onRestoreYesterdayTabs: () => void;
   onExportWorkspace: () => void;
   onImportWorkspace: () => void;
+  onTimeMachine: () => void;
 }): Command[] {
   const commands: Command[] = [];
 
@@ -153,6 +155,13 @@ export function buildCommands({
     name: "Import workspace",
     icon: "restore",
     action: onImportWorkspace,
+  });
+
+  commands.push({
+    id: "time-machine",
+    name: "Time Machine",
+    icon: "restore",
+    action: onTimeMachine,
   });
 
   return commands;

@@ -20,6 +20,7 @@ const defaultHandlers = {
   onRestoreYesterdayTabs: noop,
   onExportWorkspace: noop,
   onImportWorkspace: noop,
+  onTimeMachine: noop,
 };
 
 describe("buildCommands", () => {

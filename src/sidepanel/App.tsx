@@ -51,6 +51,7 @@ import PomodoroTimer from "./PomodoroTimer";
 import MorningBriefing from "./MorningBriefing";
 import QuickNotes from "./QuickNotes";
 import SnippetsSection from "./SnippetsSection";
+import TimeMachineSection from "./TimeMachineSection";
 import TabPreviewCard from "./TabPreviewCard";
 import type { TabPreviewInfo } from "./TabPreviewCard";
 import { buildCommands } from "./commandRegistry";
@@ -1484,6 +1485,10 @@ export default function App() {
         onRestoreYesterdayTabs: restoreYesterdayTabs,
         onExportWorkspace: exportCurrentWorkspace,
         onImportWorkspace: importWorkspace,
+        onTimeMachine: () => {
+          const el = document.querySelector('[aria-label="Time Machine"]');
+          el?.scrollIntoView({ behavior: "smooth" });
+        },
       }),
     [
       workspaces,
@@ -2407,6 +2412,9 @@ export default function App() {
 
         {/* Archive Section (Zone 4) */}
         <ArchiveSection />
+
+        {/* Time Machine Section */}
+        <TimeMachineSection />
 
         {/* Recently Closed Section */}
         <RecentlyClosedSection workspaces={workspaces} />
