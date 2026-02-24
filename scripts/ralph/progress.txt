@@ -30,6 +30,8 @@ Started: Tue Feb 24 18:49:55 IST 2026
 - Annotation rendering: XPath + textOffset + textLength for precise location; fallback to scrollY floating indicator when XPath fails
 - Service worker GET_ANNOTATIONS uses sendResponse pattern (return true for async); content scripts use chrome.runtime.sendMessage with callback
 - Research sessions: managed via researchDb.ts (IndexedDB); sidepanel listens for PAGE_TEXT_CAPTURED via chrome.runtime.onMessage for live capture updates
+- Autopilot learning: manual workspace switches tracked in `autopilotLearningLog` (chrome.storage.local); suggestions stored in `autopilotLearningSuggestion`
+- To distinguish autopilot vs manual workspace switches, use a `lastAutopilotSwitchedTo` flag set before setActiveWorkspace() calls from autopilot code
 
 ## 2026-02-24 - INFRA-01
 - Implemented IndexedDB-backed navigation event tracking system
@@ -782,4 +784,37 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - Clipboard write: navigator.clipboard.writeText() works in sidepanel context
   - Toast notifications: fixed position with auto-dismiss via setTimeout
   - exportAnnotations() in annotationStorage.ts already had JSON and Markdown formats; just needed color emoji prefixes added
+---
+
+## Iteration 1 - Wed Feb 25 00:52:34 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260225-005010/iter-1.log
+---
+**US-A-06 is complete.** There are still stories with `passes: false` remaining:
+
+- US-AP-05 (priority 26) - Autopilot Undo & Learning Mode
+- US-G-04 (priority 27) - Cluster Actions
+- US-G-05 (priority 28) - Graph List Fallback Toggle
+- US-R-04 (priority 29) - Cross-Page Analysis
+- US-R-05 (priority 30) - Generate Research Brief
+
+**US-A-06 Summary:**
+- Added export dropdown to Annotations sidebar section header (download icon button)
+- JSON export downloads as `.json` file via Blob + programmatic anchor click
+- Markdown export copies to clipboard with toast notification
+- Updated markdown format to include color emoji prefixes (yellow/green/blue circles) for highlights as blockquotes
+- Typecheck and tests pass
+---
+
+## 2026-02-25 - US-AP-05
+- Implemented Autopilot Undo banner and Learning Mode
+- Files created: src/sidepanel/AutopilotBanner.tsx
+- Files modified: src/shared/types.ts, src/shared/constants.ts, src/background/service-worker.ts, src/sidepanel/App.tsx
+- **Learnings for future iterations:**
+  - Linter aggressively converts `let` to `const` for module-level variables; need assignments in same file scope or linter will rewrite
+  - AutopilotBanner listens for AUTOPILOT_SWITCH messages via chrome.runtime.onMessage independently (not via App.tsx message handler)
+  - Learning mode tracks manual switches by listening to chrome.storage.onChanged for `activeWorkspaceId` key
+  - Autopilot-initiated switches are filtered via `lastAutopilotSwitchedTo` flag set before each setActiveWorkspace() call from autopilot code
+  - Pattern detection groups by 2-hour time blocks and domains, suggests rule after 5+ consistent switches
+  - Learning suggestions stored in `autopilotLearningSuggestion` key for sidepanel to display
 ---
