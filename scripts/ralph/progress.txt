@@ -765,3 +765,21 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - When adding click handlers to items that also have action buttons, use e.stopPropagation() on the button to prevent parent click
   - For new tab + scroll workflows, use chrome.tabs.onUpdated listener with 500ms delay after "complete" for content script init
 ---
+
+## Iteration 3 - Wed Feb 25 00:27:59 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260225-001951/iter-3.log
+---
+**US-A-05 completed.** There are still stories with `passes: false` remaining (US-A-06, US-AP-05, US-G-04, US-G-05, US-R-04, US-R-05).
+---
+
+## 2026-02-25 - US-A-06
+- Implemented export annotations feature with JSON download and Markdown clipboard copy
+- Files modified: src/sidepanel/AnnotationsSection.tsx, src/shared/annotationStorage.ts
+- **Learnings for future iterations:**
+  - Export dropdown pattern: relative container with absolute dropdown, outside-click listener for dismissal
+  - JSON file download: create Blob → URL.createObjectURL → programmatic anchor click → revokeObjectURL
+  - Clipboard write: navigator.clipboard.writeText() works in sidepanel context
+  - Toast notifications: fixed position with auto-dismiss via setTimeout
+  - exportAnnotations() in annotationStorage.ts already had JSON and Markdown formats; just needed color emoji prefixes added
+---
