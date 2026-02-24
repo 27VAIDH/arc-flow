@@ -618,3 +618,36 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - Section placement in App.tsx: after TabGraphSection, before RecentlyClosedSection
   - Command registry: add onResearchCopilot handler + type signature + test defaultHandlers simultaneously
 ---
+
+## Iteration 1 - Tue Feb 24 22:16:12 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-220653/iter-1.log
+---
+**US-R-03 is complete.** There are still stories with `passes: false` remaining (US-T1-04 is next at priority 20).
+
+**US-R-03 Summary:**
+- Created `src/sidepanel/ResearchCopilotSection.tsx` — collapsible sidebar section with:
+  - "Start Research" button creates new session (persisted to IndexedDB via `researchDb.ts`)
+  - "Capture This Page" button sends `CAPTURE_PAGE_TEXT` message to service worker
+  - Captured pages shown with title + summary (expandable, "Summarizing..." while AI processes)
+  - "Stop Research" ends session
+  - Session history list (collapsed by default) with delete and restore actions
+  - Empty state message when no session and no history
+  - Live updates via `chrome.runtime.onMessage` listener for `PAGE_TEXT_CAPTURED`
+- Registered "Research Copilot" command in `commandRegistry.ts` with scroll-to-section action
+- Updated test file with `onResearchCopilot` handler
+- Section rendered in `App.tsx` after Tab Graph section
+- Typecheck and tests pass
+---
+
+## 2026-02-24 - US-T1-04
+- Implemented Restore Tab State from Timeline feature
+- Files modified: src/sidepanel/TimeMachineSection.tsx
+- **Learnings for future iterations:**
+  - TreeNode component passes ancestorUrls prop down recursively to build the path from root to any node
+  - collectPathUrls() creates the full URL path by appending current node URL to ancestor URLs
+  - chrome.windows.create() returns potentially undefined window — use optional chaining (newWindow?.id)
+  - Restore button uses opacity-0 group-hover:opacity-100 pattern (same as delete button in AnnotationsSection)
+  - window.confirm() for confirmation dialog when restoring >5 tabs — simple and effective
+  - restorePath() opens first URL via chrome.windows.create, then adds remaining tabs to that window
+---
