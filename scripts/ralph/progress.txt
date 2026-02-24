@@ -26,6 +26,7 @@ Started: Tue Feb 24 18:49:55 IST 2026
 - Autopilot rules stored in chrome.storage.local under key `autopilotRules` (AutopilotRule[])
 - Notification-based user confirmation: chrome.notifications.create with buttons, handle via onButtonClicked listener
 - Autopilot switch uses 5-second delay timer (cancellable via notification button or AUTOPILOT_UNDO message)
+- AI services: aiResearchService.ts has summarizePage(), connectPages(), generateBrief() — each reads API key from settings, enforces 2s rate limit
 
 ## 2026-02-24 - INFRA-01
 - Implemented IndexedDB-backed navigation event tracking system
@@ -381,4 +382,35 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - Padding of 20px keeps nodes from canvas edges
   - computeLayout is a pure function extracted outside the hook for testability
   - Node positions initialized randomly; velocity damped at 0.9 per iteration for convergence
+---
+
+## Iteration 3 - Tue Feb 24 19:34:50 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-192530/iter-3.log
+---
+**US-G-02 is complete.** There are still stories with `passes: false` remaining (US-R-02 is next at priority 13).
+
+**US-G-02 Summary:**
+- Added `LayoutNode`, `LayoutEdge`, and `LayoutResult` interfaces to `types.ts` — extend `GraphNode`/`GraphEdge` with position fields
+- Created `src/sidepanel/useGraphLayout.ts` with:
+  - `useGraphLayout(data, width, height)` React hook returning `LayoutResult`
+  - Force-directed algorithm: repulsion between all node pairs + attraction along edges
+  - Runs 100 iterations synchronously on mount (via `useMemo`)
+  - Nodes clamped within bounds with 20px padding
+  - Velocity damped at 0.9 per iteration for stable convergence
+- Typecheck and tests pass
+---
+
+## 2026-02-24 - US-R-02
+- Implemented Auto-Summarization via AI using OpenRouter API
+- Files created: src/shared/aiResearchService.ts
+- Files modified: src/background/service-worker.ts
+- **Learnings for future iterations:**
+  - aiResearchService.ts follows same OpenRouter pattern as aiGroupingService.ts (same base URL, auth, model)
+  - 2-second rate limiter enforced via module-level lastCallTime + waitForRateLimit() async helper
+  - Page text truncated to 8000 chars for summarization to stay within token limits
+  - Service worker handles CAPTURE_PAGE_TEXT by forwarding to active tab content script, then saving + summarizing
+  - Capture broadcast to sidepanel twice: once immediately (no summary), once after AI summarization completes
+  - summarizePage(), connectPages(), generateBrief() each read API key from settings independently
+  - 30-second timeout for AI calls (longer than 10s used in grouping service, since summarization prompts are larger)
 ---
