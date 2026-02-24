@@ -88,22 +88,36 @@ function TreeNode({
   );
 
   return (
-    <div>
+    <div className="relative">
+      {/* Horizontal connector line from parent's vertical line to this node */}
+      {depth > 0 && (
+        <span
+          className="absolute border-t border-gray-300 dark:border-gray-600"
+          style={{
+            left: `${(depth - 1) * 16 + 11}px`,
+            top: "12px",
+            width: "9px",
+          }}
+        />
+      )}
+
       <div
-        className="flex items-center gap-1.5 px-1 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 group"
+        className={`flex items-center gap-1.5 px-1 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 group ${
+          hasChildren ? "font-medium" : ""
+        }`}
         style={{ paddingLeft: `${depth * 16 + 4}px` }}
       >
         {hasChildren ? (
           <button
             onClick={() => setExpanded((prev) => !prev)}
-            className="w-3.5 h-3.5 shrink-0 flex items-center justify-center text-gray-400"
+            className="w-3.5 h-3.5 shrink-0 flex items-center justify-center text-arc-accent dark:text-arc-accent"
             aria-label={expanded ? "Collapse" : "Expand"}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 20 20"
               fill="currentColor"
-              className={`w-3 h-3 transition-transform ${expanded ? "rotate-90" : ""}`}
+              className={`w-3 h-3 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
             >
               <path
                 fillRule="evenodd"
@@ -113,7 +127,9 @@ function TreeNode({
             </svg>
           </button>
         ) : (
-          <span className="w-3.5 h-3.5 shrink-0" />
+          <span className="w-3.5 h-3.5 shrink-0 flex items-center justify-center">
+            <span className="w-1 h-1 rounded-full bg-gray-400 dark:bg-gray-500" />
+          </span>
         )}
 
         <button
@@ -163,16 +179,31 @@ function TreeNode({
         </button>
       </div>
 
-      {expanded && hasChildren && (
-        <div>
-          {node.children.map((child) => (
-            <TreeNode
-              key={child.event.id}
-              node={child}
-              depth={depth + 1}
-              ancestorUrls={pathUrls}
-            />
-          ))}
+      {/* Children with connector lines and animated expand/collapse */}
+      {hasChildren && (
+        <div
+          className="grid transition-[grid-template-rows] duration-200 ease-in-out"
+          style={{
+            gridTemplateRows: expanded ? "1fr" : "0fr",
+          }}
+        >
+          <div className="overflow-hidden">
+            <div className="relative">
+              {/* Vertical connector line from parent to last child */}
+              <span
+                className="absolute top-0 bottom-3 border-l border-gray-300 dark:border-gray-600"
+                style={{ left: `${depth * 16 + 11}px` }}
+              />
+              {node.children.map((child) => (
+                <TreeNode
+                  key={child.event.id}
+                  node={child}
+                  depth={depth + 1}
+                  ancestorUrls={pathUrls}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>
