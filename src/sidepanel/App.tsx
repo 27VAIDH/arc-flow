@@ -1738,10 +1738,17 @@ export default function App() {
         const tab = tabs.find((t) => t.id === tabId);
         if (!tab) return;
 
+        // Duplicate check: skip if same URL already exists in target folder
+        const targetFolder = folders.find((f) => f.id === folderId);
+        if (targetFolder?.items.some((i) => i.url === tab.url)) {
+          setToast("Already saved in this folder");
+          return;
+        }
+
         const newItem: FolderItem = {
           id: crypto.randomUUID(),
-          type: "tab",
-          tabId: tab.id,
+          type: "link",
+          tabId: null,
           url: tab.url,
           title: tab.title || tab.url,
           favicon: tab.favIconUrl || "",
@@ -1750,6 +1757,27 @@ export default function App() {
         };
 
         await addItemToFolder(folderId, newItem);
+        return;
+      }
+
+      // Case 1b: Tab dropped onto pinned apps zone
+      if (activeId.startsWith("tab:") && overId === "pinned-drop-zone") {
+        const tabId = parseInt(activeId.replace("tab:", ""), 10);
+        const tab = tabs.find((t) => t.id === tabId);
+        if (!tab) return;
+
+        // Duplicate check: skip if URL already pinned
+        if (pinnedApps.some((app) => app.url === tab.url)) {
+          setToast("Already pinned");
+          return;
+        }
+
+        await addPinnedApp({
+          id: crypto.randomUUID(),
+          url: tab.url,
+          title: tab.title || tab.url,
+          favicon: tab.favIconUrl || "",
+        });
         return;
       }
 
@@ -1888,7 +1916,7 @@ export default function App() {
         return;
       }
     },
-    [tabs, folders, setFolders, filteredTabs, activeWorkspaceId]
+    [tabs, folders, setFolders, filteredTabs, activeWorkspaceId, pinnedApps, setToast]
   );
 
   const activeDragType = activeDragTab
