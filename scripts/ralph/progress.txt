@@ -736,3 +736,32 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - The Time Machine section header uses absolute positioning for action buttons (right-aligned), requiring `relative` on the section container
   - Toast notifications use `animate-pulse` from Tailwind for visual feedback
 ---
+
+## Iteration 2 - Wed Feb 25 00:25:02 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260225-001951/iter-2.log
+---
+**US-T1-07 complete.** Remaining stories with `passes: false`:
+- US-A-05 (priority 24) - Scroll-to-Annotation from Sidebar
+- US-A-06 (priority 25) - Export Annotations
+- US-AP-05 (priority 26) - Autopilot Undo & Learning Mode
+- US-G-04 (priority 27) - Cluster Actions
+- US-G-05 (priority 28) - Graph List Fallback Toggle
+- US-R-04 (priority 29) - Cross-Page Analysis
+- US-R-05 (priority 30) - Generate Research Brief
+---
+
+## 2026-02-25 00:28 IST - US-A-05
+- Implemented scroll-to-annotation from sidebar
+- Clicking an annotation item in AnnotationsSection sends SCROLL_TO_ANNOTATION message to service worker
+- Service worker finds existing tab with matching URL (switches to it) or opens new tab, then relays scroll message to content script
+- Content script already had SCROLL_TO_ANNOTATION handler with smooth scroll + highlight pulse
+- Added `url` field to SCROLL_TO_ANNOTATION message type in SidePanelMessage
+- Delete button uses e.stopPropagation() to prevent triggering scroll on delete click
+- Files changed: src/shared/types.ts, src/background/service-worker.ts, src/sidepanel/AnnotationsSection.tsx
+- **Learnings for future iterations:**
+  - chrome.tabs.query({ url }) can find tabs by URL — useful for tab lookup
+  - chrome.tabs.TabChangeInfo type doesn't exist in this project's chrome types — use inline `{ status?: string }` instead
+  - When adding click handlers to items that also have action buttons, use e.stopPropagation() on the button to prevent parent click
+  - For new tab + scroll workflows, use chrome.tabs.onUpdated listener with 500ms delay after "complete" for content script init
+---
