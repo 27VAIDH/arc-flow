@@ -118,7 +118,7 @@ export type SidePanelMessage =
   | { type: "SAVE_ANNOTATION"; annotation: Annotation }
   | { type: "DELETE_ANNOTATION"; id: string }
   | { type: "GET_ANNOTATIONS"; url: string }
-  | { type: "SCROLL_TO_ANNOTATION"; annotationId: string }
+  | { type: "SCROLL_TO_ANNOTATION"; annotationId: string; url: string }
   | { type: "AUTOPILOT_UNDO" };
 
 export interface Session {

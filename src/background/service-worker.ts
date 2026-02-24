@@ -1853,6 +1853,54 @@ chrome.runtime.onMessage.addListener(
       });
       return true; // async sendResponse
     }
+    if (message.type === "SCROLL_TO_ANNOTATION") {
+      (async () => {
+        try {
+          const { annotationId, url } = message;
+          // Find an existing tab with the annotation URL
+          const tabs = await chrome.tabs.query({ url: url.split("#")[0] });
+          let targetTabId: number | undefined;
+
+          if (tabs.length > 0 && tabs[0].id) {
+            // Switch to existing tab
+            targetTabId = tabs[0].id;
+            await chrome.tabs.update(targetTabId, { active: true });
+            if (tabs[0].windowId) {
+              await chrome.windows.update(tabs[0].windowId, { focused: true });
+            }
+            // Send scroll message to content script
+            chrome.tabs.sendMessage(targetTabId, {
+              type: "SCROLL_TO_ANNOTATION",
+              annotationId,
+            }).catch(() => {});
+          } else {
+            // Open URL in new tab, then scroll after load
+            const newTab = await chrome.tabs.create({ url, active: true });
+            if (newTab.id) {
+              const tabId = newTab.id;
+              const onUpdated = (
+                updatedTabId: number,
+                changeInfo: { status?: string },
+              ) => {
+                if (updatedTabId === tabId && changeInfo.status === "complete") {
+                  chrome.tabs.onUpdated.removeListener(onUpdated);
+                  // Small delay for content script to initialize and render annotations
+                  setTimeout(() => {
+                    chrome.tabs.sendMessage(tabId, {
+                      type: "SCROLL_TO_ANNOTATION",
+                      annotationId,
+                    }).catch(() => {});
+                  }, 500);
+                }
+              };
+              chrome.tabs.onUpdated.addListener(onUpdated);
+            }
+          }
+        } catch {
+          // Scroll-to-annotation failed silently
+        }
+      })();
+    }
     if (message.type === "AUTOPILOT_UNDO") {
       undoAutopilotSwitch().catch(() => {
         // Undo failed silently

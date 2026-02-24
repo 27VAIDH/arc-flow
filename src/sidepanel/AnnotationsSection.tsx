@@ -63,6 +63,14 @@ function getColorDot(color: string): string {
   return "bg-gray-400";
 }
 
+function scrollToAnnotation(annotation: Annotation): void {
+  chrome.runtime.sendMessage({
+    type: "SCROLL_TO_ANNOTATION",
+    annotationId: annotation.id,
+    url: annotation.url,
+  }).catch(() => {});
+}
+
 function AnnotationItem({
   annotation,
   onDelete,
@@ -71,7 +79,19 @@ function AnnotationItem({
   onDelete: (id: string) => void;
 }) {
   return (
-    <div className="flex items-start gap-1.5 px-2 py-1 group">
+    <div
+      className="flex items-start gap-1.5 px-2 py-1 group cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
+      onClick={() => scrollToAnnotation(annotation)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          scrollToAnnotation(annotation);
+        }
+      }}
+      title="Click to scroll to annotation"
+    >
       <span
         className={`w-2 h-2 rounded-full shrink-0 mt-1 ${getColorDot(annotation.color)}`}
       />
@@ -86,7 +106,10 @@ function AnnotationItem({
         )}
       </div>
       <button
-        onClick={() => onDelete(annotation.id)}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(annotation.id);
+        }}
         className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 shrink-0 transition-opacity"
         aria-label="Delete annotation"
         title="Delete annotation"
