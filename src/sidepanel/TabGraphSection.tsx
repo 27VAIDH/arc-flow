@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GraphData, GraphNode, LayoutNode } from "../shared/types";
 import { buildGraphData } from "../shared/tabGraphStorage";
 import { getNavEventsSince } from "../shared/navigationDb";
 import { getAffinityPairs } from "../shared/affinityStorage";
 import { useGraphLayout } from "./useGraphLayout";
+import { createFolder, addItemToFolder } from "../shared/folderStorage";
+import { getSettings } from "../shared/settingsStorage";
 
 const GRAPH_WIDTH = 320;
 const GRAPH_HEIGHT = 280;
@@ -31,6 +33,10 @@ export default function TabGraphSection() {
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], edges: [] });
   const [hoveredNode, setHoveredNode] = useState<LayoutNode | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; domain: string } | null>(null);
+  const [clusterSummary, setClusterSummary] = useState<{ domain: string; text: string } | null>(null);
+  const [summarizing, setSummarizing] = useState(false);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
 
   const loadGraphData = useCallback(async () => {
     try {
@@ -120,6 +126,130 @@ export default function TabGraphSection() {
     setTooltipPos(null);
   }, []);
 
+  const getClusterNodes = useCallback(
+    (domain: string): GraphNode[] => {
+      return graphData.nodes.filter((n) => n.domain === domain);
+    },
+    [graphData.nodes]
+  );
+
+  const handleNodeContextMenu = useCallback(
+    (node: LayoutNode, event: React.MouseEvent) => {
+      event.preventDefault();
+      const containerRect = (event.currentTarget as Element)
+        .closest(".relative")
+        ?.getBoundingClientRect();
+      if (containerRect) {
+        setContextMenu({
+          x: event.clientX - containerRect.left,
+          y: event.clientY - containerRect.top,
+          domain: node.domain,
+        });
+      }
+      setHoveredNode(null);
+      setTooltipPos(null);
+    },
+    []
+  );
+
+  const handleCreateFolder = useCallback(
+    async (domain: string) => {
+      setContextMenu(null);
+      const cluster = getClusterNodes(domain);
+      if (cluster.length === 0) return;
+
+      try {
+        const folder = await createFolder(domain);
+        for (const node of cluster) {
+          await addItemToFolder(folder.id, {
+            id: crypto.randomUUID(),
+            type: "link",
+            tabId: null,
+            url: node.url,
+            title: node.title,
+            favicon: `https://www.google.com/s2/favicons?domain=${node.domain}&sz=32`,
+            isArchived: false,
+            lastActiveAt: Date.now(),
+          });
+        }
+      } catch {
+        // Silently ignore errors
+      }
+    },
+    [getClusterNodes]
+  );
+
+  const handleAISummarize = useCallback(
+    async (domain: string) => {
+      setContextMenu(null);
+      const cluster = getClusterNodes(domain);
+      if (cluster.length === 0) return;
+
+      setSummarizing(true);
+      setClusterSummary(null);
+
+      try {
+        const settings = await getSettings();
+        if (!settings.openRouterApiKey) {
+          setClusterSummary({ domain, text: "Set an OpenRouter API key in Settings to use AI features." });
+          setSummarizing(false);
+          return;
+        }
+
+        const tabList = cluster.map((n) => `- ${n.title} (${n.url})`).join("\n");
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        const response = await fetch(
+          "https://openrouter.ai/api/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${settings.openRouterApiKey}`,
+              "HTTP-Referer": "chrome-extension://arcflow",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.0-flash-001",
+              max_tokens: 512,
+              messages: [
+                {
+                  role: "user",
+                  content: `Summarize what this cluster of web pages from the domain "${domain}" is about in 2-3 sentences. Focus on the common theme and key topics.\n\nPages:\n${tabList}`,
+                },
+              ],
+            }),
+            signal: controller.signal,
+          }
+        );
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) throw new Error(`API error: ${response.status}`);
+        const data = await response.json();
+        const text = data.choices?.[0]?.message?.content ?? "No summary available.";
+        setClusterSummary({ domain, text });
+      } catch {
+        setClusterSummary({ domain, text: "Failed to generate summary. Please try again." });
+      } finally {
+        setSummarizing(false);
+      }
+    },
+    [getClusterNodes]
+  );
+
+  // Dismiss context menu on click outside
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [contextMenu]);
+
   const isEmpty = graphData.nodes.length === 0;
 
   return (
@@ -188,6 +318,7 @@ export default function TabGraphSection() {
                         strokeWidth={node.isOpen ? 1.5 : 0}
                         className="cursor-pointer"
                         onClick={() => handleNodeClick(node)}
+                        onContextMenu={(e) => handleNodeContextMenu(node, e)}
                         onMouseEnter={(e) => handleNodeMouseEnter(node, e)}
                         onMouseLeave={handleNodeMouseLeave}
                       />
@@ -211,6 +342,68 @@ export default function TabGraphSection() {
                     {hoveredNode.visitCount} visit{hoveredNode.visitCount !== 1 ? "s" : ""}
                     {hoveredNode.isOpen && " \u00B7 Open"}
                   </div>
+                </div>
+              )}
+
+              {/* Context Menu */}
+              {contextMenu && (
+                <div
+                  ref={contextMenuRef}
+                  className="absolute z-50 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1 min-w-[160px]"
+                  style={{
+                    left: contextMenu.x,
+                    top: contextMenu.y,
+                  }}
+                >
+                  <div className="px-2 py-1 text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                    {contextMenu.domain} ({getClusterNodes(contextMenu.domain).length} pages)
+                  </div>
+                  <button
+                    onClick={() => handleCreateFolder(contextMenu.domain)}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                      <path d="M3.75 3A1.75 1.75 0 0 0 2 4.75v3.26a3.235 3.235 0 0 1 1.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0 0 16.25 5h-4.836a.25.25 0 0 1-.177-.073L9.823 3.513A1.75 1.75 0 0 0 8.586 3H3.75ZM3.75 9A1.75 1.75 0 0 0 2 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0 0 18 15.25v-4.5A1.75 1.75 0 0 0 16.25 9H3.75Z" />
+                    </svg>
+                    Create Folder
+                  </button>
+                  <button
+                    onClick={() => handleAISummarize(contextMenu.domain)}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                      <path fillRule="evenodd" d="M15.988 3.012A2.25 2.25 0 0 1 18 5.25v6.5A2.25 2.25 0 0 1 15.75 14H13.5l-3.712 3.712a.75.75 0 0 1-1.288-.532V14h-2.25A2.25 2.25 0 0 1 4 11.75v-6.5A2.25 2.25 0 0 1 6.25 3h9.5Zm-3.738 6.988a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM10 10a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-2.25-.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" clipRule="evenodd" />
+                    </svg>
+                    AI Summarize
+                  </button>
+                </div>
+              )}
+
+              {/* Cluster Summary */}
+              {(summarizing || clusterSummary) && (
+                <div className="mt-2 p-2 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                  {summarizing ? (
+                    <p className="text-xs text-gray-400 dark:text-gray-500 animate-pulse">
+                      Summarizing cluster...
+                    </p>
+                  ) : clusterSummary ? (
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase">
+                          {clusterSummary.domain} summary
+                        </span>
+                        <button
+                          onClick={() => setClusterSummary(null)}
+                          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+                            <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                          </svg>
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-600 dark:text-gray-300">{clusterSummary.text}</p>
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>
