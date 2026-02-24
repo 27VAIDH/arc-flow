@@ -350,3 +350,35 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - evaluateAutopilot() is a no-op when autopilotEnabled is false or no rules exist
   - Display count retrieved via chrome.system.display.getInfo() for multi-monitor condition matching
 ---
+
+## Iteration 2 - Tue Feb 24 19:33:01 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-192530/iter-2.log
+---
+**US-AP-03 is complete.** There are still stories with `passes: false` remaining (US-G-02 is next at priority 12).
+
+**US-AP-03 Summary:**
+- Extended `ServiceWorkerMessage` with `AUTOPILOT_SWITCH` (workspaceId + workspaceName) and `AUTOPILOT_UNDO` types
+- Extended `SidePanelMessage` with `AUTOPILOT_UNDO` type
+- Added `evaluateAutopilot` alarm (every 5 minutes) in `onInstalled`
+- Implemented `evaluateAutopilot()` — loads rules from storage, builds context (time, active tab URL, display count), runs scoring engine, switches workspace if best match differs
+- Notification shown before switching (if `autopilotNotify` enabled) with Cancel button
+- 5-second cancellable delay before actual workspace switch
+- `AUTOPILOT_UNDO` message handler reverts to previous workspace
+- `notifications` permission added to `manifest.json`
+- No-op when `autopilotEnabled` is false or no rules exist
+- Typecheck and tests pass
+---
+
+## 2026-02-24 - US-G-02
+- Implemented Graph Layout Hook with force-directed algorithm for SVG visualization
+- Files created: src/sidepanel/useGraphLayout.ts
+- Files modified: src/shared/types.ts
+- **Learnings for future iterations:**
+  - LayoutResult extends GraphNode/GraphEdge with position fields (x, y for nodes; x1, y1, x2, y2 for edges)
+  - Force-directed layout uses repulsion between all pairs + attraction along edges, 100 iterations
+  - useMemo with [data, width, height] deps ensures stable layout on re-render
+  - Padding of 20px keeps nodes from canvas edges
+  - computeLayout is a pure function extracted outside the hook for testability
+  - Node positions initialized randomly; velocity damped at 0.9 per iteration for convergence
+---
