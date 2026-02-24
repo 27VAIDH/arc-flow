@@ -43,19 +43,49 @@ function truncate(text: string, maxLen: number): string {
   return text.slice(0, maxLen) + "…";
 }
 
+function collectPathUrls(ancestorUrls: string[], node: NavTreeNode): string[] {
+  return [...ancestorUrls, node.event.url];
+}
+
+async function restorePath(urls: string[]) {
+  if (urls.length > 5) {
+    const confirmed = window.confirm(
+      `This will open ${urls.length} tabs in a new window. Continue?`,
+    );
+    if (!confirmed) return;
+  }
+  const newWindow = await chrome.windows.create({ url: urls[0] });
+  if (newWindow?.id) {
+    for (let i = 1; i < urls.length; i++) {
+      await chrome.tabs.create({ windowId: newWindow.id, url: urls[i] });
+    }
+  }
+}
+
 function TreeNode({
   node,
   depth,
+  ancestorUrls,
 }: {
   node: NavTreeNode;
   depth: number;
+  ancestorUrls: string[];
 }) {
   const [expanded, setExpanded] = useState(depth < 2);
   const hasChildren = node.children.length > 0;
+  const pathUrls = collectPathUrls(ancestorUrls, node);
 
   const handleClick = useCallback(() => {
     chrome.tabs.create({ url: node.event.url });
   }, [node.event.url]);
+
+  const handleRestore = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      restorePath(pathUrls);
+    },
+    [pathUrls],
+  );
 
   return (
     <div>
@@ -110,12 +140,38 @@ function TreeNode({
             {formatTime(node.event.timestamp)}
           </span>
         </button>
+
+        {/* Restore button (visible on hover) */}
+        <button
+          onClick={handleRestore}
+          className="opacity-0 group-hover:opacity-100 shrink-0 p-0.5 rounded hover:bg-gray-300 dark:hover:bg-gray-700 transition-opacity"
+          title="Restore browsing path in new window"
+          aria-label="Restore browsing path"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="w-3 h-3 text-gray-500 dark:text-gray-400"
+          >
+            <path
+              fillRule="evenodd"
+              d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H4.598a.75.75 0 0 0-.75.75v3.634a.75.75 0 0 0 1.5 0v-2.033l.312.311a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm-7.267-4.053.312.311a7 7 0 0 1 11.712 3.138.75.75 0 0 1-1.449.39 5.5 5.5 0 0 0-9.201-2.466l-.312.311h2.433a.75.75 0 0 1 0 1.5H7.906a.75.75 0 0 1-.75-.75V5.171a.75.75 0 0 1 1.5 0v2.033l.312-.311a.747.747 0 0 1 .077-.078Z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </button>
       </div>
 
       {expanded && hasChildren && (
         <div>
           {node.children.map((child) => (
-            <TreeNode key={child.event.id} node={child} depth={depth + 1} />
+            <TreeNode
+              key={child.event.id}
+              node={child}
+              depth={depth + 1}
+              ancestorUrls={pathUrls}
+            />
           ))}
         </div>
       )}
@@ -230,7 +286,7 @@ export default function TimeMachineSection() {
           ) : (
             <div className="flex flex-col gap-0.5">
               {trees.map((tree) => (
-                <TreeNode key={tree.event.id} node={tree} depth={0} />
+                <TreeNode key={tree.event.id} node={tree} depth={0} ancestorUrls={[]} />
               ))}
             </div>
           )}
