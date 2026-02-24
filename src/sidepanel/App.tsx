@@ -1844,7 +1844,30 @@ export default function App() {
         return;
       }
 
-      // Case 1e: Reorder pinned apps
+      // Case 1e: Folder item dropped onto tab list zone (unpin from folder)
+      if (activeId.startsWith("folder-item:") && overId === "tablist-drop-zone") {
+        const itemId = activeId.replace("folder-item:", "");
+        let folderItem: FolderItem | undefined;
+        let sourceFolderId: string | undefined;
+        for (const folder of folders) {
+          folderItem = folder.items.find((i) => i.id === itemId);
+          if (folderItem) {
+            sourceFolderId = folder.id;
+            break;
+          }
+        }
+        if (!folderItem || !sourceFolderId) return;
+
+        if (folderItem.type === "link" && folderItem.url) {
+          // Open the URL in a new tab, then remove from folder
+          await chrome.tabs.create({ url: folderItem.url });
+        }
+        // For type "tab" with valid tabId, tab is already open — just remove from folder
+        await removeItemFromFolder(sourceFolderId, itemId);
+        return;
+      }
+
+      // Case 1f: Reorder pinned apps
       if (activeId.startsWith("pinned:") && overId.startsWith("pinned:")) {
         const activePinnedId = activeId.replace("pinned:", "");
         const overPinnedId = overId.replace("pinned:", "");
