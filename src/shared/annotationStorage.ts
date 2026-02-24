@@ -66,11 +66,19 @@ export async function exportAnnotations(
 
     for (const a of pageAnnotations) {
       const date = new Date(a.createdAt).toLocaleString();
+      const colorEmoji =
+        a.color === "#FFEB3B"
+          ? "🟡"
+          : a.color === "#81C784"
+            ? "🟢"
+            : a.color === "#64B5F6"
+              ? "🔵"
+              : "⚪";
       if (a.type === "highlight") {
-        lines.push(`> ${a.text}`);
-        lines.push(`> — *${a.color} highlight, ${date}*`);
+        lines.push(`> ${colorEmoji} ${a.text}`);
+        lines.push(`> — *${date}*`);
       } else {
-        lines.push(`> ${a.text}`);
+        lines.push(`> ${colorEmoji} ${a.text}`);
         lines.push(`> **Note:** ${a.comment || ""}`);
         lines.push(`> — *${date}*`);
       }

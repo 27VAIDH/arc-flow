@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Annotation } from "../shared/types";
-import { getAllAnnotations, deleteAnnotation } from "../shared/annotationStorage";
+import {
+  getAllAnnotations,
+  deleteAnnotation,
+  exportAnnotations,
+} from "../shared/annotationStorage";
 
 interface AnnotationGroup {
   url: string;
@@ -183,6 +187,9 @@ function PageGroup({
 export default function AnnotationsSection() {
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const loadAnnotations = useCallback(async () => {
     const all = await getAllAnnotations();
@@ -218,39 +225,128 @@ export default function AnnotationsSection() {
     [loadAnnotations],
   );
 
+  // Close export menu on outside click
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        exportMenuRef.current &&
+        !exportMenuRef.current.contains(e.target as Node)
+      ) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showExportMenu]);
+
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timer = setTimeout(() => setToastMessage(null), 2000);
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
+
+  const handleExportJSON = useCallback(async () => {
+    const json = await exportAnnotations("json");
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "annotations.json";
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowExportMenu(false);
+  }, []);
+
+  const handleExportMarkdown = useCallback(async () => {
+    const md = await exportAnnotations("markdown");
+    await navigator.clipboard.writeText(md);
+    setToastMessage("Copied to clipboard");
+    setShowExportMenu(false);
+  }, []);
+
   const groups = groupAnnotationsByPage(annotations);
 
   return (
     <section className="px-1 pb-2" aria-label="Annotations">
+      {/* Toast notification */}
+      {toastMessage && (
+        <div className="fixed top-2 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-3 py-1.5 rounded shadow-lg z-50">
+          {toastMessage}
+        </div>
+      )}
+
       {/* Collapsible header */}
-      <button
-        onClick={() => setIsCollapsed((prev) => !prev)}
-        aria-expanded={!isCollapsed}
-        aria-controls="annotations-list"
-        className="flex items-center gap-1 w-full px-2 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          className={`w-3.5 h-3.5 shrink-0 transition-transform ${isCollapsed ? "" : "rotate-90"}`}
+      <div className="flex items-center">
+        <button
+          onClick={() => setIsCollapsed((prev) => !prev)}
+          aria-expanded={!isCollapsed}
+          aria-controls="annotations-list"
+          className="flex items-center gap-1 flex-1 px-2 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
         >
-          <path
-            fillRule="evenodd"
-            d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z"
-            clipRule="evenodd"
-          />
-        </svg>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          className="w-3.5 h-3.5 shrink-0"
-        >
-          <path d="M15.988 3.012A2.25 2.25 0 0 0 14.25 2h-8.5A2.25 2.25 0 0 0 3.5 4.25v11.5A2.25 2.25 0 0 0 5.75 18h8.5A2.25 2.25 0 0 0 16.5 15.75V4.25c0-.58-.22-1.11-.512-1.238ZM7 5.25a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 7 5.25Zm.75 2.25a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-4.5ZM7 10.75a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z" />
-        </svg>
-        <span>Annotations ({annotations.length})</span>
-      </button>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className={`w-3.5 h-3.5 shrink-0 transition-transform ${isCollapsed ? "" : "rotate-90"}`}
+          >
+            <path
+              fillRule="evenodd"
+              d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="w-3.5 h-3.5 shrink-0"
+          >
+            <path d="M15.988 3.012A2.25 2.25 0 0 0 14.25 2h-8.5A2.25 2.25 0 0 0 3.5 4.25v11.5A2.25 2.25 0 0 0 5.75 18h8.5A2.25 2.25 0 0 0 16.5 15.75V4.25c0-.58-.22-1.11-.512-1.238ZM7 5.25a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 7 5.25Zm.75 2.25a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-4.5ZM7 10.75a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z" />
+          </svg>
+          <span>Annotations ({annotations.length})</span>
+        </button>
+
+        {/* Export dropdown */}
+        {annotations.length > 0 && !isCollapsed && (
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              onClick={() => setShowExportMenu((prev) => !prev)}
+              className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              title="Export annotations"
+              aria-label="Export annotations"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="w-3.5 h-3.5"
+              >
+                <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
+                <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+              </svg>
+            </button>
+
+            {showExportMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-lg z-40 min-w-[140px]">
+                <button
+                  onClick={handleExportJSON}
+                  className="w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  Download as JSON
+                </button>
+                <button
+                  onClick={handleExportMarkdown}
+                  className="w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  Copy as Markdown
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Content */}
       {!isCollapsed && (
