@@ -20,6 +20,8 @@ Started: Tue Feb 24 13:39:13 IST 2026
 - Toast system: setToast(message) shows a 3-second auto-dismiss toast at bottom of sidebar
 - addPinnedApp from storage.ts accepts Omit<PinnedApp, "sortOrder"> — sortOrder is auto-assigned
 - Cross-section drag cases use URL equality for duplicate detection (exact match, not origin)
+- FolderPickerDropdown uses createPortal to document.body + useLayoutEffect for viewport-aware positioning
+- ContextMenu styling pattern: backdrop-frosted, dark:bg-[#1e1e2a], dark:border-white/10, shadow-2xl, rounded-xl
 
 ---
 
@@ -239,4 +241,68 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - useSwipeGesture handles both touch and trackpad wheel events — cooldown must apply to both paths via handleSwipe
   - Wheel events use accumulation + timeout pattern; touch events fire directly on touchend
   - The cooldown is set before firing the callback to ensure it's active even if the callback triggers synchronous re-renders
+---
+
+## Iteration 8 - Tue Feb 24 14:03:39 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-133913/iter-8.log
+---
+**US-008 is complete.** There are still stories with `passes: false` (US-009, US-010), so I'll end here for this iteration.
+
+**Summary of US-008 changes:**
+- Reduced wheel accumulation timeout from **150ms to 50ms** for faster swipe detection
+- Reduced default threshold from **50 to 30** for lower activation distance
+- Added **300ms cooldown mechanism** using `cooldownRef` and `cooldownTimeoutRef` — after a successful swipe fires, further swipes are ignored for 300ms to prevent double-firing
+- `handleSwipe` returns early if cooldown is active
+- Cooldown timeout and ref properly cleaned up in `useEffect` return
+- Touch swipe still fires immediately on `touchend` (no regression)
+- Typecheck passes cleanly
+- File changed: `src/sidepanel/useSwipeGesture.ts`
+---
+
+## 2026-02-24 - US-009
+- Rendered FolderPickerDropdown via ReactDOM.createPortal to document.body to escape parent overflow:hidden
+- Added useLayoutEffect-based viewport edge detection using actual dropdown dimensions (ref.current.getBoundingClientRect())
+- Updated z-index from 1000 to 9990 (below toasts at 9999, above everything else)
+- Updated styling to match ContextMenu: backdrop-frosted, dark:bg-[#1e1e2a], dark:border-white/10, shadow-2xl
+- Escape key and click-outside still close the dropdown (unchanged)
+- File changed: src/sidepanel/App.tsx
+- **Learnings for future iterations:**
+  - createPortal from react-dom is the standard way to escape overflow:hidden parents in React
+  - useLayoutEffect fires synchronously after DOM mutations, before paint — ideal for position adjustments
+  - ContextMenu uses z-50 (Tailwind), FolderPickerDropdown now uses z-index: 9990 inline to sit above it
+  - The Chrome side panel is narrow, so viewport edge detection must use actual measured dimensions, not hardcoded values
+---
+
+## Iteration 9 - Tue Feb 24 14:05:43 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-133913/iter-9.log
+---
+**US-009 is complete.** There is still one story with `passes: false` (US-010), so I'll end here for this iteration.
+
+**Summary of US-009 changes:**
+- Rendered `FolderPickerDropdown` via `ReactDOM.createPortal(jsx, document.body)` to escape any parent `overflow:hidden`
+- Updated z-index from 1000 to **9990** (below toasts at 9999, above everything else)
+- Updated styling to match ContextMenu: `backdrop-frosted`, `dark:bg-[#1e1e2a]`, `dark:border-white/10`, `shadow-2xl`
+- Replaced hardcoded 200px viewport edge detection with `useLayoutEffect` + `ref.current.getBoundingClientRect()` for actual dimension-based positioning
+- Escape key and click-outside still close the dropdown (no regression)
+- Typecheck passes cleanly
+- File changed: `src/sidepanel/App.tsx`
+---
+
+## 2026-02-24 - US-010
+- Added "New Folder" button at bottom of FolderPickerDropdown, separated by border-t divider
+- Button shows plus icon and "New Folder" text
+- Clicking button shows inline text input with auto-focus, confirm (checkmark) and cancel (X) buttons
+- Enter key creates top-level folder via createFolder(name, null), then calls onSelect(newFolderId) to save the link and close dropdown
+- Escape key hides input and returns to button view
+- Empty name submission prevented (handleCreateFolder returns early on empty/whitespace)
+- File changed: src/sidepanel/App.tsx
+- **Learnings for future iterations:**
+  - createFolder returns a Promise<Folder> — the folder.id is used immediately for onSelect
+  - e.stopPropagation() on Escape keydown prevents the dropdown's own Escape handler from also firing (closing dropdown prematurely)
+  - useState for isCreating/newFolderName is local to FolderPickerDropdown — resets naturally when dropdown unmounts
+---
+
+ALL STORIES COMPLETE. US-001 through US-010 all have passes: true.
 ---
