@@ -53,6 +53,7 @@ import QuickNotes from "./QuickNotes";
 import SnippetsSection from "./SnippetsSection";
 import TimeMachineSection from "./TimeMachineSection";
 import AnnotationsSection from "./AnnotationsSection";
+import TabGraphSection from "./TabGraphSection";
 import TabPreviewCard from "./TabPreviewCard";
 import type { TabPreviewInfo } from "./TabPreviewCard";
 import { buildCommands } from "./commandRegistry";
@@ -1494,6 +1495,10 @@ export default function App() {
           const el = document.querySelector('[aria-label="Annotations"]');
           el?.scrollIntoView({ behavior: "smooth" });
         },
+        onTabGraph: () => {
+          const el = document.querySelector('[aria-label="Tab Graph"]');
+          el?.scrollIntoView({ behavior: "smooth" });
+        },
       }),
     [
       workspaces,
@@ -2423,6 +2428,9 @@ export default function App() {
 
         {/* Annotations Section */}
         <AnnotationsSection />
+
+        {/* Tab Graph Section */}
+        <TabGraphSection />
 
         {/* Recently Closed Section */}
         <RecentlyClosedSection workspaces={workspaces} />

@@ -21,6 +21,7 @@ export function buildCommands({
   onImportWorkspace,
   onTimeMachine,
   onAnnotations,
+  onTabGraph,
 }: {
   workspaces: Workspace[];
   onSwitchWorkspace: (workspaceId: string) => void;
@@ -41,6 +42,7 @@ export function buildCommands({
   onImportWorkspace: () => void;
   onTimeMachine: () => void;
   onAnnotations: () => void;
+  onTabGraph: () => void;
 }): Command[] {
   const commands: Command[] = [];
 
@@ -171,6 +173,13 @@ export function buildCommands({
     name: "Annotations",
     icon: "notes",
     action: onAnnotations,
+  });
+
+  commands.push({
+    id: "tab-graph",
+    name: "Tab Graph",
+    icon: "workspace",
+    action: onTabGraph,
   });
 
   return commands;

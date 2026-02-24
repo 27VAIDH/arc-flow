@@ -549,3 +549,36 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - CONDITION_TYPE_OPTIONS and PRIORITY_OPTIONS defined as module-level constants for reuse
   - Target workspace dropdown populated from workspaces prop — same pattern as RoutingRulesSection
 ---
+
+## Iteration 2 - Tue Feb 24 21:55:38 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-214252/iter-2.log
+---
+**US-AP-04 is complete.** There are still stories with `passes: false` remaining (US-G-03 is next at priority 18).
+
+**US-AP-04 Summary:**
+- Added Autopilot section to `SettingsPanel.tsx` with:
+  - Enable/disable toggle for `autopilotEnabled`
+  - Notification preference toggle for `autopilotNotify`
+  - Rules list showing each rule with name, priority badge, enable toggle, edit/delete buttons, conditions summary, and target workspace
+  - Rule editor form with: name input, conditions list (time range / domain pattern / display count with add/remove), target workspace dropdown populated from existing workspaces, priority selector (1-5)
+- Rules stored in `chrome.storage.local` under `autopilotRules` key with live updates via `chrome.storage.onChanged`
+- Follows existing SettingsPanel patterns (toggle styling, section headers, form styling)
+- Typecheck and tests pass
+---
+
+## 2026-02-24 - US-G-03
+- Implemented Tab Graph SVG Visualization sidebar section
+- Files created: src/sidepanel/TabGraphSection.tsx
+- Files modified: src/sidepanel/App.tsx, src/sidepanel/commandRegistry.ts, src/sidepanel/commandRegistry.test.ts
+- **Learnings for future iterations:**
+  - Graph data loaded from last 7 days of nav events + affinity pairs with minCount=1
+  - Domain colors assigned from a fixed palette of 10 colors, cycled by domain index
+  - Force-directed layout via useGraphLayout hook (GRAPH_WIDTH=320, GRAPH_HEIGHT=280)
+  - Edge opacity scales linearly from 0.2 to 1.0 based on weight/maxWeight
+  - Switch edges rendered with strokeDasharray for visual distinction from navigation edges
+  - Open tabs get larger circle radius (7 vs 5) and white stroke border
+  - Tooltip positioned relative to SVG bounding rect with pointer-events-none
+  - Node click: if isOpen, finds tab by URL and switches to it; otherwise opens new tab
+  - chrome.tabs.query({}) returns all tabs for mapping open tab URLs to graph nodes
+---

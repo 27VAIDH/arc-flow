@@ -22,6 +22,7 @@ const defaultHandlers = {
   onImportWorkspace: noop,
   onTimeMachine: noop,
   onAnnotations: noop,
+  onTabGraph: noop,
 };
 
 describe("buildCommands", () => {
