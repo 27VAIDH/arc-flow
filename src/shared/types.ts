@@ -206,6 +206,17 @@ export interface AutopilotRule {
   createdAt: number;
 }
 
+export interface AutopilotContext {
+  currentTime: Date;
+  activeTabUrl: string;
+  displayCount: number;
+}
+
+export interface ScoredRule {
+  rule: AutopilotRule;
+  score: number;
+}
+
 export interface Settings {
   theme: "system" | "light" | "dark";
   autoArchiveMinutes: number;
