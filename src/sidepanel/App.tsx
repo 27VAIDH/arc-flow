@@ -52,6 +52,7 @@ import MorningBriefing from "./MorningBriefing";
 import QuickNotes from "./QuickNotes";
 import SnippetsSection from "./SnippetsSection";
 import TimeMachineSection from "./TimeMachineSection";
+import AnnotationsSection from "./AnnotationsSection";
 import TabPreviewCard from "./TabPreviewCard";
 import type { TabPreviewInfo } from "./TabPreviewCard";
 import { buildCommands } from "./commandRegistry";
@@ -1489,6 +1490,10 @@ export default function App() {
           const el = document.querySelector('[aria-label="Time Machine"]');
           el?.scrollIntoView({ behavior: "smooth" });
         },
+        onAnnotations: () => {
+          const el = document.querySelector('[aria-label="Annotations"]');
+          el?.scrollIntoView({ behavior: "smooth" });
+        },
       }),
     [
       workspaces,
@@ -2415,6 +2420,9 @@ export default function App() {
 
         {/* Time Machine Section */}
         <TimeMachineSection />
+
+        {/* Annotations Section */}
+        <AnnotationsSection />
 
         {/* Recently Closed Section */}
         <RecentlyClosedSection workspaces={workspaces} />

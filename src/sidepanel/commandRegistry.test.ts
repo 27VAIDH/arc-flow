@@ -21,6 +21,7 @@ const defaultHandlers = {
   onExportWorkspace: noop,
   onImportWorkspace: noop,
   onTimeMachine: noop,
+  onAnnotations: noop,
 };
 
 describe("buildCommands", () => {
