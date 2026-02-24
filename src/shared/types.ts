@@ -165,6 +165,12 @@ export interface NavigationEvent {
   sessionId: string;
 }
 
+export interface TabSwitchEntry {
+  from: number;
+  to: number;
+  timestamp: number;
+}
+
 export interface Settings {
   theme: "system" | "light" | "dark";
   autoArchiveMinutes: number;

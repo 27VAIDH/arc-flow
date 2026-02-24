@@ -25,6 +25,7 @@ import { addArchiveEntry, getArchiveEntries } from "../shared/archiveStorage";
 import { matchRoute } from "../shared/routingEngine";
 import { calculateEnergyScore } from "../shared/energyScore";
 import { addNavEvent, pruneOldEvents } from "../shared/navigationDb";
+import { recordSwitch } from "../shared/affinityStorage";
 import type { NavigationEvent } from "../shared/types";
 
 const CONTEXT_MENU_ID = "arcflow-pin-toggle";
@@ -82,6 +83,9 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
 // Session ID for grouping navigation events (regenerated on service worker restart)
 const navSessionId = crypto.randomUUID();
+
+// --- Tab switch affinity tracking ---
+let previousActiveTabId: number | null = null;
 
 chrome.webNavigation.onCommitted.addListener(async (details) => {
   // Only track main frame navigations, ignore subframes
@@ -803,6 +807,12 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
   updateLastActiveAt(activeInfo.tabId).catch(() => {});
   // Track activation for energy score
   trackTabActivation(activeInfo.tabId);
+
+  // Record tab switch for affinity tracking
+  if (previousActiveTabId !== null && previousActiveTabId !== activeInfo.tabId) {
+    recordSwitch(previousActiveTabId, activeInfo.tabId).catch(() => {});
+  }
+  previousActiveTabId = activeInfo.tabId;
 
   // Analytics: track workspace time (time spent in previous workspace) and domain visit
   analyticsTrackWorkspaceTime();
