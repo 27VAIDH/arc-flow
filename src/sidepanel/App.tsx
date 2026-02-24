@@ -55,6 +55,7 @@ import TimeMachineSection from "./TimeMachineSection";
 import AnnotationsSection from "./AnnotationsSection";
 import TabGraphSection from "./TabGraphSection";
 import ResearchCopilotSection from "./ResearchCopilotSection";
+import AutopilotBanner from "./AutopilotBanner";
 import TabPreviewCard from "./TabPreviewCard";
 import type { TabPreviewInfo } from "./TabPreviewCard";
 import { buildCommands } from "./commandRegistry";
@@ -2424,6 +2425,9 @@ export default function App() {
               </div>
             ) : null}
           </DragOverlay>
+
+        {/* Autopilot Undo Banner */}
+        <AutopilotBanner />
 
         {/* Archive Section (Zone 4) */}
         <ArchiveSection />

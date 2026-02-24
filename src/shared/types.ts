@@ -299,4 +299,5 @@ export interface Settings {
   timeMachineRetentionDays: number;
   autopilotEnabled: boolean;
   autopilotNotify: boolean;
+  autopilotLearning: boolean;
 }

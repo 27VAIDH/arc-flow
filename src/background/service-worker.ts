@@ -1462,6 +1462,7 @@ async function evaluateAutopilot(): Promise<void> {
   autopilotSwitchTimer = setTimeout(async () => {
     autopilotSwitchTimer = null;
     try {
+      lastAutopilotSwitchedTo = bestMatch.targetWorkspaceId;
       await setActiveWorkspace(bestMatch.targetWorkspaceId);
 
       // Clear notification
@@ -1502,12 +1503,149 @@ chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) =
 async function undoAutopilotSwitch(): Promise<void> {
   if (!autopilotPreviousWorkspaceId) return;
   try {
+    lastAutopilotSwitchedTo = autopilotPreviousWorkspaceId;
     await setActiveWorkspace(autopilotPreviousWorkspaceId);
   } catch {
     // Previous workspace may no longer exist
   }
   autopilotPreviousWorkspaceId = null;
 }
+
+// --- Autopilot learning mode ---
+// Tracks manual workspace switches and suggests rules after 5+ consistent patterns
+
+interface LearningEntry {
+  workspaceId: string;
+  hour: number;
+  domain: string;
+  timestamp: number;
+}
+
+const LEARNING_STORAGE_KEY = "autopilotLearningLog";
+const LEARNING_SUGGESTION_KEY = "autopilotLearningSuggestion";
+const LEARNING_MIN_PATTERN_COUNT = 5;
+
+// Track autopilot-initiated workspace IDs to filter from learning mode
+ 
+let lastAutopilotSwitchedTo: string | null = null;
+
+async function recordManualSwitch(workspaceId: string): Promise<void> {
+  const settings = await getSettings();
+  if (!settings.autopilotLearning) return;
+
+  // Get active tab URL for domain context
+  let domain = "";
+  try {
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (activeTab?.url) {
+      try {
+        domain = new URL(activeTab.url).hostname;
+      } catch {
+        // Malformed URL
+      }
+    }
+  } catch {
+    // No active tab
+  }
+
+  const entry: LearningEntry = {
+    workspaceId,
+    hour: new Date().getHours(),
+    domain,
+    timestamp: Date.now(),
+  };
+
+  const result = await chrome.storage.local.get(LEARNING_STORAGE_KEY);
+  const log: LearningEntry[] = (result[LEARNING_STORAGE_KEY] as LearningEntry[] | undefined) ?? [];
+  log.push(entry);
+
+  // Cap at 500 entries
+  const trimmed = log.length > 500 ? log.slice(-500) : log;
+  await chrome.storage.local.set({ [LEARNING_STORAGE_KEY]: trimmed });
+
+  // Check for patterns
+  await checkLearningPatterns(trimmed);
+}
+
+async function checkLearningPatterns(log: LearningEntry[]): Promise<void> {
+  // Group by hour-range + workspace
+  const hourPatterns: Record<string, number> = {};
+  // Group by domain + workspace
+  const domainPatterns: Record<string, number> = {};
+
+  for (const entry of log) {
+    // Round hour to 2-hour blocks for pattern detection
+    const hourBlock = Math.floor(entry.hour / 2) * 2;
+    const hourKey = `time:${hourBlock}-${hourBlock + 2}|ws:${entry.workspaceId}`;
+    hourPatterns[hourKey] = (hourPatterns[hourKey] ?? 0) + 1;
+
+    if (entry.domain) {
+      const domainKey = `domain:${entry.domain}|ws:${entry.workspaceId}`;
+      domainPatterns[domainKey] = (domainPatterns[domainKey] ?? 0) + 1;
+    }
+  }
+
+  // Find strongest pattern that meets threshold
+  let bestPattern: { type: 'time' | 'domain'; value: string; workspaceId: string; count: number } | null = null;
+
+  for (const [key, count] of Object.entries(hourPatterns)) {
+    if (count >= LEARNING_MIN_PATTERN_COUNT) {
+      const match = key.match(/^time:(\d+-\d+)\|ws:(.+)$/);
+      if (match && (!bestPattern || count > bestPattern.count)) {
+        bestPattern = { type: 'time', value: `${match[1].replace('-', ':00-')}:00`, workspaceId: match[2], count };
+      }
+    }
+  }
+
+  for (const [key, count] of Object.entries(domainPatterns)) {
+    if (count >= LEARNING_MIN_PATTERN_COUNT) {
+      const match = key.match(/^domain:(.+)\|ws:(.+)$/);
+      if (match && (!bestPattern || count > bestPattern.count)) {
+        bestPattern = { type: 'domain', value: match[1], workspaceId: match[2], count };
+      }
+    }
+  }
+
+  if (bestPattern) {
+    // Check if we already have a rule for this pattern
+    const rulesResult = await chrome.storage.local.get("autopilotRules");
+    const existingRules: AutopilotRule[] = (rulesResult.autopilotRules as AutopilotRule[] | undefined) ?? [];
+
+    const alreadyExists = existingRules.some((rule) =>
+      rule.conditions.some(
+        (c) => c.type === bestPattern!.type && c.value === bestPattern!.value
+      ) && rule.targetWorkspaceId === bestPattern!.workspaceId
+    );
+
+    if (!alreadyExists) {
+      // Store suggestion for sidepanel to pick up
+      await chrome.storage.local.set({
+        [LEARNING_SUGGESTION_KEY]: {
+          type: bestPattern.type,
+          value: bestPattern.value,
+          workspaceId: bestPattern.workspaceId,
+          count: bestPattern.count,
+        },
+      });
+    }
+  }
+}
+
+// Listen for workspace changes to detect manual switches
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.activeWorkspaceId) {
+    const newWorkspaceId = changes.activeWorkspaceId.newValue as string | undefined;
+    if (newWorkspaceId) {
+      // Skip autopilot-initiated switches
+      if (lastAutopilotSwitchedTo === newWorkspaceId) {
+        lastAutopilotSwitchedTo = null;
+        return;
+      }
+      lastAutopilotSwitchedTo = null;
+      recordManualSwitch(newWorkspaceId).catch(() => {});
+    }
+  }
+});
 
 // --- Split view: side-by-side windows ---
 

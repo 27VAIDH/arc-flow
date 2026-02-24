@@ -17,6 +17,7 @@ export const DEFAULT_SETTINGS: Settings = {
   timeMachineRetentionDays: 30,
   autopilotEnabled: false,
   autopilotNotify: true,
+  autopilotLearning: false,
 };
 
 export const AUTO_ARCHIVE_OPTIONS = [
