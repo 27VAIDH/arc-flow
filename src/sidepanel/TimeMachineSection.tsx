@@ -95,6 +95,35 @@ function truncate(text: string, maxLen: number): string {
   return text.slice(0, maxLen) + "…";
 }
 
+function formatTimeHHMM(timestamp: number): string {
+  const date = new Date(timestamp);
+  const h = date.getHours().toString().padStart(2, "0");
+  const m = date.getMinutes().toString().padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+function treeToMarkdown(node: NavTreeNode, depth: number): string {
+  const indent = "  ".repeat(depth);
+  const title = node.event.title || node.event.url;
+  const time = formatTimeHHMM(node.event.timestamp);
+  let md = `${indent}- [${title}](${node.event.url}) (${time})\n`;
+  for (const child of node.children) {
+    md += treeToMarkdown(child, depth + 1);
+  }
+  return md;
+}
+
+function exportTreesAsMarkdown(trees: NavTreeNode[], dateRange: DateRange): string {
+  const rangeLabel =
+    dateRange === "today" ? "Today" : dateRange === "yesterday" ? "Yesterday" : "This Week";
+  let md = `# Time Machine Export — ${rangeLabel}\n\n`;
+  for (const tree of trees) {
+    md += treeToMarkdown(tree, 0);
+    md += "\n";
+  }
+  return md.trimEnd() + "\n";
+}
+
 function collectPathUrls(ancestorUrls: string[], node: NavTreeNode): string[] {
   return [...ancestorUrls, node.event.url];
 }
@@ -290,6 +319,7 @@ export default function TimeMachineSection() {
   const [enabled, setEnabled] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [domainFilter, setDomainFilter] = useState("");
+  const [toastVisible, setToastVisible] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const debouncedSearch = useDebounce(searchQuery, 300);
   const searchLower = debouncedSearch.toLowerCase();
@@ -326,10 +356,17 @@ export default function TimeMachineSection() {
     };
   }, [loadTrees]);
 
+  const handleExport = useCallback(async () => {
+    const md = exportTreesAsMarkdown(trees, dateRange);
+    await navigator.clipboard.writeText(md);
+    setToastVisible(true);
+    setTimeout(() => setToastVisible(false), 2000);
+  }, [trees, dateRange]);
+
   if (!enabled) return null;
 
   return (
-    <section className="px-1 pb-2" aria-label="Time Machine">
+    <section className="px-1 pb-2 relative" aria-label="Time Machine">
       {/* Collapsible header */}
       <button
         onClick={() => setIsCollapsed((prev) => !prev)}
@@ -361,8 +398,32 @@ export default function TimeMachineSection() {
             clipRule="evenodd"
           />
         </svg>
-        <span>Time Machine ({trees.length})</span>
+        <span className="flex-1">Time Machine ({trees.length})</span>
       </button>
+
+      {/* Export button */}
+      {!isCollapsed && trees.length > 0 && (
+        <button
+          onClick={handleExport}
+          className="absolute right-2 top-1.5 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+          title="Export as Markdown"
+          aria-label="Export timeline as Markdown"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="w-3.5 h-3.5"
+          >
+            <path
+              d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z"
+            />
+            <path
+              d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z"
+            />
+          </svg>
+        </button>
+      )}
 
       {/* Content */}
       {!isCollapsed && (
@@ -431,6 +492,13 @@ export default function TimeMachineSection() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Toast notification */}
+      {toastVisible && (
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-800 text-[10px] px-3 py-1 rounded shadow-lg animate-pulse">
+          Copied to clipboard!
         </div>
       )}
     </section>
