@@ -1,308 +1,113 @@
 # Ralph Progress Log
-Started: Tue Feb 24 13:39:13 IST 2026
+Started: Tue Feb 24 18:49:55 IST 2026
 ---
 
 ## Codebase Patterns
-- aiGroupingService.ts exports FolderContext, WorkspaceContext, AIGroupingResult types for use by OrganizeTabsModal
-- getAIGroupingSuggestions accepts optional folders and workspaces params (default to empty arrays for backward compat)
-- AI response groups now include target ("new"|"existing"), existingFolderName, suggestedWorkspace fields
-- DraggableTabItem is in App.tsx (~line 182), DraggableFolderItem is in FolderTree.tsx (~line 167)
-- dnd-kit useSortable returns {attributes, listeners, setNodeRef, transform, transition, isDragging}
-- PointerSensor with distance:5 is configured in App.tsx sensors (~line 666)
-- Tab IDs prefixed with 'tab:', folder items with 'folder-item:', pinned apps with 'pinned:'
-- Double-click rename uses e.stopPropagation() on inner elements to avoid interfering with row-level events
-- PinnedAppsRow uses the outer DndContext (no internal DndContext) — pinned app IDs are prefixed with 'pinned:' in SortableContext
-- Pinned app reordering is handled in the outer handleDragEnd (pinned:X → pinned:Y)
-- Main DndContext now wraps both PinnedAppsRow and <main> content for cross-section dragging
-- Droppable zones: 'pinned-drop-zone' wraps PinnedAppsRow, 'tablist-drop-zone' wraps tab list section
-- customCollisionDetection priority: folder-drop > pinned-drop-zone/tablist-drop-zone > other pointer collisions > rect intersection
-- handleDragEnd dependency array includes: tabs, folders, setFolders, filteredTabs, activeWorkspaceId, pinnedApps, setToast
-- Toast system: setToast(message) shows a 3-second auto-dismiss toast at bottom of sidebar
-- addPinnedApp from storage.ts accepts Omit<PinnedApp, "sortOrder"> — sortOrder is auto-assigned
-- Cross-section drag cases use URL equality for duplicate detection (exact match, not origin)
-- FolderPickerDropdown uses createPortal to document.body + useLayoutEffect for viewport-aware positioning
-- ContextMenu styling pattern: backdrop-frosted, dark:bg-[#1e1e2a], dark:border-white/10, shadow-2xl, rounded-xl
+- Storage: Chrome Storage API (chrome.storage.local) for most data; IndexedDB for large/frequent data (navigation events)
+- Service worker opens/closes DB per write (no persistent connection — worker may suspend)
+- Alarms registered in chrome.runtime.onInstalled, handled in chrome.alarms.onAlarm listener
+- All alarm handlers use .catch(() => {}) for silent failure with retry on next alarm
+- Message types defined as discriminated unions in types.ts (ServiceWorkerMessage, SidePanelMessage)
+- crypto.randomUUID() available in service worker for generating IDs
+- chrome.webNavigation.onCommitted fires before page title is available; title fetched via chrome.tabs.get()
+- chrome.storage.local.get() returns Record<string, any> — cast results explicitly to avoid TS errors
+- Tab switch tracking uses undirected pairs (A→B and B→A count together) for affinity
+- Settings toggle pattern: use `handleUpdate({ field: !settings.field })` with toggle button styling from existing sections
+- TIME_MACHINE_RETENTION_OPTIONS constant in constants.ts for dropdown (7/14/30 days)
+- pruneOldEvents() in navigationDb.ts accepts optional maxAgeDays parameter (defaults to 30)
+- Tree building: chain events via referrerTabId; best parent = most recent event on referrer tab before child's timestamp
+- getNavEventsSince() returns all events from a timestamp; filter client-side for end bound
 
----
-
-## 2026-02-24 - US-001
-- Moved {...listeners} from grip icon span to full <li> row in DraggableTabItem (App.tsx)
-- Moved {...attributes} and {...listeners} from grip icon span to full <div> row in DraggableFolderItem (FolderTree.tsx)
-- Grip icons made visual-only: opacity-0 → opacity-30 on hover, pointer-events-none, aria-hidden
-- Files changed: src/sidepanel/App.tsx, src/sidepanel/FolderTree.tsx
+## 2026-02-24 - INFRA-01
+- Implemented IndexedDB-backed navigation event tracking system
+- Files created: src/shared/navigationDb.ts
+- Files modified: src/shared/types.ts, src/background/service-worker.ts, public/manifest.json
 - **Learnings for future iterations:**
-  - DraggableTabItem <li> already had {...attributes} but not {...listeners}; DraggableFolderItem had neither on the row
-  - Double-click rename on folder items is on inner <span> with stopPropagation, so row-level listeners don't conflict
-  - PointerSensor distance:5 already prevents click/drag confusion
+  - IndexedDB must be opened/closed per operation since service workers can suspend
+  - chrome.webNavigation.onCommitted fires for subframes too — filter by frameId === 0
+  - Page title not available at onCommitted time; need chrome.tabs.get() which may fail if tab closed
+  - Skip chrome://, chrome-extension://, and about: URLs from tracking
+  - Session ID is regenerated on service worker restart (using crypto.randomUUID())
 ---
 
-## Iteration 1 - Tue Feb 24 13:41:19 IST 2026
+## Iteration 1 - Tue Feb 24 18:53:49 IST 2026
 Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-133913/iter-1.log
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-184955/iter-1.log
 ---
-US-001 is complete. There are still stories with `passes: false`, so I'll end here for this iteration. The next iteration should pick up **US-002: Add droppable zones for pinned apps and tab list areas**.
+INFRA-01 is complete. There are still stories with `passes: false` remaining (INFRA-02 is next at priority 2).
+
+**INFRA-01 Summary:**
+- Added `NavigationEvent` interface to `types.ts`
+- Created `src/shared/navigationDb.ts` with IndexedDB wrapper (`initNavigationDb`, `addNavEvent`, `getNavEvents`, `getNavEventsSince`, `pruneOldEvents`)
+- Added `chrome.webNavigation.onCommitted` listener in service-worker.ts to record navigation events
+- DB opened/closed per write (service worker safe)
+- Events pruned after 30 days via daily alarm
+- Added `webNavigation` permission to manifest.json
+- Typecheck and tests pass
 ---
 
-## 2026-02-24 - US-002
-- Added `useDroppable` import from @dnd-kit/core
-- Created `DroppablePinnedZone` wrapper component with useDroppable({id: 'pinned-drop-zone'})
-- Created `DroppableTabListZone` wrapper component with useDroppable({id: 'tablist-drop-zone'})
-- Moved DndContext up from inside `<main>` to wrap both PinnedAppsRow and `<main>` for cross-section dragging
-- Updated customCollisionDetection: folder-drop targets first, then zone drops (pinned-drop-zone, tablist-drop-zone), then other pointer collisions
-- Visual feedback: both zones show ring-1 ring-arc-accent/30 highlight when hovered during drag (isOver from useDroppable)
-- Files changed: src/sidepanel/App.tsx
+## 2026-02-24 - INFRA-02
+- Implemented tab switch affinity tracking via chrome.storage.local
+- Files created: src/shared/affinityStorage.ts
+- Files modified: src/shared/types.ts, src/background/service-worker.ts
 - **Learnings for future iterations:**
-  - PinnedAppsRow has its own nested DndContext for internal sorting — dnd-kit supports nested contexts
-  - Moving the outer DndContext higher in the tree doesn't break the inner DndContext in PinnedAppsRow
-  - useDroppable's `isOver` property provides automatic hover state for visual feedback without needing onDragOver handlers
-  - The DragOverlay works fine even when DndContext is moved higher in the tree (it uses portals)
+  - chrome.storage.local.get() returns `Record<string, any>` — need explicit cast for typed arrays
+  - Linter auto-converts `let` to `const` if no reassignment detected in same scope — use `let` only when reassignment is nearby
+  - previousActiveTabId tracked as module-level variable in service worker for tab switch pairs
+  - Affinity pairs use undirected keys (min:max) so A→B and B→A count together
+  - Storage log capped at 10,000 entries to prevent unbounded growth
 ---
 
-## Iteration 2 - Tue Feb 24 13:45:09 IST 2026
+## Iteration 2 - Tue Feb 24 18:56:47 IST 2026
 Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-133913/iter-2.log
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-184955/iter-2.log
 ---
-US-002 is complete. There are still stories with `passes: false` (US-003 through US-010), so I'll end here for this iteration. The next iteration should pick up **US-003: Cross-section drag: tab to folder and tab to pinned apps**.
+**INFRA-02 is complete.** There are still stories with `passes: false` remaining (US-T1-01 is next at priority 3).
 
-**Summary of US-002 changes:**
-- Added `useDroppable` import from `@dnd-kit/core`
-- Created `DroppablePinnedZone` and `DroppableTabListZone` wrapper components with visual feedback (`ring-1 ring-arc-accent/30` on hover)
-- Moved `DndContext` up to wrap both PinnedAppsRow and `<main>` for cross-section drag support
-- Updated `customCollisionDetection` to recognize `pinned-drop-zone` and `tablist-drop-zone` (after folder-drop targets, before generic collisions)
-- Typecheck passes cleanly
+**INFRA-02 Summary:**
+- Added `TabSwitchEntry` interface to `types.ts` with `from`, `to`, `timestamp` fields
+- Created `src/shared/affinityStorage.ts` with `recordSwitch()`, `getAffinityPairs(minCount)`, `pruneOldSwitches(maxAgeDays)`
+- Storage key is `tabSwitchLog` in `chrome.storage.local`
+- Added tab switch recording in `chrome.tabs.onActivated` listener in service-worker.ts using `previousActiveTabId` tracking
+- Switch log capped at 10,000 entries
+- Typecheck and tests pass
 ---
 
-## 2026-02-24 - US-003
-- Updated Case 1 (tab→folder-drop): changed FolderItem type from "tab" to "link", set tabId to null
-- Added duplicate URL detection for tab→folder: shows toast "Already saved in this folder" if same URL exists
-- Added new Case 1b (tab→pinned-drop-zone): creates PinnedApp from tab data via addPinnedApp
-- Added duplicate URL detection for tab→pinned: shows toast "Already pinned" if same URL exists
-- Tab remains open in both cases (no close logic added)
-- Added pinnedApps and setToast to handleDragEnd dependency array
-- Files changed: src/sidepanel/App.tsx
+## 2026-02-24 - US-T1-01
+- Implemented Time Machine settings: enable/disable tracking, retention period (7/14/30 days)
+- Files modified: src/shared/types.ts, src/shared/constants.ts, src/sidepanel/SettingsPanel.tsx, src/background/service-worker.ts
 - **Learnings for future iterations:**
-  - Existing Case 1 already handled tab→folder but with type "tab" — US-003 changed it to "link" for saved bookmarks
-  - addPinnedApp auto-assigns sortOrder, so we only pass id/url/title/favicon
-  - Toast system is simple: setToast(string) with 3-second auto-dismiss
+  - Settings interface in types.ts must match DEFAULT_SETTINGS in constants.ts exactly
+  - SettingsPanel uses `handleUpdate()` for partial settings updates — same pattern for all new settings
+  - Toggle button styling: `bg-arc-accent` when enabled, `bg-gray-300 dark:bg-arc-surface-hover` when disabled
+  - Prune alarm handler reads settings to get retention days, then passes to pruneOldEvents()
+  - `getSettings()` is already imported in service-worker.ts — no additional import needed
 ---
 
-## Iteration 3 - Tue Feb 24 13:47:46 IST 2026
+## Iteration 3 - Tue Feb 24 19:00:16 IST 2026
 Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-133913/iter-3.log
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-184955/iter-3.log
 ---
-US-003 is complete. There are still stories with `passes: false` (US-004 through US-010), so I'll end here for this iteration. The next iteration should pick up **US-004: Cross-section drag: pinned app to folder and folder item to pinned apps**.
+**US-T1-01 is complete.** There are still stories with `passes: false` remaining (US-T1-02 is next at priority 4).
 
-**Summary of US-003 changes:**
-- Updated Case 1 (tab→folder): FolderItem now uses `type: "link"` with `tabId: null` instead of `type: "tab"`, plus duplicate URL detection with toast
-- Added Case 1b (tab→pinned-drop-zone): creates PinnedApp from tab data via `addPinnedApp`, with duplicate URL detection
-- Tab remains open after drag (no close logic)
-- Added `pinnedApps` and `setToast` to handleDragEnd dependency array
-- Typecheck passes cleanly
+**US-T1-01 Summary:**
+- Extended `Settings` interface with `timeMachineEnabled: boolean` and `timeMachineRetentionDays: number`
+- Added `DEFAULT_SETTINGS` values: `timeMachineEnabled: true`, `timeMachineRetentionDays: 30`
+- Added `TIME_MACHINE_RETENTION_OPTIONS` constant (7/14/30 days)
+- Added Time Machine section to `SettingsPanel.tsx` with toggle and retention dropdown
+- Service worker now checks `timeMachineEnabled` before recording navigation events
+- Prune alarm handler reads `timeMachineRetentionDays` from settings
+- Typecheck and tests pass
 ---
 
-## 2026-02-24 - US-004
-- Refactored PinnedAppsRow to remove internal DndContext — pinned apps now use the outer DndContext with `pinned:${id}` IDs
-- Added Case 1c (pinned→folder-drop): creates FolderItem {type: "link"} from pinned app data, with duplicate URL detection
-- Added Case 1d (folder-item→pinned-drop-zone): creates PinnedApp from folder item data, with duplicate URL detection
-- Added Case 1e (pinned→pinned): reordering pinned apps in outer handleDragEnd (moved from PinnedAppsRow internal handler)
-- Added activeDragPinned state + pinned app DragOverlay rendering
-- Source items NOT removed after drag (user keeps both copies)
-- Imported reorderPinnedApps in App.tsx
-- Files changed: src/sidepanel/App.tsx, src/sidepanel/PinnedAppsRow.tsx
+## 2026-02-24 - US-T1-02
+- Implemented Navigation Tree Builder for Time Machine feature
+- Files created: src/shared/timeMachineStorage.ts
+- Files modified: src/shared/types.ts
 - **Learnings for future iterations:**
-  - Nested DndContexts intercept drag events — to enable cross-section dragging, pinned apps had to be moved to the outer DndContext
-  - PinnedAppsRow's SortableContext works fine nested inside the outer DndContext without its own DndContext
-  - Pinned app IDs now use `pinned:` prefix to distinguish them in the shared drag space
-  - horizontalListSortingStrategy import stays in PinnedAppsRow (not needed in App.tsx)
----
-
-## Iteration 4 - Tue Feb 24 13:53:12 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-133913/iter-4.log
----
-US-004 is complete. There are still stories with `passes: false` (US-005 through US-010), so I'll end here for this iteration. The next iteration should pick up **US-005: Cross-section drag: folder item back to tab list (unpin from folder)**.
-
-**Summary of US-004 changes:**
-- Refactored PinnedAppsRow to remove its internal DndContext — pinned apps now participate in the outer DndContext with `pinned:` prefixed IDs
-- Added Case 1c (pinned→folder-drop): creates FolderItem from pinned app data with duplicate URL detection
-- Added Case 1d (folder-item→pinned-drop-zone): creates PinnedApp from folder item data with duplicate URL detection
-- Added Case 1e (pinned→pinned): pinned app reordering moved to outer handleDragEnd
-- Added `activeDragPinned` state and DragOverlay rendering for pinned apps
-- Source items are NOT removed automatically (user keeps both copies)
-- Typecheck passes cleanly
----
-
-## 2026-02-24 - US-005
-- Added Case 1e (folder-item → tablist-drop-zone) in handleDragEnd
-- For type "link" items: opens URL via chrome.tabs.create({url}), then removes from folder
-- For type "tab" items: just removes from folder (tab already open)
-- Uses existing removeItemFromFolder from folderStorage
-- Renumbered old Case 1e (pinned reorder) to Case 1f
-- Files changed: src/sidepanel/App.tsx
-- **Learnings for future iterations:**
-  - chrome.tabs.create is available in Chrome extension side panel context
-  - Case ordering matters: folder-item → tablist-drop-zone must come before folder-item → folder-drop (Case 2) to avoid being caught by the folder-drop prefix check
----
-
-## Iteration 5 - Tue Feb 24 13:54:47 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-133913/iter-5.log
----
-**US-005 is complete.** There are still stories with `passes: false` (US-006 through US-010), so I'll end here for this iteration.
-
-**Summary of US-005 changes:**
-- Added Case 1e in `handleDragEnd`: folder-item dropped on `tablist-drop-zone`
-- For `type: "link"` items: opens URL in new tab via `chrome.tabs.create({url})`, then removes FolderItem from folder via `removeItemFromFolder`
-- For `type: "tab"` items: just removes FolderItem (tab already open)
-- Renumbered old Case 1e (pinned reorder) to Case 1f
-- Typecheck passes cleanly
-- File changed: `src/sidepanel/App.tsx`
----
-
-## 2026-02-24 - US-006
-- Updated callOpenRouterAPI to accept folders (FolderContext[]) and workspaces (WorkspaceContext[]) params
-- Updated AI prompt to include existing folder names/item counts and workspace names as context
-- Prompt instructs AI to reference existing folders instead of creating new ones, and suggest workspace moves
-- Updated response schema: each group now has target ("new"|"existing"), optional existingFolderName, optional suggestedWorkspace
-- Updated parseAIResponse to validate and normalize new fields with safe fallback to "new" if target is unrecognized
-- Updated getAIGroupingSuggestions signature with optional folders and workspaces params (default empty arrays)
-- Exported FolderContext, WorkspaceContext, and AIGroupingResult types for use by OrganizeTabsModal
-- File changed: src/shared/aiGroupingService.ts
-- **Learnings for future iterations:**
-  - Default params (folders=[], workspaces=[]) maintain backward compatibility — OrganizeTabsModal can call without them until US-007
-  - parseAIResponse uses safe fallback: unrecognized target values default to "new"
-  - existingFolderName is only included when target is "existing" to keep the data clean
----
-
-## Iteration 6 - Tue Feb 24 13:56:50 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-133913/iter-6.log
----
-**US-006 is complete.** There are still stories with `passes: false` (US-007 through US-010), so I'll end here for this iteration. The next iteration should pick up **US-007: Update OrganizeTabsModal to handle existing folders and workspace suggestions**.
-
-**Summary of US-006 changes:**
-- Updated `callOpenRouterAPI` to accept `folders: FolderContext[]` and `workspaces: WorkspaceContext[]` params
-- Updated AI prompt to include existing folder names/item counts and workspace names as context, instructing the AI to reference existing folders and suggest workspace moves
-- Updated response schema: each group now has `target` ("new"|"existing"), optional `existingFolderName`, optional `suggestedWorkspace`
-- Updated `parseAIResponse` to validate and normalize new fields with safe fallback to "new" for unrecognized target values
-- Updated `getAIGroupingSuggestions` signature with optional `folders` and `workspaces` params (default empty arrays for backward compat)
-- Exported `FolderContext`, `WorkspaceContext`, and `AIGroupingResult` types
-- Typecheck passes cleanly
-- File changed: `src/shared/aiGroupingService.ts`
----
-
-## 2026-02-24 - US-007
-- Updated OrganizeTabsModal to accept workspaces and activeWorkspaceId props
-- Pass FolderContext[] and WorkspaceContext[] to getAIGroupingSuggestions for AI-aware grouping
-- Added target/existingFolderName/suggestedWorkspace fields to TabGroup interface
-- Group cards now show green "New" badge or blue "Existing" badge based on target
-- acceptGroup helper: for "existing" target, finds folder by name (case-insensitive) and adds to it; falls back to createFolder if not found
-- Workspace move suggestions shown in separate "Suggested Moves" section with purple "Move" badge
-- Accepting workspace moves calls assignTabToWorkspace to update tabWorkspaceMap
-- Domain-based fallback: groupTabsByDomain now checks if display name matches existing folder name (case-insensitive) and sets target to "existing"
-- Updated App.tsx to pass workspaces and activeWorkspaceId to OrganizeTabsModal
-- Files changed: src/sidepanel/OrganizeTabsModal.tsx, src/sidepanel/App.tsx
-- **Learnings for future iterations:**
-  - assignTabToWorkspace from workspaceStorage.ts is the correct way to move tabs between workspaces
-  - AI groups can have both folder assignment and workspace suggestion — they're handled independently
-  - useMemo for workspaceMoves depends on aiGroups which can be null — guard with groupingSource check
-  - Domain groups inherit target from folder name matching; AI groups get target from the AI response directly
----
-
-## Iteration 7 - Tue Feb 24 14:01:53 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-133913/iter-7.log
----
-**US-007 is complete.** There are still stories with `passes: false` (US-008, US-009, US-010), so I'll end here for this iteration. The next iteration should pick up **US-008: Near-instant workspace swipe response**.
-
-**Summary of US-007 changes:**
-- Updated `OrganizeTabsModal` to accept `workspaces` and `activeWorkspaceId` props
-- Passes `FolderContext[]` and `WorkspaceContext[]` to `getAIGroupingSuggestions` for AI-aware grouping
-- Added `target`/`existingFolderName`/`suggestedWorkspace` fields to `TabGroup` interface
-- Group cards now show green **"New"** badge or blue **"Existing"** badge based on target
-- `acceptGroup` helper: for "existing" target, finds folder by name (case-insensitive) and adds to it; falls back to `createFolder` if not found
-- Workspace move suggestions shown in separate **"Suggested Moves"** section with purple **"Move"** badge
-- Accepting workspace moves calls `assignTabToWorkspace` to update tabWorkspaceMap
-- Domain-based fallback: `groupTabsByDomain` checks if display name matches existing folder name (case-insensitive) and sets target to "existing"
-- Updated `App.tsx` to pass `workspaces` and `activeWorkspaceId` to `OrganizeTabsModal`
-- Typecheck passes cleanly
-- Files changed: `src/sidepanel/OrganizeTabsModal.tsx`, `src/sidepanel/App.tsx`
----
-
-## 2026-02-24 - US-008
-- Reduced wheel accumulation timeout from 150ms to 50ms for faster swipe detection
-- Reduced default threshold from 50 to 30 for lower activation distance
-- Added cooldownRef (useRef<boolean>) and cooldownTimeoutRef for 300ms cooldown after swipe fires
-- handleSwipe returns early if cooldownRef.current is true (prevents double-firing)
-- Cooldown timeout and ref cleaned up in useEffect return
-- Touch swipe still fires immediately on touchend via handleSwipe (cooldown applies equally)
-- File changed: src/sidepanel/useSwipeGesture.ts
-- **Learnings for future iterations:**
-  - useSwipeGesture handles both touch and trackpad wheel events — cooldown must apply to both paths via handleSwipe
-  - Wheel events use accumulation + timeout pattern; touch events fire directly on touchend
-  - The cooldown is set before firing the callback to ensure it's active even if the callback triggers synchronous re-renders
----
-
-## Iteration 8 - Tue Feb 24 14:03:39 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-133913/iter-8.log
----
-**US-008 is complete.** There are still stories with `passes: false` (US-009, US-010), so I'll end here for this iteration.
-
-**Summary of US-008 changes:**
-- Reduced wheel accumulation timeout from **150ms to 50ms** for faster swipe detection
-- Reduced default threshold from **50 to 30** for lower activation distance
-- Added **300ms cooldown mechanism** using `cooldownRef` and `cooldownTimeoutRef` — after a successful swipe fires, further swipes are ignored for 300ms to prevent double-firing
-- `handleSwipe` returns early if cooldown is active
-- Cooldown timeout and ref properly cleaned up in `useEffect` return
-- Touch swipe still fires immediately on `touchend` (no regression)
-- Typecheck passes cleanly
-- File changed: `src/sidepanel/useSwipeGesture.ts`
----
-
-## 2026-02-24 - US-009
-- Rendered FolderPickerDropdown via ReactDOM.createPortal to document.body to escape parent overflow:hidden
-- Added useLayoutEffect-based viewport edge detection using actual dropdown dimensions (ref.current.getBoundingClientRect())
-- Updated z-index from 1000 to 9990 (below toasts at 9999, above everything else)
-- Updated styling to match ContextMenu: backdrop-frosted, dark:bg-[#1e1e2a], dark:border-white/10, shadow-2xl
-- Escape key and click-outside still close the dropdown (unchanged)
-- File changed: src/sidepanel/App.tsx
-- **Learnings for future iterations:**
-  - createPortal from react-dom is the standard way to escape overflow:hidden parents in React
-  - useLayoutEffect fires synchronously after DOM mutations, before paint — ideal for position adjustments
-  - ContextMenu uses z-50 (Tailwind), FolderPickerDropdown now uses z-index: 9990 inline to sit above it
-  - The Chrome side panel is narrow, so viewport edge detection must use actual measured dimensions, not hardcoded values
----
-
-## Iteration 9 - Tue Feb 24 14:05:43 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-133913/iter-9.log
----
-**US-009 is complete.** There is still one story with `passes: false` (US-010), so I'll end here for this iteration.
-
-**Summary of US-009 changes:**
-- Rendered `FolderPickerDropdown` via `ReactDOM.createPortal(jsx, document.body)` to escape any parent `overflow:hidden`
-- Updated z-index from 1000 to **9990** (below toasts at 9999, above everything else)
-- Updated styling to match ContextMenu: `backdrop-frosted`, `dark:bg-[#1e1e2a]`, `dark:border-white/10`, `shadow-2xl`
-- Replaced hardcoded 200px viewport edge detection with `useLayoutEffect` + `ref.current.getBoundingClientRect()` for actual dimension-based positioning
-- Escape key and click-outside still close the dropdown (no regression)
-- Typecheck passes cleanly
-- File changed: `src/sidepanel/App.tsx`
----
-
-## 2026-02-24 - US-010
-- Added "New Folder" button at bottom of FolderPickerDropdown, separated by border-t divider
-- Button shows plus icon and "New Folder" text
-- Clicking button shows inline text input with auto-focus, confirm (checkmark) and cancel (X) buttons
-- Enter key creates top-level folder via createFolder(name, null), then calls onSelect(newFolderId) to save the link and close dropdown
-- Escape key hides input and returns to button view
-- Empty name submission prevented (handleCreateFolder returns early on empty/whitespace)
-- File changed: src/sidepanel/App.tsx
-- **Learnings for future iterations:**
-  - createFolder returns a Promise<Folder> — the folder.id is used immediately for onSelect
-  - e.stopPropagation() on Escape keydown prevents the dropdown's own Escape handler from also firing (closing dropdown prematurely)
-  - useState for isCreating/newFolderName is local to FolderPickerDropdown — resets naturally when dropdown unmounts
----
-
-ALL STORIES COMPLETE. US-001 through US-010 all have passes: true.
+  - Tree building chains events via referrerTabId; best parent is the most recent event on the referrer tab before the child's timestamp
+  - getNavEventsSince() in navigationDb.ts returns all events from a timestamp onward; filter client-side for end bound
+  - NavTreeNode is a recursive type — children sorted oldest-first for natural reading, roots sorted newest-first
+  - Orphan events (no referrer or no matching parent) become root nodes
+  - eventsByTabId map is key for efficient parent lookup during tree construction
 ---

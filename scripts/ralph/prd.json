@@ -1,184 +1,723 @@
 {
   "project": "ArcFlow",
-  "branchName": "ralph/sidebar-dnd-organize-fixes",
-  "description": "Enhanced Drag & Drop, Smart Tab Organization, and UI Fixes — Full bi-directional DnD across tabs/folders/pinned apps, Arc-style full-row dragging, AI organize with folder/workspace awareness, near-instant workspace swipe, and Save to Folder popup fixes.",
+  "branchName": "ralph/power-features",
+  "description": "ArcFlow Power Features v2.0 — Browsing Time Machine, Page Annotation Layer, Workspace Autopilot, Tab Relationship Graph, and AI Research Copilot. 30 stories across 5 waves.",
   "userStories": [
     {
-      "id": "US-001",
-      "title": "Arc-style full-row tab and folder item dragging",
-      "description": "As a user, I want to initiate a drag from anywhere on a tab row or folder item row (not just the left grip icon) so that dragging feels natural like in Arc browser. Move dnd-kit listeners from the grip icon to the entire <li> row in DraggableTabItem (App.tsx ~line 182) and DraggableFolderItem (FolderTree.tsx). The grip icon can remain as a subtle visual hint (opacity-0 → opacity-30 on hover) but must not be the only drag handle. Ensure PointerSensor's 5px activation distance prevents drag from interfering with click, double-click rename, and middle-click close.",
-      "acceptanceCriteria": [
-        "In DraggableTabItem (App.tsx): {...listeners} and {...attributes} applied to the <li> element instead of just the grip icon",
-        "In DraggableFolderItem (FolderTree.tsx): same change — listeners on the full row, not just the grip handle",
-        "PointerSensor activation distance remains at 5px to distinguish click from drag",
-        "Single-click to switch tab still works (handleClick fires on click without drag)",
-        "Double-click to rename tab still works (handleDoubleClick fires correctly)",
-        "Middle-click to close tab still works (handleMouseDown with button === 1)",
-        "Grip icon kept as subtle visual affordance (opacity-0 normal, opacity-30 on row hover) but not required to drag",
-        "Typecheck passes (npx tsc --noEmit)"
-      ],
+      "id": "INFRA-01",
+      "title": "Navigation Event Tracking System",
+      "description": "Create an IndexedDB-backed navigation event tracking system. Every page visit gets recorded with timestamp, URL, title, tabId, transitionType (from chrome.webNavigation), and referrer tabId.",
       "priority": 1,
-      "passes": true,
-      "notes": ""
+      "dependsOn": [],
+      "filesToCreate": [
+        "src/shared/navigationDb.ts"
+      ],
+      "filesToModify": [
+        "src/shared/types.ts",
+        "src/background/service-worker.ts",
+        "public/manifest.json"
+      ],
+      "acceptanceCriteria": [
+        "NavigationEvent interface added to types.ts with fields: id, tabId, url, title, timestamp, transitionType, referrerTabId (optional), sessionId",
+        "IndexedDB wrapper in navigationDb.ts with initNavigationDb(), addNavEvent(), getNavEvents(tabId), getNavEventsSince(timestamp), pruneOldEvents(maxAgeDays)",
+        "chrome.webNavigation.onCommitted listener in service-worker.ts records events to IndexedDB",
+        "DB opened/closed per write (no persistent connection — service worker may suspend)",
+        "Events pruned after 30 days by default",
+        "webNavigation permission added to manifest.json",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": true
     },
     {
-      "id": "US-002",
-      "title": "Add droppable zones for pinned apps and tab list areas",
-      "description": "As a developer, I need new droppable zones so items can be dragged between sections. In App.tsx: wrap the pinned apps area with useDroppable (id: 'pinned-drop-zone') and the open tabs list area with useDroppable (id: 'tablist-drop-zone'). Update customCollisionDetection to recognize these new drop zone IDs alongside the existing 'folder-drop:' zones. The collision detection should prefer folder-drop targets (existing behavior), then check pinned-drop-zone and tablist-drop-zone. Visual feedback: highlight pinned apps area with a subtle border/glow when a draggable hovers over it, same for tab list area.",
-      "acceptanceCriteria": [
-        "Pinned apps container wrapped with useDroppable, id: 'pinned-drop-zone'",
-        "Open tabs list container wrapped with useDroppable, id: 'tablist-drop-zone'",
-        "customCollisionDetection updated: checks folder-drop first (existing), then pinned-drop-zone and tablist-drop-zone",
-        "When dragging over pinned-drop-zone: container shows subtle highlight (ring-1 ring-arc-accent/30 or similar)",
-        "When dragging over tablist-drop-zone: container shows subtle highlight",
-        "Highlight removed when drag leaves the zone",
-        "Existing folder drop targets still work correctly (no regression)",
-        "Typecheck passes (npx tsc --noEmit)"
-      ],
+      "id": "INFRA-02",
+      "title": "Tab Switch Affinity Tracking",
+      "description": "Track which tabs the user switches between frequently. Stores switch pairs in chrome.storage.local under key tabSwitchLog. This data feeds the Tab Relationship Graph and Autopilot features.",
       "priority": 2,
-      "passes": true,
-      "notes": ""
+      "dependsOn": [],
+      "filesToCreate": [
+        "src/shared/affinityStorage.ts"
+      ],
+      "filesToModify": [
+        "src/shared/types.ts",
+        "src/background/service-worker.ts"
+      ],
+      "acceptanceCriteria": [
+        "TabSwitchEntry interface added to types.ts: { from: number, to: number, timestamp: number }",
+        "affinityStorage.ts with recordSwitch(fromTabId, toTabId), getAffinityPairs(minCount), pruneOldSwitches(maxAgeDays)",
+        "Storage key is tabSwitchLog in chrome.storage.local",
+        "chrome.tabs.onActivated listener in service-worker.ts calls recordSwitch() with previous and current tab IDs",
+        "Switch log capped at 10,000 entries",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": true
     },
     {
-      "id": "US-003",
-      "title": "Cross-section drag: tab to folder and tab to pinned apps",
-      "description": "As a user, I want to drag a tab from the open tabs list into a folder or onto the pinned apps area. In App.tsx handleDragEnd: add cases for (1) tab dropped on folder-drop zone — create FolderItem with type 'link' from tab URL/title/favicon and add to target folder via addItemToFolder, (2) tab dropped on pinned-drop-zone — create PinnedApp from tab URL/title/favicon via addPinnedApp storage function. The tab should remain open in both cases (not closed).",
-      "acceptanceCriteria": [
-        "Dragging a tab (id prefix 'tab:') onto a folder-drop zone creates a FolderItem {type: 'link', url, title, favicon} and adds it to that folder",
-        "Dragging a tab onto pinned-drop-zone creates a PinnedApp {url, title, favicon, sortOrder} in the current workspace",
-        "Tab remains open after being dragged to folder or pinned (not closed)",
-        "If tab is already saved in the target folder (same URL), do not create duplicate — show toast or skip silently",
-        "If tab URL is already pinned, do not create duplicate pinned app",
-        "Typecheck passes (npx tsc --noEmit)"
-      ],
+      "id": "US-T1-01",
+      "title": "Time Machine Settings",
+      "description": "Add Time Machine settings: enable/disable tracking, retention period (7/14/30 days), max events stored. Add prune alarm to service worker.",
       "priority": 3,
-      "passes": true,
-      "notes": ""
+      "dependsOn": ["INFRA-01"],
+      "filesToCreate": [],
+      "filesToModify": [
+        "src/shared/types.ts",
+        "src/shared/constants.ts",
+        "src/sidepanel/SettingsPanel.tsx",
+        "src/background/service-worker.ts"
+      ],
+      "acceptanceCriteria": [
+        "Settings interface extended with timeMachineEnabled: boolean, timeMachineRetentionDays: number",
+        "DEFAULT_SETTINGS in constants.ts has timeMachineEnabled: true, timeMachineRetentionDays: 30",
+        "SettingsPanel.tsx has Time Machine section with toggle and retention dropdown (7/14/30 days)",
+        "Service worker checks timeMachineEnabled before recording navigation events",
+        "Alarm pruneNavigationEvents added in onInstalled, handled in onAlarm (runs daily)",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": true
     },
     {
-      "id": "US-004",
-      "title": "Cross-section drag: pinned app to folder and folder item to pinned apps",
-      "description": "As a user, I want to drag a pinned app into a folder (saves as FolderItem) and drag a folder item onto pinned apps (creates PinnedApp). In App.tsx handleDragEnd: add cases for (1) pinned app (id prefix 'pinned:') dropped on folder-drop zone — create FolderItem from pinned app data, optionally remove from pinned apps, (2) folder-item (id prefix 'folder-item:') dropped on pinned-drop-zone — create PinnedApp from folder item data. Do NOT remove the source item automatically — the user can delete it manually if desired.",
-      "acceptanceCriteria": [
-        "Dragging a pinned app onto a folder-drop zone creates FolderItem {type: 'link', url, title, favicon} in that folder",
-        "Dragging a folder item onto pinned-drop-zone creates PinnedApp {url, title, favicon, sortOrder}",
-        "Source items are NOT removed automatically (user keeps both copies)",
-        "Duplicate prevention: skip if same URL already exists in target folder or pinned apps",
-        "Existing drag behaviors preserved: folder-item-to-folder moves, folder reordering, pinned app reordering",
-        "Typecheck passes (npx tsc --noEmit)"
-      ],
+      "id": "US-T1-02",
+      "title": "Navigation Tree Builder",
+      "description": "Build navigation trees from raw events. A tree represents a browsing session starting from a root URL, with child nodes for each page navigated from it. Trees built by matching referrerTabId chains.",
       "priority": 4,
-      "passes": true,
-      "notes": ""
+      "dependsOn": ["INFRA-01"],
+      "filesToCreate": [
+        "src/shared/timeMachineStorage.ts"
+      ],
+      "filesToModify": [
+        "src/shared/types.ts"
+      ],
+      "acceptanceCriteria": [
+        "NavTreeNode interface added to types.ts: { event: NavigationEvent, children: NavTreeNode[] }",
+        "timeMachineStorage.ts exports buildNavigationTree(events: NavigationEvent[]): NavTreeNode[]",
+        "timeMachineStorage.ts exports getTreesForTimeRange(start: number, end: number): Promise<NavTreeNode[]>",
+        "Tree builder correctly chains parent to child via referrerTabId",
+        "Orphan events (no referrer) become root nodes",
+        "Trees sorted by timestamp (newest first)",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": true
     },
     {
-      "id": "US-005",
-      "title": "Cross-section drag: folder item back to tab list (unpin from folder)",
-      "description": "As a user, I want to drag a folder item out of a folder and onto the open tabs area to remove it from the folder. In App.tsx handleDragEnd: add case for folder-item (id prefix 'folder-item:') dropped on tablist-drop-zone. If the folder item is type 'link', open the URL in a new tab (chrome.tabs.create) and remove the FolderItem from the folder. If type 'tab' and tabId is still valid, just remove the FolderItem (the tab is already open).",
-      "acceptanceCriteria": [
-        "Dragging a folder item onto tablist-drop-zone removes it from its parent folder",
-        "If folder item type is 'link': opens URL in a new tab via chrome.tabs.create({url}), then removes FolderItem",
-        "If folder item type is 'tab' with valid tabId: just removes FolderItem (tab already open)",
-        "Removal uses existing removeItemFromFolder or equivalent storage function",
-        "Existing folder-item-to-folder drag (moving between folders) still works",
-        "Typecheck passes (npx tsc --noEmit)"
-      ],
+      "id": "US-A-01",
+      "title": "Annotation Data Model & Storage",
+      "description": "Create the annotation data model and storage layer. Annotations are tied to a specific URL and identified by XPath + text offset. Stored in chrome.storage.local under key annotations.",
       "priority": 5,
-      "passes": true,
-      "notes": ""
+      "dependsOn": [],
+      "filesToCreate": [
+        "src/shared/annotationStorage.ts"
+      ],
+      "filesToModify": [
+        "src/shared/types.ts"
+      ],
+      "acceptanceCriteria": [
+        "Annotation interface in types.ts: { id, url, pageTitle, type ('highlight' | 'note'), text, comment (optional), color, xpath, textOffset, textLength, fallbackScrollY, createdAt }",
+        "annotationStorage.ts with saveAnnotation(a), getAnnotationsForUrl(url), deleteAnnotation(id), getAllAnnotations(), exportAnnotations(format: 'json' | 'markdown')",
+        "Storage key is annotations in chrome.storage.local",
+        "Export to JSON and Markdown formats",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
     },
     {
-      "id": "US-006",
-      "title": "Update AI grouping service with folder and workspace context",
-      "description": "As a developer, I need to update the AI prompt in aiGroupingService.ts to include existing folder names and workspace names as context. Update callOpenRouterAPI to accept additional parameters: folders (array of {name, itemCount}) and workspaces (array of {name}). Update the prompt to instruct the AI to: (1) suggest adding tabs to existing folders when appropriate, (2) suggest which workspace a tab might belong in. Update the response schema to include a 'target' field: 'new' for new folder, 'existing' for existing folder (with folderName), and optionally 'workspaceMove' suggestions. Update parseAIResponse to handle the new schema. Update getAIGroupingSuggestions signature to accept folders and workspaces params.",
-      "acceptanceCriteria": [
-        "callOpenRouterAPI accepts new params: folders: {name: string, itemCount: number}[], workspaces: {name: string}[]",
-        "AI prompt includes existing folder names and item counts as context",
-        "AI prompt includes workspace names as context",
-        "AI prompt instructs: 'If tabs fit an existing folder, reference it by name instead of creating a new one. Also suggest workspace moves if a tab clearly belongs elsewhere.'",
-        "Response schema: each group has 'target': 'new' | 'existing', optional 'existingFolderName', optional 'suggestedWorkspace'",
-        "parseAIResponse validates new fields (target, existingFolderName, suggestedWorkspace) with safe fallback to 'new' if missing",
-        "getAIGroupingSuggestions signature updated to accept folders and workspaces",
-        "Fallback: if AI returns unrecognized target values, default to 'new'",
-        "Typecheck passes (npx tsc --noEmit)"
-      ],
+      "id": "US-AP-01",
+      "title": "Autopilot Rules Data Model",
+      "description": "Define the autopilot rule system. Rules map conditions (time ranges, URL patterns, display count) to target workspaces. Autopilot disabled by default.",
       "priority": 6,
-      "passes": true,
-      "notes": ""
+      "dependsOn": [],
+      "filesToCreate": [],
+      "filesToModify": [
+        "src/shared/types.ts",
+        "src/shared/constants.ts"
+      ],
+      "acceptanceCriteria": [
+        "AutopilotRule interface: { id, name, enabled, conditions: AutopilotCondition[], targetWorkspaceId, priority, createdAt }",
+        "AutopilotCondition interface: { type: 'time' | 'domain' | 'displayCount', value: string }",
+        "Settings extended with autopilotEnabled: boolean, autopilotNotify: boolean",
+        "DEFAULT_SETTINGS: autopilotEnabled: false, autopilotNotify: true",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
     },
     {
-      "id": "US-007",
-      "title": "Update OrganizeTabsModal to handle existing folders and workspace suggestions",
-      "description": "As a user, I want the Organize Tabs modal to show whether a suggestion adds to an existing folder or creates a new one, and show workspace move suggestions. In OrganizeTabsModal.tsx: (1) pass current folders and workspaces to getAIGroupingSuggestions, (2) display badge on each group: green 'New' badge for new folders, blue 'Existing' badge for existing folder matches, (3) when accepting an 'existing' group, add tabs to the existing folder (find by name) instead of creating a new one, (4) show workspace move suggestions as a separate section with purple 'Move' badge, (5) update domain-based fallback: if a domain group name matches an existing folder name (case-insensitive), mark it as 'existing'.",
-      "acceptanceCriteria": [
-        "OrganizeTabsModal passes current folders (with item counts) and workspace names to getAIGroupingSuggestions",
-        "Each group card shows a badge: green 'New' for new folders, blue 'Existing' for existing folder matches",
-        "Accepting an 'existing' group calls addItemToFolder on the matched existing folder instead of createFolder",
-        "Workspace move suggestions shown in a separate 'Suggested Moves' section with purple badge",
-        "Accepting a workspace move: moves tab to target workspace via tabWorkspaceMap update",
-        "Domain-based fallback grouping: if group name matches existing folder name (case-insensitive), target set to 'existing'",
-        "If matched existing folder is not found at accept time (deleted between suggestion and accept), fall back to creating new folder",
-        "Typecheck passes (npx tsc --noEmit)"
-      ],
+      "id": "US-AP-02",
+      "title": "Autopilot Scoring Engine",
+      "description": "Implement the pure-function scoring engine that evaluates autopilot rules against current context and returns the best workspace match. Score = sum of matched conditions × rule priority.",
       "priority": 7,
-      "passes": true,
-      "notes": ""
+      "dependsOn": ["US-AP-01"],
+      "filesToCreate": [
+        "src/shared/autopilotEngine.ts"
+      ],
+      "filesToModify": [
+        "src/shared/types.ts"
+      ],
+      "acceptanceCriteria": [
+        "AutopilotContext interface: { currentTime: Date, activeTabUrl: string, displayCount: number }",
+        "ScoredRule interface: { rule: AutopilotRule, score: number }",
+        "autopilotEngine.ts exports scoreRules(rules, context): ScoredRule[]",
+        "autopilotEngine.ts exports getBestMatch(rules, context): AutopilotRule | null",
+        "Time condition checks hour ranges (e.g., '09:00-17:00')",
+        "Domain condition checks URL pattern match",
+        "DisplayCount condition checks screen count",
+        "Returns null if no rules match",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
     },
     {
-      "id": "US-008",
-      "title": "Near-instant workspace swipe response",
-      "description": "As a user, I want workspace switching via swipe gestures to feel instant. In useSwipeGesture.ts: (1) reduce wheel accumulation timeout from 150ms to 50ms, (2) reduce default threshold from 50 to 30, (3) add a cooldown mechanism — after a successful swipe fires, ignore further swipes for 300ms to prevent double-firing. Use a useRef<boolean> cooldown flag set to true on swipe, cleared after 300ms timeout.",
-      "acceptanceCriteria": [
-        "wheelTimeoutRef setTimeout reduced from 150ms to 50ms",
-        "Default threshold parameter changed from 50 to 30",
-        "Cooldown ref added: after handleSwipe fires a callback, set cooldown flag to true",
-        "Cooldown clears after 300ms timeout",
-        "During cooldown, handleSwipe returns early without firing callbacks",
-        "Touch swipe still fires immediately on touchend (no regression)",
-        "Rapid swipes during cooldown are ignored (no double-firing or workspace skipping)",
-        "Cooldown ref cleaned up in useEffect return (clear timeout)",
-        "Typecheck passes (npx tsc --noEmit)"
-      ],
+      "id": "US-G-01",
+      "title": "Graph Data Builder",
+      "description": "Build graph data (nodes + edges) from navigation events and tab switch affinity data. Nodes = unique URLs grouped by domain. Edges = navigation links + affinity switches. Cap at 50 nodes.",
       "priority": 8,
-      "passes": true,
-      "notes": ""
+      "dependsOn": ["INFRA-01", "INFRA-02"],
+      "filesToCreate": [
+        "src/shared/tabGraphStorage.ts"
+      ],
+      "filesToModify": [
+        "src/shared/types.ts"
+      ],
+      "acceptanceCriteria": [
+        "GraphNode interface: { id, url, domain, title, visitCount, isOpen }",
+        "GraphEdge interface: { source, target, weight, type: 'navigation' | 'switch' }",
+        "GraphData interface: { nodes: GraphNode[], edges: GraphEdge[] }",
+        "tabGraphStorage.ts exports buildGraphData(navEvents, affinityPairs, openTabs): GraphData",
+        "Nodes capped at 50 (highest visitCount kept)",
+        "Edges have correct type classification (navigation vs switch)",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
     },
     {
-      "id": "US-009",
-      "title": "Fix Save to Folder popup overlay and styling",
-      "description": "As a user, I want the Save to Folder popup to render correctly without clipping or overlay issues. In App.tsx FolderPickerDropdown (~line 471): (1) render via ReactDOM.createPortal to document.body to escape any parent overflow:hidden, (2) increase z-index to 9990 (below toasts at 9999 but above everything else), (3) add backdrop-frosted class and proper dark theme styling matching ContextMenu (bg-[#1e1e2a], border-white/10, shadow-2xl), (4) fix viewport edge positioning — account for Chrome side panel narrow width, use the dropdown ref's actual dimensions for edge detection instead of hardcoded 200px.",
-      "acceptanceCriteria": [
-        "FolderPickerDropdown rendered via ReactDOM.createPortal(jsx, document.body)",
-        "z-index set to 9990 (above context menu z-50, below toast z-9999)",
-        "Styling updated: backdrop-frosted (backdrop-filter: blur(16px) saturate(180%)), dark:bg-[#1e1e2a], dark:border-white/10",
-        "Viewport edge detection uses ref.current.getBoundingClientRect() after render (useLayoutEffect) to adjust position based on actual dropdown dimensions",
-        "Dropdown content fully visible — no clipping by parent containers",
-        "Escape key and click-outside still close the dropdown",
-        "Existing folder selection behavior unchanged",
-        "Typecheck passes (npx tsc --noEmit)"
-      ],
+      "id": "US-R-01",
+      "title": "Research Mode Toggle & Page Text Capture",
+      "description": "Add research mode toggle and content script that captures page text for AI analysis. Content script is a no-op until triggered by CAPTURE_PAGE_TEXT message. Page data stored in IndexedDB (pages can be 50KB+).",
       "priority": 9,
-      "passes": true,
-      "notes": ""
+      "dependsOn": [],
+      "filesToCreate": [
+        "src/shared/researchDb.ts",
+        "src/content/research.ts"
+      ],
+      "filesToModify": [
+        "src/shared/types.ts",
+        "public/manifest.json",
+        "vite.config.ts"
+      ],
+      "acceptanceCriteria": [
+        "PageCapture interface: { id, url, title, text, sessionId, capturedAt, summary (optional) }",
+        "ResearchSession interface: { id, name, pageIds: string[], createdAt }",
+        "ServiceWorkerMessage extended with { type: 'CAPTURE_PAGE_TEXT' }",
+        "SidePanelMessage extended with { type: 'PAGE_TEXT_CAPTURED', data: PageCapture }",
+        "researchDb.ts with initResearchDb(), savePageCapture(), getCaptures(sessionId), deleteSession(sessionId)",
+        "Content script research.ts extracts document.body.innerText only when messaged",
+        "Content script registered in manifest.json (all URLs, run_at: document_idle)",
+        "Vite config updated with research content script entry point",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
     },
     {
-      "id": "US-010",
-      "title": "Add New Folder option to Save to Folder popup",
-      "description": "As a user, I want a 'New Folder' button at the bottom of the Save to Folder popup so I can create a folder and save the link in one action. In FolderPickerDropdown: (1) add a separator line after the folder list, (2) add a 'New Folder' button with a plus icon, (3) clicking it replaces the button with an inline text input + confirm/cancel buttons, (4) pressing Enter or clicking confirm: creates folder via createFolder(), then calls onSelect with the new folder's ID, (5) pressing Escape or clicking cancel: returns to the folder list view.",
-      "acceptanceCriteria": [
-        "'New Folder' button rendered at bottom of dropdown, separated by a thin border-t",
-        "Button shows plus icon and 'New Folder' text",
-        "Clicking button: hides button, shows inline text input with auto-focus",
-        "Input has placeholder 'Folder name'",
-        "Enter key in input: creates top-level folder via createFolder({name, parentId: null}), then calls onSelect(newFolderId) to save the link",
-        "Escape key in input: hides input, shows 'New Folder' button again",
-        "Empty name submission is prevented (input validation)",
-        "After successful creation and save, dropdown closes (onSelect triggers close)",
-        "Typecheck passes (npx tsc --noEmit)"
-      ],
+      "id": "US-A-02",
+      "title": "Content Script Annotation Toolbar",
+      "description": "Create the annotation content script that injects a floating toolbar on text selection. Toolbar has Highlight (3 colors: yellow, green, blue) and Note buttons. Creates Annotation objects with XPath of selection range. Imperative DOM only — no React.",
       "priority": 10,
-      "passes": true,
-      "notes": ""
+      "dependsOn": ["US-A-01"],
+      "filesToCreate": [
+        "src/content/annotate.ts"
+      ],
+      "filesToModify": [
+        "src/shared/types.ts",
+        "src/background/service-worker.ts",
+        "public/manifest.json",
+        "vite.config.ts"
+      ],
+      "acceptanceCriteria": [
+        "Floating toolbar appears on text selection with Highlight and Note buttons",
+        "3 highlight colors available: yellow (#FFEB3B), green (#81C784), blue (#64B5F6)",
+        "Note button opens inline text input for comment",
+        "XPath + fallback scrollY captured for each annotation",
+        "Annotations saved via SAVE_ANNOTATION message to service worker",
+        "ServiceWorkerMessage extended with SAVE_ANNOTATION and DELETE_ANNOTATION types",
+        "Service worker handles SAVE_ANNOTATION and DELETE_ANNOTATION messages",
+        "Toolbar dismissed on click outside",
+        "Content script registered in manifest.json and vite.config.ts",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-AP-03",
+      "title": "Autopilot Background Worker",
+      "description": "Wire the autopilot scoring engine into the service worker. Evaluate rules on 5-minute alarm. Show notification before switching with 5s delay (cancellable). Handle AUTOPILOT_UNDO to revert.",
+      "priority": 11,
+      "dependsOn": ["US-AP-02"],
+      "filesToCreate": [],
+      "filesToModify": [
+        "src/shared/types.ts",
+        "src/background/service-worker.ts",
+        "public/manifest.json"
+      ],
+      "acceptanceCriteria": [
+        "ServiceWorkerMessage extended with AUTOPILOT_SWITCH and AUTOPILOT_UNDO types",
+        "evaluateAutopilot alarm added (every 5 minutes)",
+        "On alarm: load rules + context, run scoring engine, switch if best match differs from current workspace",
+        "Notification shown before switching (if autopilotNotify enabled)",
+        "5-second delay before actual switch (user can cancel)",
+        "AUTOPILOT_UNDO reverts to previous workspace",
+        "No-op when autopilotEnabled is false",
+        "notifications permission added to manifest.json",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-G-02",
+      "title": "Graph Layout Hook (Force-Directed SVG)",
+      "description": "Create a React hook that computes force-directed layout positions for graph nodes. Simple algorithm: repulsion between all nodes, attraction along edges. Runs 100 iterations on mount.",
+      "priority": 12,
+      "dependsOn": ["US-G-01"],
+      "filesToCreate": [
+        "src/sidepanel/useGraphLayout.ts"
+      ],
+      "filesToModify": [
+        "src/shared/types.ts"
+      ],
+      "acceptanceCriteria": [
+        "LayoutResult interface: { nodes: Array<GraphNode & { x, y }>, edges: Array<GraphEdge & { x1, y1, x2, y2 }> }",
+        "useGraphLayout(data: GraphData, width: number, height: number) hook",
+        "Force-directed algorithm with repulsion between all nodes + attraction along edges",
+        "Runs 100 iterations synchronously on mount",
+        "Nodes stay within bounds (0 to width, 0 to height)",
+        "Returns stable positioned nodes and edges",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-R-02",
+      "title": "Auto-Summarization via AI",
+      "description": "Wire page captures to OpenRouter AI for automatic summarization. Uses same API pattern as aiGroupingService.ts. Enforces 2s minimum gap between API calls.",
+      "priority": 13,
+      "dependsOn": ["US-R-01"],
+      "filesToCreate": [
+        "src/shared/aiResearchService.ts"
+      ],
+      "filesToModify": [
+        "src/background/service-worker.ts",
+        "src/shared/types.ts"
+      ],
+      "acceptanceCriteria": [
+        "aiResearchService.ts exports summarizePage(text: string): Promise<string>",
+        "aiResearchService.ts exports connectPages(summaries: string[]): Promise<string>",
+        "aiResearchService.ts exports generateBrief(summaries: string[], topic: string): Promise<string>",
+        "Follows OpenRouter API pattern from aiGroupingService.ts (same base URL, auth, model)",
+        "2-second minimum gap between API calls (rate limiter)",
+        "On PAGE_TEXT_CAPTURED message, service worker calls summarizePage() and stores summary alongside capture",
+        "summary field added as optional to PageCapture interface",
+        "Handles API errors gracefully (logs error, does not crash)",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-T1-03",
+      "title": "Timeline View Section",
+      "description": "Create the Time Machine sidebar section showing a chronological timeline of navigation trees. Collapsible section, date range selector (today/yesterday/this week), tree nodes with favicon + title + time, click to open URL.",
+      "priority": 14,
+      "dependsOn": ["US-T1-02"],
+      "filesToCreate": [
+        "src/sidepanel/TimeMachineSection.tsx"
+      ],
+      "filesToModify": [
+        "src/sidepanel/App.tsx",
+        "src/sidepanel/commandRegistry.ts"
+      ],
+      "acceptanceCriteria": [
+        "Collapsible sidebar section titled 'Time Machine'",
+        "Date range selector: today, yesterday, this week",
+        "Tree nodes show favicon + title (truncated) + time",
+        "Click tree node opens URL in new tab",
+        "Expand/collapse tree branches",
+        "Reacts to chrome.storage.onChanged for live updates",
+        "'Time Machine' command registered in commandRegistry.ts",
+        "Section rendered in App.tsx",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-A-03",
+      "title": "Annotation Highlight Rendering",
+      "description": "Render saved annotations on page load. Re-highlight text by locating XPath target and applying <mark> wrapper. For notes, add indicator icon. If XPath fails, fall back to scrollY with floating indicator.",
+      "priority": 15,
+      "dependsOn": ["US-A-02"],
+      "filesToCreate": [],
+      "filesToModify": [
+        "src/content/annotate.ts",
+        "src/shared/types.ts"
+      ],
+      "acceptanceCriteria": [
+        "On page load, content script queries annotations for current URL",
+        "Highlights rendered as <mark> wrappers with stored color",
+        "Note indicators visible on annotated text",
+        "XPath fallback to scrollY with floating indicator when XPath fails",
+        "ServiceWorkerMessage extended with GET_ANNOTATIONS type",
+        "SidePanelMessage extended with ANNOTATIONS_LOADED type",
+        "Does not break page layout",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-A-04",
+      "title": "Annotations Sidebar Section",
+      "description": "Create the Annotations sidebar section showing all annotations grouped by page. Each entry shows page title, annotation count, last annotated date. Expand to see individual annotations. Delete button per annotation.",
+      "priority": 16,
+      "dependsOn": ["US-A-01"],
+      "filesToCreate": [
+        "src/sidepanel/AnnotationsSection.tsx"
+      ],
+      "filesToModify": [
+        "src/sidepanel/App.tsx",
+        "src/sidepanel/commandRegistry.ts"
+      ],
+      "acceptanceCriteria": [
+        "Collapsible sidebar section titled 'Annotations'",
+        "Annotations grouped by page URL",
+        "Each group shows page title + annotation count + last annotated date",
+        "Expand group to see individual annotations with color indicator + text snippet + optional comment",
+        "Delete button per annotation",
+        "Empty state message when no annotations exist",
+        "'Annotations' command registered in commandRegistry.ts",
+        "Section rendered in App.tsx",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-AP-04",
+      "title": "Autopilot Settings UI",
+      "description": "Add Autopilot settings section to SettingsPanel with rule management. Rule editor: name, conditions (time range, domain pattern, display count), target workspace dropdown, priority.",
+      "priority": 17,
+      "dependsOn": ["US-AP-01"],
+      "filesToCreate": [],
+      "filesToModify": [
+        "src/sidepanel/SettingsPanel.tsx"
+      ],
+      "acceptanceCriteria": [
+        "Autopilot section in SettingsPanel with enable/disable toggle",
+        "Notification preference toggle",
+        "Rules list with add/edit/delete functionality",
+        "Rule editor with name, conditions (time range, domain pattern, display count), target workspace dropdown, priority",
+        "Target workspace dropdown populated from existing workspaces",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-G-03",
+      "title": "Graph SVG Visualization Component",
+      "description": "Create the Tab Relationship Graph sidebar section with inline SVG. Nodes are circles colored by domain, edges are lines with opacity by weight. Click node to switch tab or open URL. Hover tooltip with title + visit count.",
+      "priority": 18,
+      "dependsOn": ["US-G-02"],
+      "filesToCreate": [
+        "src/sidepanel/TabGraphSection.tsx"
+      ],
+      "filesToModify": [
+        "src/sidepanel/App.tsx",
+        "src/sidepanel/commandRegistry.ts"
+      ],
+      "acceptanceCriteria": [
+        "Collapsible sidebar section titled 'Tab Graph'",
+        "SVG graph renders nodes as circles colored by domain",
+        "Edge opacity reflects weight",
+        "Click node switches to tab (if open) or opens URL",
+        "Hover tooltip shows full title + visit count",
+        "Handles 0 nodes gracefully with empty state",
+        "'Tab Graph' command registered in commandRegistry.ts",
+        "Section rendered in App.tsx",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-R-03",
+      "title": "Research Copilot Sidebar Section",
+      "description": "Create the Research Copilot sidebar section. Start/stop research session. 'Capture This Page' button triggers content script on active tab. Shows captured pages with summaries. Session history list.",
+      "priority": 19,
+      "dependsOn": ["US-R-02"],
+      "filesToCreate": [
+        "src/sidepanel/ResearchCopilotSection.tsx"
+      ],
+      "filesToModify": [
+        "src/sidepanel/App.tsx",
+        "src/sidepanel/commandRegistry.ts"
+      ],
+      "acceptanceCriteria": [
+        "Collapsible sidebar section titled 'Research Copilot'",
+        "'Start Research' button creates new session",
+        "'Capture This Page' button triggers content script on active tab",
+        "Captured pages shown with title + summary",
+        "'Stop Research' ends session",
+        "Session history list (collapsed by default)",
+        "'Research Copilot' command registered in commandRegistry.ts",
+        "Section rendered in App.tsx",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-T1-04",
+      "title": "Restore Tab State from Timeline",
+      "description": "Add 'Restore' action to timeline nodes that re-opens all URLs from root to that node in a new window (recreating the browsing path). Confirmation dialog for >5 tabs.",
+      "priority": 20,
+      "dependsOn": ["US-T1-03"],
+      "filesToCreate": [],
+      "filesToModify": [
+        "src/sidepanel/TimeMachineSection.tsx"
+      ],
+      "acceptanceCriteria": [
+        "Restore button/icon appears on tree node hover",
+        "Click opens all URLs from root to selected node in a new window",
+        "Confirmation dialog shown when restoring >5 tabs",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-T1-05",
+      "title": "Branching Tree Visualization",
+      "description": "Add visual tree/branch view with CSS connector lines (border-left + pseudo-elements). 16px depth indentation. Animated expand/collapse.",
+      "priority": 21,
+      "dependsOn": ["US-T1-03"],
+      "filesToCreate": [],
+      "filesToModify": [
+        "src/sidepanel/TimeMachineSection.tsx"
+      ],
+      "acceptanceCriteria": [
+        "CSS connector lines between parent and children nodes",
+        "Depth indentation at 16px per level",
+        "Branch points visually highlighted",
+        "Animated expand/collapse transitions",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-T1-06",
+      "title": "Search and Filter Timeline",
+      "description": "Add search/filter to Time Machine section. Search input filters by title/URL (case-insensitive). Domain filter dropdown. Matching nodes highlighted, non-matching hidden. Debounced 300ms.",
+      "priority": 22,
+      "dependsOn": ["US-T1-03"],
+      "filesToCreate": [],
+      "filesToModify": [
+        "src/sidepanel/TimeMachineSection.tsx"
+      ],
+      "acceptanceCriteria": [
+        "Search input at top filters tree nodes by title or URL",
+        "Case-insensitive substring match",
+        "Domain filter dropdown",
+        "Matching nodes highlighted, non-matching collapsed/hidden",
+        "Search debounced at 300ms",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-T1-07",
+      "title": "Export Timeline as Markdown",
+      "description": "Export navigation trees as formatted Markdown. Tree structure with indentation, links as [title](url) (HH:MM). Copies to clipboard with toast notification.",
+      "priority": 23,
+      "dependsOn": ["US-T1-03"],
+      "filesToCreate": [],
+      "filesToModify": [
+        "src/sidepanel/TimeMachineSection.tsx"
+      ],
+      "acceptanceCriteria": [
+        "Export button on Time Machine section header",
+        "Markdown format with tree indentation using dashes",
+        "Links formatted as [title](url)",
+        "Timestamps included as (HH:MM)",
+        "Copied to clipboard with toast notification",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-A-05",
+      "title": "Scroll-to-Annotation from Sidebar",
+      "description": "Click annotation in sidebar navigates to page and scrolls to annotation location. If tab open, switch and scroll. If not, open then scroll. Smooth scroll + brief highlight pulse.",
+      "priority": 24,
+      "dependsOn": ["US-A-03", "US-A-04"],
+      "filesToCreate": [],
+      "filesToModify": [
+        "src/sidepanel/AnnotationsSection.tsx",
+        "src/content/annotate.ts",
+        "src/shared/types.ts"
+      ],
+      "acceptanceCriteria": [
+        "Click annotation in sidebar scrolls to it on page",
+        "If tab with URL is open, switch to it and send SCROLL_TO_ANNOTATION message",
+        "If not open, open URL in new tab then scroll after load",
+        "Smooth scroll animation to annotation",
+        "Brief highlight pulse (CSS animation) on target annotation",
+        "SCROLL_TO_ANNOTATION message type added to types.ts",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-A-06",
+      "title": "Export Annotations",
+      "description": "Export all annotations as JSON or Markdown from sidebar. JSON downloads as .json file. Markdown grouped by page with highlights as blockquotes and color emoji prefix.",
+      "priority": 25,
+      "dependsOn": ["US-A-04"],
+      "filesToCreate": [],
+      "filesToModify": [
+        "src/sidepanel/AnnotationsSection.tsx"
+      ],
+      "acceptanceCriteria": [
+        "Export dropdown with JSON and Markdown options",
+        "JSON option downloads as .json file",
+        "Markdown option copies to clipboard",
+        "Markdown: grouped by page, highlights as > blockquotes with color emoji prefix, notes below",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-AP-05",
+      "title": "Autopilot Undo & Learning Mode",
+      "description": "Undo banner in sidebar when autopilot switches workspace (10s countdown). Learning mode tracks manual switches and suggests rules after 5+ consistent patterns.",
+      "priority": 26,
+      "dependsOn": ["US-AP-03", "US-AP-04"],
+      "filesToCreate": [
+        "src/sidepanel/AutopilotBanner.tsx"
+      ],
+      "filesToModify": [
+        "src/sidepanel/App.tsx",
+        "src/background/service-worker.ts",
+        "src/shared/types.ts"
+      ],
+      "acceptanceCriteria": [
+        "AutopilotBanner.tsx shows 'Switched to {workspace} — Undo' with 10s countdown",
+        "Undo button sends AUTOPILOT_UNDO message to revert workspace",
+        "Banner auto-dismisses after countdown",
+        "autopilotLearning: boolean added to Settings interface",
+        "Service worker tracks manual workspace switches in learning mode",
+        "After 5+ consistent manual switches to same workspace at same time/domain, suggests a rule",
+        "Banner rendered in App.tsx",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-G-04",
+      "title": "Cluster Actions (Create Folder, AI Summarize)",
+      "description": "Right-click on graph node cluster (same domain group) shows context menu: Create Folder groups tabs, AI Summarize generates cluster summary. Uses existing folderStorage.ts and aiGroupingService.ts.",
+      "priority": 27,
+      "dependsOn": ["US-G-03"],
+      "filesToCreate": [],
+      "filesToModify": [
+        "src/sidepanel/TabGraphSection.tsx"
+      ],
+      "acceptanceCriteria": [
+        "Right-click context menu on node clusters (same domain group)",
+        "'Create Folder' option creates folder with cluster tabs using folderStorage.ts",
+        "'AI Summarize' option sends page titles/URLs to AI for cluster summary using aiGroupingService.ts",
+        "Context menu dismissed on click outside",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-G-05",
+      "title": "Graph List Fallback Toggle",
+      "description": "Toggle between SVG graph view and flat list view. List shows nodes sorted by visit count with domain grouping headers. View preference persisted.",
+      "priority": 28,
+      "dependsOn": ["US-G-03"],
+      "filesToCreate": [],
+      "filesToModify": [
+        "src/sidepanel/TabGraphSection.tsx"
+      ],
+      "acceptanceCriteria": [
+        "Toggle button switches between graph and list icons",
+        "List view shows nodes sorted by visit count",
+        "Domain grouping headers in list view",
+        "Same click behavior as graph (switch to tab or open URL)",
+        "View preference persisted in chrome.storage.local",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-R-04",
+      "title": "Cross-Page Analysis",
+      "description": "Analyze connections across captured pages in research session. 'Analyze Connections' button (enabled when >=2 pages). Shows common themes, contradictions, knowledge gaps. Results cached per session.",
+      "priority": 29,
+      "dependsOn": ["US-R-03"],
+      "filesToCreate": [],
+      "filesToModify": [
+        "src/sidepanel/ResearchCopilotSection.tsx"
+      ],
+      "acceptanceCriteria": [
+        "'Analyze Connections' button disabled with <2 captured pages",
+        "Calls connectPages() from aiResearchService.ts",
+        "Shows results card with common themes, contradictions, and knowledge gaps",
+        "Results cached in session (no re-fetch on re-render)",
+        "Loading state shown during analysis",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-R-05",
+      "title": "Generate Research Brief",
+      "description": "Generate comprehensive research brief from captured pages. Optional topic input. Formatted output with Summary, Key Findings, Sources. Copy to clipboard and export as Markdown.",
+      "priority": 30,
+      "dependsOn": ["US-R-04"],
+      "filesToCreate": [],
+      "filesToModify": [
+        "src/sidepanel/ResearchCopilotSection.tsx"
+      ],
+      "acceptanceCriteria": [
+        "'Generate Brief' button enabled when >=1 page captured",
+        "Optional topic input for focused brief",
+        "Calls generateBrief() from aiResearchService.ts",
+        "Formatted output with Summary, Key Findings, Sources sections",
+        "Copy to clipboard button",
+        "Export as Markdown option",
+        "npm run typecheck passes",
+        "npm run test:run passes"
+      ],
+      "passes": false
     }
   ]
 }
