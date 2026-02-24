@@ -12,6 +12,7 @@ Started: Tue Feb 24 18:49:55 IST 2026
 - chrome.webNavigation.onCommitted fires before page title is available; title fetched via chrome.tabs.get()
 - chrome.storage.local.get() returns Record<string, any> — cast results explicitly to avoid TS errors
 - Tab switch tracking uses undirected pairs (A→B and B→A count together) for affinity
+- Autopilot scoring: score = matchedConditions × rule.priority; all conditions must match for a rule to score
 - Settings toggle pattern: use `handleUpdate({ field: !settings.field })` with toggle button styling from existing sections
 - TIME_MACHINE_RETENTION_OPTIONS constant in constants.ts for dropdown (7/14/30 days)
 - pruneOldEvents() in navigationDb.ts accepts optional maxAgeDays parameter (defaults to 30)
@@ -164,4 +165,57 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - AutopilotRule has `priority` field for scoring engine to weight matched rules
   - Autopilot disabled by default (`autopilotEnabled: false`) but notifications enabled (`autopilotNotify: true`)
   - Settings interface and DEFAULT_SETTINGS must stay in sync — add to both simultaneously
+---
+
+## Iteration 1 - Tue Feb 24 19:12:18 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-191218/iter-1.log
+---
+Error: Claude Code cannot be launched inside another Claude Code session.
+Nested sessions share runtime resources and will crash all active sessions.
+To bypass this check, unset the CLAUDECODE environment variable.
+⚠️  timeout failed with ITER_TIMEOUT='1200'. Running without timeout.
+Error: Claude Code cannot be launched inside another Claude Code session.
+Nested sessions share runtime resources and will crash all active sessions.
+To bypass this check, unset the CLAUDECODE environment variable.
+---
+
+## Iteration 2 - Tue Feb 24 19:12:20 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-191218/iter-2.log
+---
+Error: Claude Code cannot be launched inside another Claude Code session.
+Nested sessions share runtime resources and will crash all active sessions.
+To bypass this check, unset the CLAUDECODE environment variable.
+⚠️  timeout failed with ITER_TIMEOUT='1200'. Running without timeout.
+Error: Claude Code cannot be launched inside another Claude Code session.
+Nested sessions share runtime resources and will crash all active sessions.
+To bypass this check, unset the CLAUDECODE environment variable.
+---
+
+## Iteration 3 - Tue Feb 24 19:12:23 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-191218/iter-3.log
+---
+Error: Claude Code cannot be launched inside another Claude Code session.
+Nested sessions share runtime resources and will crash all active sessions.
+To bypass this check, unset the CLAUDECODE environment variable.
+⚠️  timeout failed with ITER_TIMEOUT='1200'. Running without timeout.
+Error: Claude Code cannot be launched inside another Claude Code session.
+Nested sessions share runtime resources and will crash all active sessions.
+To bypass this check, unset the CLAUDECODE environment variable.
+---
+
+## 2026-02-24 - US-AP-02
+- Implemented Autopilot Scoring Engine — pure-function evaluation of autopilot rules
+- Files created: src/shared/autopilotEngine.ts
+- Files modified: src/shared/types.ts
+- **Learnings for future iterations:**
+  - AutopilotContext interface has currentTime (Date), activeTabUrl (string), displayCount (number)
+  - Time conditions use 'HH:MM-HH:MM' format and support cross-midnight ranges (e.g., '22:00-06:00')
+  - Domain conditions support wildcard patterns ('*.example.com') and exact match
+  - DisplayCount condition compares integer equality
+  - All conditions must match for a rule to be scored (AND logic)
+  - Score = matched condition count × rule priority; highest score wins
+  - getBestMatch() returns null when no rules match (no enabled rules, no conditions, or no full match)
 ---
