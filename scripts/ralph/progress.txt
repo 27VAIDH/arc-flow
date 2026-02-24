@@ -705,3 +705,34 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - Domain list collected by recursively walking all tree nodes and extracting hostnames via URL constructor
   - Non-matching subtrees return null from TreeNode component (hidden entirely)
 ---
+
+## Iteration 1 - Wed Feb 25 00:22:35 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260225-001951/iter-1.log
+---
+**US-T1-06 is complete.** There are still stories with `passes: false` remaining (US-T1-07 is next at priority 23).
+
+**US-T1-06 Summary:**
+- Modified `src/sidepanel/TimeMachineSection.tsx` to add search and filter functionality:
+  - **Search input** at top of section filters tree nodes by title or URL (case-insensitive substring match)
+  - **Domain filter dropdown** populated from all domains in current tree data
+  - **300ms debounce** on search input via custom `useDebounce` hook
+  - **Matching nodes highlighted** with yellow background (`bg-yellow-100 dark:bg-yellow-900/30`)
+  - **Non-matching subtrees hidden** entirely (return null from TreeNode)
+  - **Auto-expand** matching subtrees when filtering is active
+  - Helper functions: `getDomain()`, `collectDomains()`, `nodeMatchesFilter()`, `treeHasMatch()`
+- Typecheck and tests pass
+---
+
+## 2026-02-25 00:24 - US-T1-07
+- Implemented Export Timeline as Markdown feature
+- Files changed: src/sidepanel/TimeMachineSection.tsx
+- Added `treeToMarkdown()` recursive function converting NavTreeNode trees to indented Markdown with `[title](url) (HH:MM)` format
+- Added `exportTreesAsMarkdown()` that wraps trees with a header showing the date range
+- Added Export button (download icon) in section header, visible when section is expanded and trees exist
+- Copies Markdown to clipboard via `navigator.clipboard.writeText()`
+- Toast notification "Copied to clipboard!" shown for 2 seconds
+- **Learnings for future iterations:**
+  - The Time Machine section header uses absolute positioning for action buttons (right-aligned), requiring `relative` on the section container
+  - Toast notifications use `animate-pulse` from Tailwind for visual feedback
+---
