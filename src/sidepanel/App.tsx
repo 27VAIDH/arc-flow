@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, memo, type RefObject } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useMemo, useRef, useState, memo, type RefObject } from "react";
 import { useSwipeGesture } from "./useSwipeGesture";
 import type {
   TabInfo,
@@ -56,6 +55,7 @@ import TabPreviewCard from "./TabPreviewCard";
 import type { TabPreviewInfo } from "./TabPreviewCard";
 import { buildCommands } from "./commandRegistry";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
+import Popover from "./Popover";
 import {
   DndContext,
   PointerSensor,
@@ -484,47 +484,6 @@ function FolderPickerDropdown({
   onSelect: (folderId: string) => void;
   onClose: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [onClose]);
-
-  // Adjust position based on actual dropdown dimensions after render.
-  // Uses direct DOM mutation to avoid setState-in-effect and ref-during-render lint violations.
-  useLayoutEffect(() => {
-    if (!ref.current) return;
-    const rect = ref.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    let left = x;
-    let top = y;
-    if (left + rect.width > vw) left = Math.max(4, vw - rect.width - 4);
-    if (top + rect.height > vh) top = Math.max(4, vh - rect.height - 4);
-    ref.current.style.left = `${left}px`;
-    ref.current.style.top = `${top}px`;
-  }, [x, y]);
-
-  const style: React.CSSProperties = {
-    position: "fixed",
-    left: x,
-    top: y,
-    zIndex: 9990,
-  };
-
   const renderFolderOption = (
     folder: Folder,
     depth: number
@@ -534,7 +493,7 @@ function FolderPickerDropdown({
       <div key={folder.id}>
         <button
           onClick={() => onSelect(folder.id)}
-          className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-arc-surface-hover flex items-center gap-2 transition-colors duration-200"
+          className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-arc-text-primary hover:bg-gray-100 dark:hover:bg-arc-surface-hover flex items-center gap-2 transition-colors duration-200"
           style={{ paddingLeft: 12 + depth * 16 }}
         >
           <svg
@@ -571,21 +530,19 @@ function FolderPickerDropdown({
     onSelect(folder.id);
   };
 
-  return createPortal(
-    <div
-      ref={ref}
-      style={style}
-      className="min-w-[180px] max-w-[240px] bg-white dark:bg-[#1e1e2a] backdrop-frosted border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl py-1 max-h-[200px] overflow-y-auto"
-    >
+  return (
+    <Popover x={x} y={y} onClose={onClose} className="max-w-[240px]">
       <div className="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 font-medium">
         Save to folder
       </div>
-      {topLevelFolders.map((folder) => renderFolderOption(folder, 0))}
+      <div className="max-h-[160px] overflow-y-auto">
+        {topLevelFolders.map((folder) => renderFolderOption(folder, 0))}
+      </div>
       <div className="border-t border-gray-200 dark:border-white/10 mt-1 pt-1">
         {!isCreating ? (
           <button
             onClick={() => setIsCreating(true)}
-            className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-arc-surface-hover flex items-center gap-2 transition-colors duration-200"
+            className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-arc-text-primary hover:bg-gray-100 dark:hover:bg-arc-surface-hover flex items-center gap-2 transition-colors duration-200"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -641,8 +598,7 @@ function FolderPickerDropdown({
           </div>
         )}
       </div>
-    </div>,
-    document.body
+    </Popover>
   );
 }
 
