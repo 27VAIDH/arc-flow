@@ -1,1194 +1,242 @@
 # Ralph Progress Log
-Started: Fri Feb 20 12:01:29 IST 2026
+Started: Tue Feb 24 13:39:13 IST 2026
 ---
 
 ## Codebase Patterns
-- AI service is in `src/shared/aiGroupingService.ts` — exports `getAIGroupingSuggestions(tabs, openRouterApiKey)` consumed by `OrganizeTabsModal.tsx`
-- Settings type is in `src/shared/types.ts` — `Settings` interface defines all extension settings
-- Settings now uses `openRouterApiKey: string` (flat field) instead of old nested `aiGrouping` object
-- `settingsStorage.ts` has `migrateSettings()` that converts old `aiGrouping.apiKey` → `openRouterApiKey`
-- OpenRouter API uses OpenAI-compatible response format (`data.choices[0].message.content`)
-- Typecheck: `npx tsc --noEmit`, Lint: `npx eslint <file>`
-- SettingsPanel.tsx uses local component pattern (e.g., `TestConnectionButton`) for self-contained UI sections
-- Routing engine is in `src/shared/routingEngine.ts` — exports `matchRoute(url, rules)` for URL-to-workspace matching
-- `RoutingRule` type has `enabled` field — always check it when iterating rules
-- `settingsStorage.ts` migration adds `enabled: true` to old rules missing the field
-- Service worker `getWorkspaceForUrl` now delegates to `matchRoute` from routingEngine.ts
-- `isIgnoredUrl()` helper in service worker filters chrome://, extension://, about:blank, newtab URLs
-- `ServiceWorkerMessage` type union in types.ts — add new message types here for service worker → sidepanel communication
-- Auto-routing sends `tab-auto-routed` message to sidepanel when a tab is moved to a different workspace
-- SettingsPanel uses local DndContext inside `RoutingRulesSection` for sortable routing rules (separate from App.tsx DndContext)
-- Self-contained settings components pattern: `TestConnectionButton`, `RoutingRulesSection`, `SortableRoutingRuleRow` are all local to SettingsPanel.tsx
-- App.tsx has a `toast` state with auto-dismiss (3s) — use `setToast("message")` for ephemeral notifications
-- Toast renders as fixed bottom-center overlay with `animate-fade-in` (defined in index.css)
-- Context menu items can be async — `onClick` handler supports `async () => {}` pattern
-- To add routing rules from code: `getSettings()` → check existing → `updateSettings({ routingRules: [...existing, newRule] })`
-- App.tsx message listener is mount-once (`[]` deps) — use `useRef` + `useEffect` to access changing state (e.g., `activeWorkspaceIdRef`)
-- `pendingWorkspaceSuggestion` storage key holds AI/fallback workspace suggestion for sidepanel (US-009)
-- `WorkspaceSuggestion` type in types.ts has `tabIds` array for knowing which tabs to move into new workspace
-- `checkForWorkspaceSuggestion()` in service worker has 10-min cooldown — safe to call from hot paths
-- Workspace suggestion card in App.tsx uses `pendingWorkspaceSuggestion` storage key; dismissal tracked via `suggestionDismissedAt` (24h cooldown)
-- `assignTabToWorkspace(tabId, wsId)` from workspaceStorage.ts moves a tab to a workspace in the tab-workspace map
-- Service worker maintains `tabInfoCache` (Map<number, {url, title, favIconUrl}>) for recently closed tab tracking — populated on init and updated on create/update events
-- `recentlyClosed` storage key holds `RecentlyClosedTab[]` (max 20, FIFO) — each entry has url, title, favicon, workspaceId, closedAt
-- `trackRecentlyClosed(tabId)` must be called BEFORE `removeTabFromMap` in onRemoved to capture the workspace ID
-- `RecentlyClosedSection` component reads from `recentlyClosed` storage key, listens for storage changes, and is placed between Archive and Quick Notes in App.tsx
-- `normalizeUrl(url)` in service worker strips trailing `/`, `www.` prefix, and hash fragment for dedup comparison
-- `duplicate-tab-detected` message includes `newTabId`, `existingTabId`, `existingWorkspaceName` — consumed by sidepanel (US-013)
-- Notification bars in App.tsx follow a pattern: state + auto-dismiss useEffect + inline JSX below search bar (see autoRouteIndicator and dupNotification)
-- `dupNotification` state handles duplicate tab detection UI — auto-dismisses after 8s, only one shown at a time (new replaces old)
-- `deepWorkActive` boolean stored in chrome.storage.local — persists across sidebar close/reopen, synced via storage change listener
-- Deep Work Mode toggle: suspends non-active tabs, enables focusMode, expands Quick Notes; deactivation disables focusMode but does NOT unsuspend tabs
-- Header gets `ring-1 ring-arc-accent/30` when Deep Work is active
-- `PomodoroTimer.tsx` renders below header when deepWorkActive=true — uses `pomodoroState` key in chrome.storage.local
-- Pomodoro uses `chrome.alarms` (alarm name `arcflow-pomodoro`) for accuracy + setInterval for 1s display ticks
-- Pomodoro state: `{phase, sessionNumber, startedAt, pausedAt, remainingMs}` — remaining calculated from startedAt on resume
-- `chrome.notifications.create` used for phase transitions (break/work notifications)
-- `focusStats` stored in chrome.storage.local as `{[YYYY-MM-DD]: {totalMinutes, sessions}}` — updated on Pomodoro work session completion
-- `recordWorkSessionComplete()` in PomodoroTimer.tsx handles focus stats recording + 30-day pruning
-- `FocusStatsData` and `FocusStatsDay` types are local to PomodoroTimer.tsx (not in shared/types.ts)
-- `briefingDismissedDate` stores YYYY-MM-DD string in chrome.storage.local — used by MorningBriefing to show once per day
-- `tabSessionCounters` in chrome.storage.local tracks `{opened: number, closed: number}` since last sidebar hide — reset on visibilitychange hidden
-- `lastSessionTimestamp` stored in chrome.storage.local on sidebar visibilitychange (hidden) — marks session boundaries
-- QuickNotes has `MAX_CHARS = 5000` (increased from 2000) and Edit/Preview toggle — preview uses simple regex-based markdown renderer (no library)
-- `renderMarkdown()` in QuickNotes.tsx supports: **bold**, *italic*, # headers, - bullet lists, - [ ] checklists, [links](url)
-- Checklist toggle in preview mode works via `data-check-line` attribute on checkbox inputs + click handler on container div
-- Content script (`src/content/capture.ts`) is a separate build entry in vite.config.ts — outputs as `content-capture.js`
-- Context menu items for selection (`contexts: ['selection']`) are registered in service worker `onInstalled` — menu ID: `SAVE_TO_NOTES_MENU_ID`
-- `handleSaveToNotes()` in service worker sends message to content script, gets annotation back, appends to workspace notes via `updateWorkspace()`
-- Note entry format: `\n\n> [text]\n— [title](url)\n📝 [annotation]` — annotation line omitted if empty
-- `notes-saved-from-page` message type notifies sidepanel to show toast and refresh workspaces
-- Content script overlay popup uses inline styles (no CSS file needed) with z-index 99999
-- Analytics data stored in chrome.storage.local under `analytics` key with `{daily: {[YYYY-MM-DD]: {opened, closed, domains, workspaceMinutes}}}` structure
-- Analytics writes are debounced via in-memory buffer flushed every 30 seconds (not on every event)
-- `analyticsTrackOpened()`, `analyticsTrackClosed()`, `analyticsTrackDomain(url)`, `analyticsTrackWorkspaceTime()` are synchronous buffer operations
-- Workspace time tracking uses last-activation pattern: on each `onActivated`, calculate elapsed time for previous workspace, then record new activation
-- Analytics entries auto-pruned to 30 days on each flush
-- `AnalyticsSection` in SettingsPanel.tsx is self-contained: reads from `analytics` and `focusStats` storage keys, listens for changes
-- Analytics dashboard uses pure CSS bars (no charting library) — `AnalyticsDailyEntry` type duplicated locally in SettingsPanel.tsx
-- `dailySnapshots` storage key maps `{[YYYY-MM-DD]: {workspaces, tabs, createdAt}}` — max 7 entries, captured via `arcflow-daily-snapshot` alarm
-- `DailySnapshot` type is local to service-worker.ts and SessionManager.tsx — captures workspace info + tabs grouped by workspace ID
-- Command palette entries added via `buildCommands()` in commandRegistry.ts — each new command needs handler in App.tsx + param in buildCommands
-- `tabEnergyScores` storage key maps `{[tabId]: number}` (score 1-100) — recalculated every 5 min by service worker alarm
-- `calculateEnergyScore()` in `shared/energyScore.ts` is a pure function: takes tab info, activation count, lastActiveAt → returns 1-100
-- `tabActivationCounts` in service worker is in-memory Map<number, number[]> tracking activation timestamps per tab (24h window)
-- `tabEnergyScores` state in App.tsx is `Record<string, number>` (string tab ID → score 1-100) — loaded from storage on mount, updated reactively via storage change listener
-- WorkspaceSwitcher accepts `tabEnergyScores` and `tabWorkspaceMap` props for health bar computation — `getWorkspaceAverageEnergy()` is a standalone helper
-- Workspace export JSON format: `{version: "2.0", type: "arcflow-workspace", name, emoji, accentColor, pinnedApps, folders, notes}` — used for export/import (US-027/US-028)
-- File download in sidepanel: `URL.createObjectURL(blob)` + temporary `<a>` element + click + `URL.revokeObjectURL(url)`
-- File upload from command palette: programmatic `document.createElement("input")` with type=file + `.click()` — works in sidepanel context
-- Workspace import validates `{version: "2.0", type: "arcflow-workspace"}` and remaps all IDs (folders, items, pinnedApps) to fresh UUIDs
-- `Snippet` type in `shared/types.ts` has `id, text, annotation, sourceUrl, sourceTitle, savedAt` fields
-- Snippets stored per workspace: `snippets_[workspaceId]` key in chrome.storage.local, array of `Snippet[]`
-- Max 50 snippets per workspace (FIFO) — oldest removed when exceeded
-- `ARCFLOW_CAPTURE_SNIPPET` message type in content script reuses `createOverlayPopup` — Cancel dismisses without saving (unlike notes where Skip saves without annotation)
-- `snippet-saved` message type notifies sidepanel to show toast
-- `SnippetsSection.tsx` follows collapsible section pattern — reads from `snippets_[workspaceId]` storage key, click-to-expand inline details
-- Workspace change reset in SnippetsSection uses derived state pattern (compare prop vs lastWsId state) to avoid React lint errors with setState in effects
+- aiGroupingService.ts exports FolderContext, WorkspaceContext, AIGroupingResult types for use by OrganizeTabsModal
+- getAIGroupingSuggestions accepts optional folders and workspaces params (default to empty arrays for backward compat)
+- AI response groups now include target ("new"|"existing"), existingFolderName, suggestedWorkspace fields
+- DraggableTabItem is in App.tsx (~line 182), DraggableFolderItem is in FolderTree.tsx (~line 167)
+- dnd-kit useSortable returns {attributes, listeners, setNodeRef, transform, transition, isDragging}
+- PointerSensor with distance:5 is configured in App.tsx sensors (~line 666)
+- Tab IDs prefixed with 'tab:', folder items with 'folder-item:', pinned apps with 'pinned:'
+- Double-click rename uses e.stopPropagation() on inner elements to avoid interfering with row-level events
+- PinnedAppsRow uses the outer DndContext (no internal DndContext) — pinned app IDs are prefixed with 'pinned:' in SortableContext
+- Pinned app reordering is handled in the outer handleDragEnd (pinned:X → pinned:Y)
+- Main DndContext now wraps both PinnedAppsRow and <main> content for cross-section dragging
+- Droppable zones: 'pinned-drop-zone' wraps PinnedAppsRow, 'tablist-drop-zone' wraps tab list section
+- customCollisionDetection priority: folder-drop > pinned-drop-zone/tablist-drop-zone > other pointer collisions > rect intersection
+- handleDragEnd dependency array includes: tabs, folders, setFolders, filteredTabs, activeWorkspaceId, pinnedApps, setToast
+- Toast system: setToast(message) shows a 3-second auto-dismiss toast at bottom of sidebar
+- addPinnedApp from storage.ts accepts Omit<PinnedApp, "sortOrder"> — sortOrder is auto-assigned
+- Cross-section drag cases use URL equality for duplicate detection (exact match, not origin)
 
 ---
 
-## 2026-02-20 - US-001
-- Replaced Anthropic and OpenAI API backends with single OpenRouter.ai backend
-- Single function `callOpenRouterAPI` replaces `callAnthropicAPI` and `callOpenAIAPI`
-- Endpoint: `https://openrouter.ai/api/v1/chat/completions`, model: `google/gemini-2.0-flash-001`
-- Headers: Authorization Bearer, Content-Type application/json, HTTP-Referer chrome-extension://arcflow
-- 10-second timeout via AbortController preserved
-- Fallback to heuristic grouping on failure preserved
-- Removed provider check — no longer needed since there's a single backend
-- Files changed: `src/shared/aiGroupingService.ts`
+## 2026-02-24 - US-001
+- Moved {...listeners} from grip icon span to full <li> row in DraggableTabItem (App.tsx)
+- Moved {...attributes} and {...listeners} from grip icon span to full <div> row in DraggableFolderItem (FolderTree.tsx)
+- Grip icons made visual-only: opacity-0 → opacity-30 on hover, pointer-events-none, aria-hidden
+- Files changed: src/sidepanel/App.tsx, src/sidepanel/FolderTree.tsx
 - **Learnings for future iterations:**
-  - The `settings.aiGrouping` parameter still has `provider` field — US-002 will clean this up
-  - OpenRouter uses OpenAI-compatible response format, so `data.choices[0].message.content` works
-  - The `enabled` check in `getAIGroupingSuggestions` still guards against calls when AI is disabled
+  - DraggableTabItem <li> already had {...attributes} but not {...listeners}; DraggableFolderItem had neither on the row
+  - Double-click rename on folder items is on inner <span> with stopPropagation, so row-level listeners don't conflict
+  - PointerSensor distance:5 already prevents click/drag confusion
 ---
 
-## Iteration 1 - Fri Feb 20 12:03:22 IST 2026
+## Iteration 1 - Tue Feb 24 13:41:19 IST 2026
 Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-1.log
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-133913/iter-1.log
 ---
-US-001 is complete. There are still 29 stories with `passes: false`, so more iterations are needed.
-
-**US-001 Summary:**
-- Replaced `callAnthropicAPI` and `callOpenAIAPI` with a single `callOpenRouterAPI` function
-- Endpoint: `https://openrouter.ai/api/v1/chat/completions` with model `google/gemini-2.0-flash-001`
-- Headers: `Authorization: Bearer <key>`, `Content-Type: application/json`, `HTTP-Referer: chrome-extension://arcflow`
-- 10-second timeout via AbortController preserved
-- Fallback to heuristic grouping on failure preserved
-- Error logged to console with descriptive message
-- Typecheck passes, lint passes
-- Committed: `ef7376d`
+US-001 is complete. There are still stories with `passes: false`, so I'll end here for this iteration. The next iteration should pick up **US-002: Add droppable zones for pinned apps and tab list areas**.
 ---
 
-## 2026-02-20 - US-002
-- Replaced nested `aiGrouping` settings with flat `openRouterApiKey: string` field
-- Removed provider dropdown (anthropic/openai) from SettingsPanel
-- Added single "OpenRouter API Key" password input field
-- Added "Test Connection" button that calls OpenRouter with minimal prompt and shows green checkmark/red X
-- Updated `Settings` type in `shared/types.ts`
-- Updated `DEFAULT_SETTINGS` in `constants.ts`, removed `AI_PROVIDER_OPTIONS`
-- Added migration in `settingsStorage.ts` that converts old `aiGrouping.apiKey` → `openRouterApiKey`
-- Updated `aiGroupingService.ts` to accept `openRouterApiKey: string` directly
-- Updated `OrganizeTabsModal.tsx` to pass `settings.openRouterApiKey` instead of `settings.aiGrouping`
-- Files changed: `src/shared/types.ts`, `src/shared/constants.ts`, `src/shared/settingsStorage.ts`, `src/shared/aiGroupingService.ts`, `src/sidepanel/SettingsPanel.tsx`, `src/sidepanel/OrganizeTabsModal.tsx`
+## 2026-02-24 - US-002
+- Added `useDroppable` import from @dnd-kit/core
+- Created `DroppablePinnedZone` wrapper component with useDroppable({id: 'pinned-drop-zone'})
+- Created `DroppableTabListZone` wrapper component with useDroppable({id: 'tablist-drop-zone'})
+- Moved DndContext up from inside `<main>` to wrap both PinnedAppsRow and `<main>` for cross-section dragging
+- Updated customCollisionDetection: folder-drop targets first, then zone drops (pinned-drop-zone, tablist-drop-zone), then other pointer collisions
+- Visual feedback: both zones show ring-1 ring-arc-accent/30 highlight when hovered during drag (isOver from useDroppable)
+- Files changed: src/sidepanel/App.tsx
 - **Learnings for future iterations:**
-  - Settings migration runs on every `getSettings()` call — lightweight but handles legacy data transparently
-  - `TestConnectionButton` is a self-contained component within SettingsPanel (not exported)
-  - AI grouping is now implicitly enabled whenever `openRouterApiKey` is non-empty (no separate toggle)
+  - PinnedAppsRow has its own nested DndContext for internal sorting — dnd-kit supports nested contexts
+  - Moving the outer DndContext higher in the tree doesn't break the inner DndContext in PinnedAppsRow
+  - useDroppable's `isOver` property provides automatic hover state for visual feedback without needing onDragOver handlers
+  - The DragOverlay works fine even when DndContext is moved higher in the tree (it uses portals)
 ---
 
-## Iteration 2 - Fri Feb 20 12:06:49 IST 2026
+## Iteration 2 - Tue Feb 24 13:45:09 IST 2026
 Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-2.log
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-133913/iter-2.log
 ---
-**US-002 is complete.** Committed as `70d7f87`. There are still 28 stories with `passes: false`, so more iterations are needed.
+US-002 is complete. There are still stories with `passes: false` (US-003 through US-010), so I'll end here for this iteration. The next iteration should pick up **US-003: Cross-section drag: tab to folder and tab to pinned apps**.
 
-**US-002 Summary:**
-- Replaced nested `aiGrouping` settings object with flat `openRouterApiKey: string` field
-- Removed provider dropdown (Anthropic/OpenAI) from SettingsPanel
-- Added single "OpenRouter API Key" password input field
-- Added "Test Connection" button that calls OpenRouter with a minimal prompt (`Say hi`, max_tokens: 5) and shows green checkmark on success, red X with error on failure
-- Updated `Settings` type, `DEFAULT_SETTINGS`, removed `AI_PROVIDER_OPTIONS`
-- Added migration in `settingsStorage.ts` that converts old `aiGrouping.apiKey` → `openRouterApiKey`
-- Updated `aiGroupingService.ts` and `OrganizeTabsModal.tsx` callers
-- Typecheck passes
+**Summary of US-002 changes:**
+- Added `useDroppable` import from `@dnd-kit/core`
+- Created `DroppablePinnedZone` and `DroppableTabListZone` wrapper components with visual feedback (`ring-1 ring-arc-accent/30` on hover)
+- Moved `DndContext` up to wrap both PinnedAppsRow and `<main>` for cross-section drag support
+- Updated `customCollisionDetection` to recognize `pinned-drop-zone` and `tablist-drop-zone` (after folder-drop targets, before generic collisions)
+- Typecheck passes cleanly
 ---
 
-## 2026-02-20 - US-003
-- Created `src/shared/routingEngine.ts` with `matchRoute(url, rules)` function
-- Added `RoutingRule` type to `src/shared/types.ts` with `{pattern, workspaceId, enabled}` fields
-- Updated `Settings.routingRules` to use `RoutingRule[]` (added `enabled` field)
-- Glob-to-regex conversion: `**` matches everything, `*` matches anything except `/`
-- Pattern matched against URL without protocol, and also full URL for `*://` patterns
-- Updated service worker `getWorkspaceForUrl` to skip disabled rules
-- Updated SettingsPanel "Add Rule" to include `enabled: true`
-- Added migration in `settingsStorage.ts` to backfill `enabled: true` on old rules
-- Files changed: `src/shared/routingEngine.ts` (new), `src/shared/types.ts`, `src/shared/settingsStorage.ts`, `src/sidepanel/SettingsPanel.tsx`, `src/background/service-worker.ts`
+## 2026-02-24 - US-003
+- Updated Case 1 (tab→folder-drop): changed FolderItem type from "tab" to "link", set tabId to null
+- Added duplicate URL detection for tab→folder: shows toast "Already saved in this folder" if same URL exists
+- Added new Case 1b (tab→pinned-drop-zone): creates PinnedApp from tab data via addPinnedApp
+- Added duplicate URL detection for tab→pinned: shows toast "Already pinned" if same URL exists
+- Tab remains open in both cases (no close logic added)
+- Added pinnedApps and setToast to handleDragEnd dependency array
+- Files changed: src/sidepanel/App.tsx
 - **Learnings for future iterations:**
-  - Service worker has its own `globToRegex` that could be replaced with `matchRoute` from routingEngine — future stories (US-004) should consider this
-  - The `matchRoute` function strips protocol before matching, so patterns like `github.com/*` work against `https://github.com/repo`
-  - Patterns with `*://` prefix are matched against the full URL
+  - Existing Case 1 already handled tab→folder but with type "tab" — US-003 changed it to "link" for saved bookmarks
+  - addPinnedApp auto-assigns sortOrder, so we only pass id/url/title/favicon
+  - Toast system is simple: setToast(string) with 3-second auto-dismiss
 ---
 
-## Iteration 3 - Fri Feb 20 12:09:00 IST 2026
+## Iteration 3 - Tue Feb 24 13:47:46 IST 2026
 Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-3.log
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-133913/iter-3.log
 ---
-**US-003 is complete.** Committed as `af1f3cd`. There are still 27 stories with `passes: false`, so more iterations are needed.
+US-003 is complete. There are still stories with `passes: false` (US-004 through US-010), so I'll end here for this iteration. The next iteration should pick up **US-004: Cross-section drag: pinned app to folder and folder item to pinned apps**.
 
-**US-003 Summary:**
-- Created `src/shared/routingEngine.ts` with `matchRoute(url, rules)` — glob pattern matching engine for URL-to-workspace routing
-- Added `RoutingRule` type to `types.ts` with `{pattern, workspaceId, enabled}` fields
-- Glob conversion: `**` matches everything (including `/`), `*` matches anything except `/`
-- Pattern matched against URL with protocol stripped, plus full URL for `*://` patterns
-- First matching enabled rule wins; disabled rules skipped; returns `null` if no match
-- Updated service worker, SettingsPanel, and settingsStorage migration for the new `enabled` field
-- Typecheck passes, lint passes
+**Summary of US-003 changes:**
+- Updated Case 1 (tab→folder): FolderItem now uses `type: "link"` with `tabId: null` instead of `type: "tab"`, plus duplicate URL detection with toast
+- Added Case 1b (tab→pinned-drop-zone): creates PinnedApp from tab data via `addPinnedApp`, with duplicate URL detection
+- Tab remains open after drag (no close logic)
+- Added `pinnedApps` and `setToast` to handleDragEnd dependency array
+- Typecheck passes cleanly
 ---
 
-## 2026-02-20 - US-004
-- Wired auto-routing into service worker `chrome.tabs.onUpdated` listener
-- Replaced local `globToRegex` with shared `matchRoute` from `routingEngine.ts` in `getWorkspaceForUrl`
-- Added `isIgnoredUrl()` helper to filter chrome://, extension://, about:blank, and newtab URLs
-- `onUpdated` now triggers on `status === 'complete'` (not just URL change), calls `matchRoute`, checks if tab is already in target workspace
-- Sends `tab-auto-routed` message to sidepanel with tabId and workspaceId when a tab is auto-routed
-- Added `tab-auto-routed` message type to `ServiceWorkerMessage` union in types.ts
-- Files changed: `src/background/service-worker.ts`, `src/shared/types.ts`
+## 2026-02-24 - US-004
+- Refactored PinnedAppsRow to remove internal DndContext — pinned apps now use the outer DndContext with `pinned:${id}` IDs
+- Added Case 1c (pinned→folder-drop): creates FolderItem {type: "link"} from pinned app data, with duplicate URL detection
+- Added Case 1d (folder-item→pinned-drop-zone): creates PinnedApp from folder item data, with duplicate URL detection
+- Added Case 1e (pinned→pinned): reordering pinned apps in outer handleDragEnd (moved from PinnedAppsRow internal handler)
+- Added activeDragPinned state + pinned app DragOverlay rendering
+- Source items NOT removed after drag (user keeps both copies)
+- Imported reorderPinnedApps in App.tsx
+- Files changed: src/sidepanel/App.tsx, src/sidepanel/PinnedAppsRow.tsx
 - **Learnings for future iterations:**
-  - `isIgnoredUrl()` can be reused for future tab event handlers that need to skip internal URLs
-  - The `tab-auto-routed` message is consumed by sidepanel — US-007 will add the UI indicator
-  - `getWorkspaceForUrl` now delegates to `matchRoute`, eliminating the duplicate glob logic
+  - Nested DndContexts intercept drag events — to enable cross-section dragging, pinned apps had to be moved to the outer DndContext
+  - PinnedAppsRow's SortableContext works fine nested inside the outer DndContext without its own DndContext
+  - Pinned app IDs now use `pinned:` prefix to distinguish them in the shared drag space
+  - horizontalListSortingStrategy import stays in PinnedAppsRow (not needed in App.tsx)
 ---
 
-## Iteration 4 - Fri Feb 20 12:11:04 IST 2026
+## Iteration 4 - Tue Feb 24 13:53:12 IST 2026
 Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-4.log
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-133913/iter-4.log
 ---
-**US-004 is complete.** Committed as `cebb2b1`. There are still 26 stories with `passes: false`, so more iterations are needed.
+US-004 is complete. There are still stories with `passes: false` (US-005 through US-010), so I'll end here for this iteration. The next iteration should pick up **US-005: Cross-section drag: folder item back to tab list (unpin from folder)**.
 
-**US-004 Summary:**
-- Wired auto-routing into service worker `chrome.tabs.onUpdated` listener
-- Replaced local `globToRegex` with shared `matchRoute` from `routingEngine.ts` — eliminating duplicate glob logic
-- Added `isIgnoredUrl()` helper to filter `chrome://`, `extension://`, `about:blank`, and newtab URLs
-- `onUpdated` now triggers on `status === 'complete'`, calls `matchRoute`, checks if tab is already in target workspace before moving
-- Sends `tab-auto-routed` message to sidepanel with `tabId` and `workspaceId`
-- Added `tab-auto-routed` message type to `ServiceWorkerMessage` union in `types.ts`
-- Files changed: `src/background/service-worker.ts`, `src/shared/types.ts`
-- Typecheck passes, lint passes
+**Summary of US-004 changes:**
+- Refactored PinnedAppsRow to remove its internal DndContext — pinned apps now participate in the outer DndContext with `pinned:` prefixed IDs
+- Added Case 1c (pinned→folder-drop): creates FolderItem from pinned app data with duplicate URL detection
+- Added Case 1d (folder-item→pinned-drop-zone): creates PinnedApp from folder item data with duplicate URL detection
+- Added Case 1e (pinned→pinned): pinned app reordering moved to outer handleDragEnd
+- Added `activeDragPinned` state and DragOverlay rendering for pinned apps
+- Source items are NOT removed automatically (user keeps both copies)
+- Typecheck passes cleanly
 ---
 
-## 2026-02-20 - US-005
-- Replaced old "Air Traffic Control" inline-edit section with new "Auto-routing" section using dedicated components
-- Created `SortableRoutingRuleRow` component — each rule row shows drag handle, pattern text, workspace emoji+name badge, enable/disable toggle, and delete (X) button
-- Created `RoutingRulesSection` component — self-contained section with DndContext for drag-and-drop reordering of rules
-- "Add Rule" button opens inline form with pattern input (placeholder: `e.g., github.com/*`) and workspace dropdown, with Save/Cancel buttons
-- Rules reorderable via @dnd-kit drag handles using `SortableContext` + `verticalListSortingStrategy`
-- Toggle switch enables/disables individual rules (updates `enabled` field)
-- Rules saved to `settings.routingRules` on add/toggle/delete/reorder
-- Files changed: `src/sidepanel/SettingsPanel.tsx`
+## 2026-02-24 - US-005
+- Added Case 1e (folder-item → tablist-drop-zone) in handleDragEnd
+- For type "link" items: opens URL via chrome.tabs.create({url}), then removes from folder
+- For type "tab" items: just removes from folder (tab already open)
+- Uses existing removeItemFromFolder from folderStorage
+- Renumbered old Case 1e (pinned reorder) to Case 1f
+- Files changed: src/sidepanel/App.tsx
 - **Learnings for future iterations:**
-  - SettingsPanel now has its own DndContext inside `RoutingRulesSection` — this is separate from App.tsx's DndContext and works independently
-  - The `SortableRoutingRuleRow` pattern (sortable row with inline controls) can be reused for other sortable settings lists
-  - `RoutingRule` type imported from `shared/types.ts` — already has `enabled` field from US-003
+  - chrome.tabs.create is available in Chrome extension side panel context
+  - Case ordering matters: folder-item → tablist-drop-zone must come before folder-item → folder-drop (Case 2) to avoid being caught by the folder-drop prefix check
 ---
 
-## Iteration 5 - Fri Feb 20 12:13:54 IST 2026
+## Iteration 5 - Tue Feb 24 13:54:47 IST 2026
 Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-5.log
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-133913/iter-5.log
 ---
-**US-005 is complete.** Committed as `2d902f6`. There are still 25 stories with `passes: false`, so more iterations are needed.
+**US-005 is complete.** There are still stories with `passes: false` (US-006 through US-010), so I'll end here for this iteration.
 
-**US-005 Summary:**
-- Replaced the old "Air Traffic Control" inline-edit section with a new "Auto-routing" section
-- Created `SortableRoutingRuleRow` component: each rule row shows drag handle, pattern text, workspace emoji+name, enable/disable toggle, and delete button
-- Created `RoutingRulesSection` component: self-contained section with its own DndContext for drag-and-drop reordering
-- "Add Rule" opens inline form with pattern input (`e.g., github.com/*` placeholder) and workspace dropdown
-- Rules reorderable via @dnd-kit drag handles
-- Toggle switches enable/disable individual rules
-- All CRUD operations (add/toggle/delete/reorder) save to `settings.routingRules`
-- Typecheck passes, lint passes
-- File changed: `src/sidepanel/SettingsPanel.tsx`
----
-
-## 2026-02-20 - US-006
-- Added "Always open [domain] here" context menu item for tabs in App.tsx
-- Extracts domain from tab URL via `new URL(tab.url).hostname`
-- Creates routing rule with pattern `*://domain/*` for the active workspace
-- Checks for existing rule with same pattern before adding (shows "Rule already exists" toast)
-- Shows success toast: "Tabs from [domain] will auto-route to [emoji] [name]"
-- Added toast notification system to App.tsx: `toast` state with 3-second auto-dismiss
-- Toast renders as fixed bottom-center overlay with fade-in animation
-- Skips chrome:// and extension:// domains (no menu item shown)
-- Files changed: `src/sidepanel/App.tsx`
-- **Learnings for future iterations:**
-  - App.tsx now has a reusable toast system — `setToast("message")` for any ephemeral notification
-  - Context menu `onClick` handlers can be async — useful for storage operations
-  - `getSettings()` must be called at click time (not menu render time) to get fresh routing rules
-  - `animate-fade-in` CSS class is already defined in `index.css` — reuse it for entry animations
----
-
-## Iteration 6 - Fri Feb 20 12:17:44 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-6.log
----
-**US-006 is complete.** Committed as `4c218e1`. There are still 24 stories with `passes: false`, so more iterations are needed.
-
-**US-006 Summary:**
-- Added "Always open [domain] here" context menu item to tab right-click menu in `App.tsx`
-- Extracts domain from tab URL, creates `*://domain/*` routing rule for the active workspace
-- Checks for existing rule before adding — shows "Rule already exists for [domain]" toast if duplicate
-- Shows success toast: "Tabs from [domain] will auto-route to [emoji] [name]"
-- Added reusable toast notification system to App.tsx (3-second auto-dismiss, fixed bottom-center)
-- Skips chrome:// and extension:// domains
-- Typecheck passes, lint passes
+**Summary of US-005 changes:**
+- Added Case 1e in `handleDragEnd`: folder-item dropped on `tablist-drop-zone`
+- For `type: "link"` items: opens URL in new tab via `chrome.tabs.create({url})`, then removes FolderItem from folder via `removeItemFromFolder`
+- For `type: "tab"` items: just removes FolderItem (tab already open)
+- Renumbered old Case 1e (pinned reorder) to Case 1f
+- Typecheck passes cleanly
 - File changed: `src/sidepanel/App.tsx`
 ---
 
-## 2026-02-20 - US-007
-- Added auto-routing indicator banner in App.tsx below the search bar
-- Listens for `tab-auto-routed` message from service worker via existing `handleMessage` listener
-- Uses `activeWorkspaceIdRef` (ref updated via useEffect) to check workspace match inside the mount-once listener
-- Banner shows workspace emoji + name: "Tab auto-routed to [emoji] [name]"
-- Banner auto-fades after 3 seconds via useEffect timer
-- Banner has small X button to dismiss immediately
-- Only shows if user is currently viewing the target workspace
-- Styled with accent color bg tint, rounded corners, and `animate-fade-in` animation
-- Files changed: `src/sidepanel/App.tsx`
+## 2026-02-24 - US-006
+- Updated callOpenRouterAPI to accept folders (FolderContext[]) and workspaces (WorkspaceContext[]) params
+- Updated AI prompt to include existing folder names/item counts and workspace names as context
+- Prompt instructs AI to reference existing folders instead of creating new ones, and suggest workspace moves
+- Updated response schema: each group now has target ("new"|"existing"), optional existingFolderName, optional suggestedWorkspace
+- Updated parseAIResponse to validate and normalize new fields with safe fallback to "new" if target is unrecognized
+- Updated getAIGroupingSuggestions signature with optional folders and workspaces params (default empty arrays)
+- Exported FolderContext, WorkspaceContext, and AIGroupingResult types for use by OrganizeTabsModal
+- File changed: src/shared/aiGroupingService.ts
 - **Learnings for future iterations:**
-  - The message listener in App.tsx is set up once with `[]` dependency — use refs to access changing state inside it
-  - `getWorkspaces()` can be called inside the message handler to get fresh workspace data (name, emoji)
-  - `animate-fade-in` class from `index.css` works well for entry animations on banners
+  - Default params (folders=[], workspaces=[]) maintain backward compatibility — OrganizeTabsModal can call without them until US-007
+  - parseAIResponse uses safe fallback: unrecognized target values default to "new"
+  - existingFolderName is only included when target is "existing" to keep the data clean
 ---
 
-## Iteration 7 - Fri Feb 20 12:20:30 IST 2026
+## Iteration 6 - Tue Feb 24 13:56:50 IST 2026
 Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-7.log
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-133913/iter-6.log
 ---
-**US-007 is complete.** Committed as `15b66c0`. There are still 23 stories with `passes: false`, so more iterations are needed.
+**US-006 is complete.** There are still stories with `passes: false` (US-007 through US-010), so I'll end here for this iteration. The next iteration should pick up **US-007: Update OrganizeTabsModal to handle existing folders and workspace suggestions**.
 
-**US-007 Summary:**
-- Added auto-routing indicator banner in `App.tsx`, rendered below the search bar
-- Listens for `tab-auto-routed` message from service worker in the existing message handler
-- Uses `activeWorkspaceIdRef` (ref synced via `useEffect`) to correctly check the active workspace inside the mount-once listener
-- Banner shows: "Tab auto-routed to [emoji] [name]"
-- Auto-fades after 3 seconds via `useEffect` timer
-- Small X button for immediate dismissal
-- Only shows when user is currently viewing the target workspace
-- Styled with accent color background tint, `animate-fade-in` animation
-- Typecheck passes, lint passes
-- File changed: `src/sidepanel/App.tsx`
+**Summary of US-006 changes:**
+- Updated `callOpenRouterAPI` to accept `folders: FolderContext[]` and `workspaces: WorkspaceContext[]` params
+- Updated AI prompt to include existing folder names/item counts and workspace names as context, instructing the AI to reference existing folders and suggest workspace moves
+- Updated response schema: each group now has `target` ("new"|"existing"), optional `existingFolderName`, optional `suggestedWorkspace`
+- Updated `parseAIResponse` to validate and normalize new fields with safe fallback to "new" for unrecognized target values
+- Updated `getAIGroupingSuggestions` signature with optional `folders` and `workspaces` params (default empty arrays for backward compat)
+- Exported `FolderContext`, `WorkspaceContext`, and `AIGroupingResult` types
+- Typecheck passes cleanly
+- File changed: `src/shared/aiGroupingService.ts`
 ---
 
-## 2026-02-20 - US-008
-- Added AI auto-workspace suggestion engine to service worker
-- `getUnorganizedTabs()`: finds tabs not matching routing rules and not in any folder
-- `getAISuggestion()`: calls OpenRouter API with unorganized tab titles/URLs, asks for JSON `{suggest, name, emoji, reason}`
-- `domainClusterFallback()`: fallback when AI unavailable — groups 3+ tabs from same domain into suggestion
-- `checkForWorkspaceSuggestion()`: orchestrates detection, enforces 10-minute cooldown
-- Suggestion stored in `chrome.storage.local` under `pendingWorkspaceSuggestion` key
-- Sends `workspace-suggestion-ready` message to sidepanel when suggestion is ready
-- Added `WorkspaceSuggestion` type to `shared/types.ts` with `suggest, name, emoji, reason, tabIds, createdAt`
-- Added `workspace-suggestion-ready` to `ServiceWorkerMessage` union type
-- Triggered on tab navigation complete (inside onUpdated handler) and via periodic alarm (every 5 min)
-- Files changed: `src/background/service-worker.ts`, `src/shared/types.ts`
+## 2026-02-24 - US-007
+- Updated OrganizeTabsModal to accept workspaces and activeWorkspaceId props
+- Pass FolderContext[] and WorkspaceContext[] to getAIGroupingSuggestions for AI-aware grouping
+- Added target/existingFolderName/suggestedWorkspace fields to TabGroup interface
+- Group cards now show green "New" badge or blue "Existing" badge based on target
+- acceptGroup helper: for "existing" target, finds folder by name (case-insensitive) and adds to it; falls back to createFolder if not found
+- Workspace move suggestions shown in separate "Suggested Moves" section with purple "Move" badge
+- Accepting workspace moves calls assignTabToWorkspace to update tabWorkspaceMap
+- Domain-based fallback: groupTabsByDomain now checks if display name matches existing folder name (case-insensitive) and sets target to "existing"
+- Updated App.tsx to pass workspaces and activeWorkspaceId to OrganizeTabsModal
+- Files changed: src/sidepanel/OrganizeTabsModal.tsx, src/sidepanel/App.tsx
 - **Learnings for future iterations:**
-  - `checkForWorkspaceSuggestion` has built-in cooldown (10 min) so it's safe to call from hot paths like onUpdated
-  - `pendingWorkspaceSuggestion` storage key holds the suggestion for the sidepanel (US-009) to consume
-  - `WorkspaceSuggestion.tabIds` tracks which tabs to move when the user accepts the suggestion
-  - Domain clustering fallback capitalizes the first part of the hostname as workspace name (e.g., "github.com" → "Github")
+  - assignTabToWorkspace from workspaceStorage.ts is the correct way to move tabs between workspaces
+  - AI groups can have both folder assignment and workspace suggestion — they're handled independently
+  - useMemo for workspaceMoves depends on aiGroups which can be null — guard with groupingSource check
+  - Domain groups inherit target from folder name matching; AI groups get target from the AI response directly
 ---
 
-## Iteration 8 - Fri Feb 20 12:23:21 IST 2026
+## Iteration 7 - Tue Feb 24 14:01:53 IST 2026
 Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-8.log
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-133913/iter-7.log
 ---
-**US-008 is complete.** Committed as `1e4d045`. There are still 22 stories with `passes: false`, so more iterations are needed.
+**US-007 is complete.** There are still stories with `passes: false` (US-008, US-009, US-010), so I'll end here for this iteration. The next iteration should pick up **US-008: Near-instant workspace swipe response**.
 
-**US-008 Summary:**
-- Added AI auto-workspace suggestion engine to the service worker
-- `getUnorganizedTabs()`: finds tabs not matching any routing rule and not in any folder
-- `getAISuggestion()`: calls OpenRouter API with tab titles/URLs, asks for `{suggest, name, emoji, reason}` JSON response
-- `domainClusterFallback()`: when AI is unavailable, groups 3+ tabs from the same domain into a suggestion
-- `checkForWorkspaceSuggestion()`: orchestrates the detection with a 10-minute cooldown
-- Suggestion stored in `chrome.storage.local` under `pendingWorkspaceSuggestion`
-- Sends `workspace-suggestion-ready` message to sidepanel
-- Added `WorkspaceSuggestion` type and `workspace-suggestion-ready` message type to `types.ts`
-- Triggered on tab navigation complete and via periodic 5-minute alarm
-- Typecheck passes, lint passes
-- Files changed: `src/background/service-worker.ts`, `src/shared/types.ts`
+**Summary of US-007 changes:**
+- Updated `OrganizeTabsModal` to accept `workspaces` and `activeWorkspaceId` props
+- Passes `FolderContext[]` and `WorkspaceContext[]` to `getAIGroupingSuggestions` for AI-aware grouping
+- Added `target`/`existingFolderName`/`suggestedWorkspace` fields to `TabGroup` interface
+- Group cards now show green **"New"** badge or blue **"Existing"** badge based on target
+- `acceptGroup` helper: for "existing" target, finds folder by name (case-insensitive) and adds to it; falls back to `createFolder` if not found
+- Workspace move suggestions shown in separate **"Suggested Moves"** section with purple **"Move"** badge
+- Accepting workspace moves calls `assignTabToWorkspace` to update tabWorkspaceMap
+- Domain-based fallback: `groupTabsByDomain` checks if display name matches existing folder name (case-insensitive) and sets target to "existing"
+- Updated `App.tsx` to pass `workspaces` and `activeWorkspaceId` to `OrganizeTabsModal`
+- Typecheck passes cleanly
+- Files changed: `src/sidepanel/OrganizeTabsModal.tsx`, `src/sidepanel/App.tsx`
 ---
 
-## 2026-02-20 - US-009
-- Added AI auto-workspace suggestion card to sidebar in App.tsx
-- Listens for `workspace-suggestion-ready` message and loads `pendingWorkspaceSuggestion` from storage
-- Also loads pending suggestion on mount (in case message was sent before sidepanel opened)
-- Card appears below search bar (after auto-routing indicator) with emoji, name, and reason text
-- "Create" button: creates workspace with suggested name/emoji, moves relevant tabs (via tabIds), switches user to new workspace
-- "Dismiss" button: hides card, stores `suggestionDismissedAt` timestamp, suppresses re-showing for 24 hours
-- Card styled with rounded corners, subtle shadow, accent border matching theme
-- Uses existing toast system for success/error feedback
-- Files changed: `src/sidepanel/App.tsx`
+## 2026-02-24 - US-008
+- Reduced wheel accumulation timeout from 150ms to 50ms for faster swipe detection
+- Reduced default threshold from 50 to 30 for lower activation distance
+- Added cooldownRef (useRef<boolean>) and cooldownTimeoutRef for 300ms cooldown after swipe fires
+- handleSwipe returns early if cooldownRef.current is true (prevents double-firing)
+- Cooldown timeout and ref cleaned up in useEffect return
+- Touch swipe still fires immediately on touchend via handleSwipe (cooldown applies equally)
+- File changed: src/sidepanel/useSwipeGesture.ts
 - **Learnings for future iterations:**
-  - `assignTabToWorkspace` from workspaceStorage.ts is the correct way to move tabs to a workspace
-  - `createWorkspace` sets a default emoji, so call `updateWorkspace` right after to set the suggested emoji
-  - `loadWorkspaceSuggestion` is a stable callback (via useCallback) so it can be used in the mount-once useEffect dependency array
-  - 24h dismissal uses `suggestionDismissedAt` key in chrome.storage.local
----
-
-## Iteration 9 - Fri Feb 20 12:26:07 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-9.log
----
-**US-009 is complete.** Committed as `cf09dff`. There are still 21 stories with `passes: false` (US-010 through US-030), so more iterations are needed.
-
-**US-009 Summary:**
-- Added AI auto-workspace suggestion card to the sidebar in `App.tsx`
-- Listens for `workspace-suggestion-ready` message from service worker and loads `pendingWorkspaceSuggestion` from storage
-- Also loads pending suggestion on mount (in case message arrived before sidepanel opened)
-- Card appears below search bar with emoji, suggested name, and AI-generated reason
-- "Create" button: creates workspace with suggested name/emoji, moves relevant tabs into it, switches user to the new workspace
-- "Dismiss" button: hides card, stores dismissal timestamp, suppresses re-showing for 24 hours
-- Card styled with rounded corners, subtle shadow, accent border, matching the onboarding card aesthetic
-- Uses existing toast system for success/error feedback
-- Typecheck passes, lint passes
-- File changed: `src/sidepanel/App.tsx`
----
-
-## 2026-02-20 - US-010
-- Added recently closed tabs tracking to the service worker
-- Added `RecentlyClosedTab` type to `shared/types.ts` with url, title, favicon, workspaceId, closedAt fields
-- Added in-memory `tabInfoCache` (Map) to cache tab info since `chrome.tabs.get()` doesn't work after removal
-- Cache populated on `initialize()`, updated on `onCreated` and `onUpdated` events, cleaned up on `onRemoved`
-- `trackRecentlyClosed(tabId)`: captures tab info from cache, checks for ignored URLs, checks for auto-archived tabs (same URL archived within 2 seconds), stores in `recentlyClosed` storage key
-- `recentlyClosed` array capped at 20 entries (FIFO), newest first
-- `trackRecentlyClosed` called BEFORE `removeTabFromMap` in `onRemoved` to capture workspace ID
-- Files changed: `src/background/service-worker.ts`, `src/shared/types.ts`
-- **Learnings for future iterations:**
-  - `chrome.tabs.get(tabId)` fails after tab removal — must cache tab info proactively
-  - `tabInfoCache` is in-memory only, so it's lost on service worker restart; `initialize()` repopulates it from current tabs
-  - Auto-archive detection uses a 2-second window: if the same URL was archived within 2s, the closure was likely from auto-archive
-  - `trackRecentlyClosed` must run before `removeTabFromMap` to read the workspace mapping while it still exists
----
-
-## Iteration 10 - Fri Feb 20 12:28:57 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-10.log
----
-**US-010 is complete.** Committed as `25ab3c0`. There are still 20 stories with `passes: false` (US-011 through US-030), so more iterations are needed.
-
-**US-010 Summary:**
-- Added `RecentlyClosedTab` type to `shared/types.ts` with `url`, `title`, `favicon`, `workspaceId`, `closedAt` fields
-- Added in-memory `tabInfoCache` (Map) in the service worker to cache tab info since `chrome.tabs.get()` doesn't work after removal
-- Cache populated on `initialize()`, updated on `onCreated` and `onUpdated`, cleaned up on `onRemoved`
-- `trackRecentlyClosed(tabId)`: captures tab info from cache, skips ignored URLs (chrome://, extension://), skips auto-archived tabs (same URL archived within 2 seconds), stores in `recentlyClosed` storage key
-- Array capped at 20 entries (FIFO), newest first
-- Called before `removeTabFromMap` in `onRemoved` to capture workspace ID while it still exists
-- Typecheck passes, lint passes
-- Files changed: `src/background/service-worker.ts`, `src/shared/types.ts`
----
-
-## 2026-02-20 - US-011
-- Created `RecentlyClosedSection.tsx` component following collapsible section pattern (like ArchiveSection)
-- Section placed between Archive and Quick Notes in App.tsx
-- Section header: 'Recently closed' with count badge and collapse toggle
-- Each entry shows: favicon (16px), title (truncated 40 chars), workspace emoji, relative time
-- Clicking entry: opens URL in new tab, assigns to original workspaceId via MOVE_TAB_TO_WORKSPACE message, removes from list
-- 'Clear all' button empties the list with no confirmation
-- Section hidden entirely when recentlyClosed array is empty
-- Reads from `recentlyClosed` storage key, listens for chrome.storage.onChanged for live updates
-- Files changed: `src/sidepanel/RecentlyClosedSection.tsx` (new), `src/sidepanel/App.tsx`
-- **Learnings for future iterations:**
-  - `RecentlyClosedSection` receives `workspaces` prop to resolve workspace emoji from workspaceId
-  - The component uses the same `formatTimeSince` helper pattern as ArchiveSection (local function)
-  - `chrome.tabs.query({ url })` can find recently opened tabs to assign workspace after reopening
-  - Entries are keyed by `${url}-${closedAt}` to ensure uniqueness
----
-
-## Iteration 11 - Fri Feb 20 12:31:13 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-11.log
----
-**US-011 is complete.** Committed as `d5ccc20`.
-
-**Summary:**
-- Created `src/sidepanel/RecentlyClosedSection.tsx` — new collapsible section component following the ArchiveSection pattern
-- Section header: "Recently closed (N)" with count badge and collapse toggle
-- Each entry shows: favicon (16px), title (truncated 40 chars), workspace emoji badge, relative time ("2m ago")
-- Clicking an entry reopens the URL in a new tab, assigns it to the original workspace, and removes it from the list
-- "Clear all" button empties the list (no confirmation per spec)
-- Section hidden entirely when the `recentlyClosed` array is empty
-- Listens for `chrome.storage.onChanged` for live updates
-- Placed between Archive and Quick Notes in `App.tsx`
-- Typecheck passes, lint passes
-
-There are still 19 stories with `passes: false` (US-012 through US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-012
-- Added `normalizeUrl()` function to service worker: strips trailing `/`, removes `www.` prefix, removes hash fragment
-- Added duplicate tab detection in `onUpdated` handler (status === 'complete'): normalizes new tab URL, compares against all other open tabs
-- If duplicate found, sends `duplicate-tab-detected` message to sidepanel with newTabId, existingTabId, existingWorkspaceId, existingWorkspaceName
-- Self-comparison excluded (skips same tabId), chrome://, extension://, about:blank URLs ignored
-- Added `duplicate-tab-detected` to `ServiceWorkerMessage` union type in types.ts
-- Only reports first duplicate found (breaks after first match)
-- Files changed: `src/background/service-worker.ts`, `src/shared/types.ts`
-- **Learnings for future iterations:**
-  - `normalizeUrl` uses `new URL()` for robust parsing — handles edge cases like ports, query strings
-  - Duplicate detection runs after auto-routing in the same async block, so routing happens first
-  - `existingWorkspaceName` is pre-formatted as "emoji name" for direct display in sidepanel UI
----
-
-## Iteration 12 - Fri Feb 20 12:33:15 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-12.log
----
-**US-012 is complete.** Committed as `e271012`.
-
-**Summary:**
-- Added `normalizeUrl()` function to service worker: strips trailing `/`, removes `www.` prefix, removes hash fragment for consistent URL comparison
-- Added duplicate tab detection in the `onUpdated` handler (status === 'complete'): normalizes the new tab's URL and compares against all other open tabs in the current window
-- If a duplicate is found, sends `duplicate-tab-detected` message to sidepanel with `newTabId`, `existingTabId`, `existingWorkspaceId`, and `existingWorkspaceName`
-- Self-comparison excluded, chrome://, extension://, about:blank URLs ignored
-- Added `duplicate-tab-detected` to `ServiceWorkerMessage` union type in `types.ts`
-- Typecheck passes, lint passes
-
-There are still 18 stories with `passes: false` (US-013 through US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-013
-- Added tab deduplication notification bar in sidebar (App.tsx)
-- Listens for `duplicate-tab-detected` message in the existing handleMessage listener
-- Shows yellow-tinted notification bar below search bar: "Already open in [Workspace emoji+name]"
-- "Switch" button: closes duplicate tab, activates existing tab, switches workspace if needed
-- "Keep Both" button: dismisses notification, keeps both tabs open
-- Bar auto-dismisses after 8 seconds with fade-out transition
-- Only one dedup notification shown at a time (new message replaces old via setState)
-- Files changed: `src/sidepanel/App.tsx`
-- **Learnings for future iterations:**
-  - Notification bars follow a consistent pattern in App.tsx: state variable + auto-dismiss useEffect + inline JSX
-  - `handleDupSwitch` uses `activeWorkspaceIdRef.current` (not state) for workspace comparison since it may run inside stale closures
-  - `CLOSE_TAB` and `SWITCH_TAB` messages are fire-and-forget — no need to await
----
-
-## Iteration 13 - Fri Feb 20 12:35:32 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-13.log
----
-**US-013 is complete.** Committed as `f6f6ee2`.
-
-**Summary:**
-- Added `dupNotification` state in App.tsx for duplicate tab detection UI
-- Listens for `duplicate-tab-detected` message in the existing message handler
-- Shows a yellow-tinted notification bar below the search bar: "Already open in [Workspace emoji+name]"
-- "Switch" button: closes the duplicate tab, activates the existing tab, switches workspace if needed
-- "Keep Both" button: dismisses the notification, keeps both tabs open
-- Bar auto-dismisses after 8 seconds with fade-out transition
-- Only one dedup notification shown at a time (new message replaces old)
-- Typecheck passes, lint passes
-- File changed: `src/sidepanel/App.tsx`
-
-There are still 17 stories with `passes: false` (US-014 through US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-014
-- Added Deep Work Mode toggle button (brain/lightbulb icon) to sidebar header, next to Organize button
-- Button toggles `deepWorkActive` state stored in chrome.storage.local
-- When activated: sets `focusMode.enabled = true` in settings, suspends all non-active tabs via `SUSPEND_TAB` messages, expands Quick Notes section
-- When deactivated: sets `focusMode.enabled = false`, does NOT unsuspend tabs
-- Header gets subtle accent glow (`ring-1 ring-arc-accent/30`) when Deep Work is active
-- State persists across sidebar close/reopen via chrome.storage.local + storage change listener
-- Command palette entry: "Toggle Deep Work Mode"
-- Files changed: `src/sidepanel/App.tsx`, `src/sidepanel/commandRegistry.ts`, `src/sidepanel/commandRegistry.test.ts`
-- **Learnings for future iterations:**
-  - `deepWorkActive` is a simple boolean in chrome.storage.local — not part of `Settings` object, for fast toggle without settings migration
-  - The header conditionally applies `ring-1 ring-arc-accent/30 rounded-lg` classes when active
-  - Deep Work activation suspends tabs at point-in-time; new tabs opened after aren't auto-suspended (Pomodoro timer in US-015 will add ongoing focus)
-  - `toggleDeepWork` callback depends on `filteredTabs` and `activeWorkspace` for tab suspension and notes expansion
----
-
-## Iteration 14 - Fri Feb 20 12:39:01 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-14.log
----
-**US-014 is complete.** Committed as `d7eb089`.
-
-**US-014 Summary:**
-- Added brain/lightbulb icon button to sidebar header (right side, next to Organize button)
-- Button toggles `deepWorkActive` state in `chrome.storage.local`
-- When activated: `focusMode.enabled` set to `true`, all non-active tabs suspended via `SUSPEND_TAB`, Quick Notes section expanded
-- When deactivated: `focusMode.enabled` set to `false`, tabs NOT unsuspended
-- Header gets subtle accent glow (`ring-1 ring-arc-accent/30`) when Deep Work is active
-- State persists across sidebar close/reopen via storage + storage change listener
-- Command palette entry: "Toggle Deep Work Mode"
-- Typecheck passes, lint passes
-- Files changed: `src/sidepanel/App.tsx`, `src/sidepanel/commandRegistry.ts`, `src/sidepanel/commandRegistry.test.ts`
-
-There are still 16 stories with `passes: false` (US-015 through US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-015
-- Created `PomodoroTimer.tsx` component — renders below header when Deep Work is active
-- Compact single-line design: [MM:SS] [Session X/4 · Work/Break] [pause] [skip]
-- Default: 25 min work / 5 min break / 4 sessions before 15 min long break
-- Timer uses `chrome.alarms` API (`arcflow-pomodoro` alarm, periodInMinutes: 1) for accuracy
-- Remaining time calculated from `startedAt` timestamp, displayed via 1s setInterval tick
-- Pause/resume toggle: on pause stores remaining ms; on resume recalculates startedAt
-- Skip button advances to next phase immediately
-- Phase transitions trigger `chrome.notifications.create` (break time / back to work messages)
-- After session 4: long break notification, then resets to session 1
-- State persisted in chrome.storage.local under `pomodoroState` key
-- Wired into App.tsx: renders between header and search bar when `deepWorkActive === true`
-- Files changed: `src/sidepanel/PomodoroTimer.tsx` (new), `src/sidepanel/App.tsx`
-- **Learnings for future iterations:**
-  - PomodoroTimer manages its own state independently — no props needed
-  - `chrome.alarms` + `setInterval` combo: alarms for reliable minute-level ticks even when service worker sleeps, interval for smooth per-second display updates
-  - Phase completion detection happens in both the interval tick and alarm handler for reliability
-  - `chrome.notifications` may not be available in all contexts — wrapped in try/catch
----
-
-## Iteration 15 - Fri Feb 20 12:41:57 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-15.log
----
-**US-015 is complete.** Committed as `0a13bb4`.
-
-**US-015 Summary:**
-- Created `src/sidepanel/PomodoroTimer.tsx` — new Pomodoro timer component with compact single-line design
-- Layout: `[MM:SS] [Session X/4 · Work/Break] [pause] [skip]`
-- Default durations: 25 min work / 5 min short break / 15 min long break after session 4
-- Timer uses `chrome.alarms` API (fires every minute) for accuracy + `setInterval` for smooth per-second display
-- Remaining time calculated from `startedAt` timestamp — handles pause/resume correctly
-- Pause/resume toggle and skip-to-next-phase buttons
-- Phase transitions trigger `chrome.notifications.create` ("Break time!" / "Back to work!")
-- State persisted in `chrome.storage.local` under `pomodoroState` key
-- Wired into `App.tsx`: renders below header when `deepWorkActive === true`
-- Typecheck passes, lint passes
-- Files changed: `src/sidepanel/PomodoroTimer.tsx` (new), `src/sidepanel/App.tsx`
-
-There are still 15 stories with `passes: false` (US-016 through US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-016
-- Added focus stats tracking and display to PomodoroTimer.tsx
-- `focusStats` stored in chrome.storage.local with `{[YYYY-MM-DD]: {totalMinutes, sessions}}` structure
-- On each Pomodoro work session completion (advancePhase from "work" → "break"), `recordWorkSessionComplete()` increments totalMinutes by 25 and sessions by 1
-- Entries older than 30 days pruned on each write via `pruneOldEntries()`
-- Display shows "Today: Xh Ym (N sessions)" below the Pomodoro timer when Deep Work is active
-- Shows "0m (0 sessions)" if no focus time today
-- Listens for `chrome.storage.onChanged` to update display reactively when stats change
-- Files changed: `src/sidepanel/PomodoroTimer.tsx`
-- **Learnings for future iterations:**
-  - `FocusStatsData` type is local to PomodoroTimer.tsx — if other components need it (e.g., Morning Briefing US-017, Analytics US-023), they should read from `focusStats` storage key directly
-  - The storage key is `focusStats` — a flat object keyed by YYYY-MM-DD date strings
-  - `getTodayKey()` helper generates the date key in local timezone
-  - The stats display is part of PomodoroTimer, not a separate component — keeps it simple since it only shows during Deep Work
----
-
-## Iteration 16 - Fri Feb 20 12:44:54 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-16.log
----
-**US-016 is complete.** Committed as `81211a2`.
-
-**US-016 Summary:**
-- Added focus stats tracking to `PomodoroTimer.tsx` — on each Pomodoro work session completion, `recordWorkSessionComplete()` increments `totalMinutes` by 25 and `sessions` by 1
-- Data stored in `chrome.storage.local` under `focusStats` key with `{[YYYY-MM-DD]: {totalMinutes, sessions}}` structure
-- Entries older than 30 days pruned on each write
-- Display shows "Today: Xh Ym (N sessions)" below the Pomodoro timer when Deep Work is active
-- Shows "0m (0 sessions)" when no focus time recorded today
-- Reactively updates via `chrome.storage.onChanged` listener
-- Typecheck passes, lint passes
-- File changed: `src/sidepanel/PomodoroTimer.tsx`
-
-There are still 14 stories with `passes: false` (US-017 through US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-017
-- Created `MorningBriefing.tsx` component — daily summary card shown at top of sidebar (above search bar) on first open per calendar day
-- Shows total open tabs + per-workspace breakdown with emoji icons
-- Shows "X tabs opened, Y closed since last session" using `tabSessionCounters` tracked by service worker
-- Shows yesterday's focus time from `focusStats` storage key (if > 0)
-- Shows first line of each workspace's notes as reminders (non-empty workspaces only)
-- Dismiss (X) button stores today's date as `briefingDismissedDate` — hides for rest of day
-- `lastSessionTimestamp` updated on sidebar `visibilitychange` (hidden) event
-- Tab session counters reset when sidebar goes hidden (new "session" starts)
-- Added `incrementTabCounter()` function to service worker — tracks opened/closed counts in `tabSessionCounters` storage key
-- Card styled with rounded corners, subtle shadow, accent border matching theme
-- Files changed: `src/sidepanel/MorningBriefing.tsx` (new), `src/sidepanel/App.tsx`, `src/background/service-worker.ts`
-- **Learnings for future iterations:**
-  - `briefingDismissedDate` stores YYYY-MM-DD string — compared against today's date to determine visibility
-  - `tabSessionCounters` in chrome.storage.local tracks `{opened, closed}` since last sidebar hide — reset on each new session
-  - `lastSessionTimestamp` stored on visibilitychange (hidden) — can be used by future features to track session boundaries
-  - `FocusStatsData` type is duplicated locally in MorningBriefing.tsx (same as PomodoroTimer.tsx) — reads from same `focusStats` storage key
-  - Morning Briefing receives `tabs`, `workspaces`, `tabWorkspaceMap` as props from App.tsx for real-time data
----
-
-## Iteration 17 - Fri Feb 20 12:48:32 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-17.log
----
-**US-017 is complete.** Committed as `8a3c919`.
-
-**US-017 Summary:**
-- Created `src/sidepanel/MorningBriefing.tsx` — daily summary card shown at top of sidebar (above search bar) on first open per calendar day
-- Shows: total open tabs, per-workspace tab counts with emoji icons
-- Shows "X tabs opened, Y closed since last session" using `tabSessionCounters` tracked by service worker
-- Shows yesterday's focus time from `focusStats` storage (if > 0)
-- Shows first line of each workspace's notes as reminders
-- Dismiss (X) button stores today's date as `briefingDismissedDate` — hides for rest of day
-- `lastSessionTimestamp` updated on sidebar `visibilitychange` (hidden); tab session counters reset at same time
-- Added `incrementTabCounter()` to service worker for opened/closed tracking
-- Card styled with rounded corners, subtle shadow, accent border
-- Typecheck passes, lint passes
-- Files changed: `src/sidepanel/MorningBriefing.tsx` (new), `src/sidepanel/App.tsx`, `src/background/service-worker.ts`
-
-There are still 13 stories with `passes: false` (US-018 through US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-018
-- Added AI-generated productivity tip to the Morning Briefing card
-- If `openRouterApiKey` is configured, sends yesterday's browsing summary (top domains, tab counts, workspace names, focus time) to OpenRouter
-- Prompt asks for one short productivity tip under 20 words
-- Tip displayed as italicized text at the bottom of the Morning Briefing card
-- 5-second timeout via AbortController; on timeout or any error, tip section simply hidden (no error shown)
-- If no API key configured, tip section not shown (no error, no API call)
-- Uses `getSettings()` from settingsStorage.ts to get the API key
-- Reads analytics data from `analytics` storage key for yesterday's browsing summary
-- Files changed: `src/sidepanel/MorningBriefing.tsx`
-- **Learnings for future iterations:**
-  - OpenRouter API calls in sidepanel components follow same pattern: fetch + AbortController timeout + try/catch silencing errors
-  - `analytics.daily[YYYY-MM-DD]` structure has `opened`, `closed`, `domains`, `workspaceMinutes` fields (may be undefined if US-022 analytics collection not yet implemented)
-  - The AI tip gracefully handles missing analytics data — builds summary from whatever is available (tabs, workspaces, focus stats)
----
-
-## Iteration 18 - Fri Feb 20 12:50:21 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-18.log
----
-**US-018 is complete.** Committed as `55ee765`.
-
-**US-018 Summary:**
-- Added AI-generated productivity tip to the Morning Briefing card in `MorningBriefing.tsx`
-- If `openRouterApiKey` is configured, sends yesterday's browsing summary (top domains, tab counts, workspace names, focus time) to OpenRouter with prompt asking for one short tip under 20 words
-- Tip displayed as italicized text at the bottom of the briefing card
-- 5-second timeout via AbortController; on timeout or error, tip section simply hidden
-- If no API key configured, no API call made and no tip shown
-- Typecheck passes, lint passes
-
-There are still 12 stories with `passes: false` (US-019 through US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-019
-- Added Edit/Preview toggle to QuickNotes.tsx with markdown rendering support
-- Edit mode: existing textarea behavior with raw markdown
-- Preview mode: renders markdown as styled HTML using simple regex-based renderer (no external library)
-- Supported syntax: **bold** → `<strong>`, *italic* → `<em>`, # headers → `<h1>`/`<h2>`/`<h3>`, - bullet lists → `<ul><li>`, - [ ] checklists → clickable checkboxes, [text](url) → `<a>` links
-- Checklist items clickable in preview: clicking toggles `- [ ]` ↔ `- [x]` in underlying text via `data-check-line` attribute
-- Character limit increased from 2000 to 5000; counter threshold updated to 4000
-- Character counter shows `X / 5,000` format with locale formatting
-- Preview state resets to Edit when switching workspaces (tracked via state with wsId to avoid lint errors)
-- HTML is escaped before inline formatting to prevent XSS via `escapeHtml()` helper
-- Files changed: `src/sidepanel/QuickNotes.tsx`
-- **Learnings for future iterations:**
-  - React 19 strict lint rules disallow `setState` in effects and ref access during render — use state-based tracking (wsId in state) instead
-  - `dangerouslySetInnerHTML` is used for preview — all user content goes through `escapeHtml()` before markdown processing
-  - The `formatRelativeTime` export warning is pre-existing and can be ignored
-  - Markdown renderer is intentionally simple — covers 90% of use cases without a heavy library
----
-
-## Iteration 19 - Fri Feb 20 12:53:49 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-19.log
----
-**US-019 is complete.** Committed as `fd5105f`.
-
-**US-019 Summary:**
-- Added Edit/Preview toggle to `QuickNotes.tsx` with markdown rendering
-- Edit mode: existing textarea with raw markdown
-- Preview mode: renders markdown as styled HTML using a simple regex-based renderer (no external library)
-- Supported syntax: `**bold**`, `*italic*`, `#` headers, `- ` bullet lists, `- [ ]`/`- [x]` checklists (clickable), `[text](url)` links
-- Checklist items clickable in preview: clicking toggles `- [ ]` ↔ `- [x]` in underlying text
-- Character limit increased from 2000 to 5000; counter threshold updated to 4000
-- Existing plain text notes render correctly (plain text is valid markdown)
-- HTML escaped before processing to prevent XSS
-- Typecheck passes, lint passes (only pre-existing warning)
-- File changed: `src/sidepanel/QuickNotes.tsx`
-
-There are still 11 stories with `passes: false` (US-020 through US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-020
-- Added content script for capturing selected text from any page and saving to ArcFlow workspace notes
-- Created `src/content/capture.ts` content script with overlay popup for optional annotation
-- Added `content_scripts` entry to `manifest.json` matching `<all_urls>`
-- Added `content-capture` build entry to `vite.config.ts`
-- Registered context menu item `Save to ArcFlow Notes` with `contexts: ['selection']` in service worker
-- Added `handleSaveToNotes()` in service worker: sends message to content script for annotation popup, appends to workspace notes via `updateWorkspace()`
-- Note format: `\n\n> [text]\n— [title](url)\n📝 [annotation]` (annotation line omitted if empty)
-- If notes would exceed 5000 chars, content script shows alert: "Notes full"
-- Added `notes-saved-from-page` message type to `ServiceWorkerMessage` union
-- App.tsx handles `notes-saved-from-page` to show toast and refresh workspaces
-- Files changed: `public/manifest.json`, `vite.config.ts`, `src/content/capture.ts` (new), `src/background/service-worker.ts`, `src/shared/types.ts`, `src/sidepanel/App.tsx`
-- **Learnings for future iterations:**
-  - Content scripts are separate build entries in vite — must add to `rollupOptions.input` in vite.config.ts
-  - Content scripts communicate with service worker via `chrome.runtime.onMessage` / `chrome.tabs.sendMessage`
-  - `chrome.tabs.sendMessage(tabId, msg)` sends to the content script in a specific tab; `chrome.runtime.sendMessage(msg)` sends to the service worker
-  - Content script overlay popup uses inline styles (no CSS framework available in content scripts)
-  - `info.selectionText` in context menu click handler provides the selected text directly
----
-
-## Iteration 20 - Fri Feb 20 12:58:33 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-20.log
----
-**US-020 is complete.** Committed as `327d7df`.
-
-**US-020 Summary:**
-- Added `content_scripts` entry to `manifest.json` matching `<all_urls>`
-- Created `src/content/capture.ts` — content script with overlay popup for optional annotation (dark themed, z-index 99999, Enter to save, Escape to cancel)
-- Registered `Save to ArcFlow Notes` context menu item with `contexts: ['selection']` in the service worker
-- Added `handleSaveToNotes()` in service worker: sends message to content script to show annotation popup, then appends captured text to workspace notes via `updateWorkspace()`
-- Note format: `\n\n> [text]\n— [title](url)\n📝 [annotation]` (annotation line omitted if empty)
-- If notes would exceed 5000 chars, content script shows alert: "Notes full"
-- Added `notes-saved-from-page` message type; App.tsx shows toast and refreshes workspaces on receipt
-- Added `content-capture` build entry to `vite.config.ts`
-- Typecheck passes, lint passes
-- Files changed: `public/manifest.json`, `vite.config.ts`, `src/content/capture.ts` (new), `src/background/service-worker.ts`, `src/shared/types.ts`, `src/sidepanel/App.tsx`
-
-There are still 10 stories with `passes: false` (US-021 through US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-021
-- Added link icon button (🔗) to QuickNotes header, positioned next to Edit/Preview toggle with `ml-auto`
-- On click: queries `chrome.tabs.query({active: true, currentWindow: true})` for active tab
-- Inserts `[Page Title](url)` at textarea cursor position (selectionStart/selectionEnd), or appends if no textarea ref
-- Button disabled (grayed out with `cursor-not-allowed`) when in Preview mode
-- Button has tooltip: "Insert link to current tab" via `title` attribute
-- Restores cursor position after insertion via `setTimeout` + `setSelectionRange`
-- Respects MAX_CHARS limit — silently skips insertion if it would exceed 5000 chars
-- Files changed: `src/sidepanel/QuickNotes.tsx`
-- **Learnings for future iterations:**
-  - `textareaRef.current.selectionStart/End` gives cursor position for precise text insertion
-  - `setTimeout(() => textarea.setSelectionRange(...), 0)` needed after React state update to restore cursor
-  - `chrome.tabs.query` in sidepanel context works fine — returns the active tab in the current window
----
-
-## Iteration 21 - Fri Feb 20 13:00:00 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-21.log
----
-**US-021 is complete.** Committed as `edfd5e7`.
-
-**US-021 Summary:**
-- Added 🔗 link icon button to QuickNotes header, next to the Edit/Preview toggle
-- On click: queries `chrome.tabs.query({active: true, currentWindow: true})` for the active tab
-- Inserts `[Page Title](url)` at the textarea cursor position, or appends if no cursor
-- Button disabled (grayed out) when in Preview mode
-- Button has tooltip: "Insert link to current tab"
-- Respects 5000 char limit
-- Typecheck passes, lint passes (only pre-existing warning)
-- File changed: `src/sidepanel/QuickNotes.tsx`
-
-There are still 9 stories with `passes: false` (US-022 through US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-022
-- Added analytics data collection to service worker with debounced writes
-- In-memory buffer tracks: opened/closed tab deltas, domain visit deltas, workspace time deltas
-- Buffer flushed to `chrome.storage.local` under `analytics` key every 30 seconds via `setInterval`
-- Data structure: `{daily: {[YYYY-MM-DD]: {opened, closed, domains: {domain: count}, workspaceMinutes: {wsId: minutes}}}}`
-- `chrome.tabs.onCreated`: calls `analyticsTrackOpened()` to increment opened count
-- `chrome.tabs.onRemoved`: calls `analyticsTrackClosed()` to increment closed count
-- `chrome.tabs.onActivated`: calls `analyticsTrackWorkspaceTime()` to calculate time in previous workspace, then `analyticsTrackDomain(url)` for domain visit tracking
-- Workspace time capped at 30 minutes per activation to avoid idle inflation
-- Auto-prunes entries older than 30 days on each flush
-- All tracking functions are synchronous buffer operations (no async overhead on hot paths)
-- Files changed: `src/background/service-worker.ts`
-- **Learnings for future iterations:**
-  - Analytics buffer pattern: synchronous writes to in-memory buffer, async flush on interval — avoids storage thrashing
-  - Workspace time tracking uses "last activation" pattern: store timestamp+wsId on each activation, calculate delta on next activation
-  - `AnalyticsDailyEntry` type is local to service-worker.ts — US-023 (analytics dashboard) will read from the `analytics` storage key directly
-  - 30-minute cap on workspace time prevents unrealistic values from browser idle/sleep
----
-
-## Iteration 22 - Fri Feb 20 13:03:06 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-22.log
----
-**US-022 is complete.** Committed as `453b6bd` (code) + `00d4a90` (PRD/progress).
-
-**US-022 Summary:**
-- Added analytics data collection to the service worker with debounced writes (30-second flush interval)
-- In-memory buffer tracks: tabs opened/closed, domain visits, workspace time
-- Data structure: `{daily: {[YYYY-MM-DD]: {opened, closed, domains: {domain: count}, workspaceMinutes: {wsId: minutes}}}}`
-- `chrome.tabs.onCreated` → increments opened count
-- `chrome.tabs.onRemoved` → increments closed count  
-- `chrome.tabs.onActivated` → extracts domain from tab URL and increments domain count; calculates minutes since last activation and adds to previous workspace's time
-- Workspace time capped at 30 minutes per activation to avoid idle inflation
-- Entries older than 30 days pruned on each flush
-- All tracking functions are synchronous buffer operations (no async overhead on hot paths)
-- Typecheck passes, lint passes
-- File changed: `src/background/service-worker.ts`
-
-There are still 8 stories with `passes: false` (US-023 through US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-023
-- Added `AnalyticsSection` component to SettingsPanel.tsx — self-contained analytics dashboard
-- 7-day tabs opened/closed bar chart: vertical bars with accent color (opened) and muted gray (closed), day labels
-- Workspace time: horizontal progress bars per workspace with emoji labels and hours/minutes display
-- Top 5 domains: numbered list sorted by visit count descending
-- Memory saved: estimated total MB from closed/suspended tabs (~50 MB per tab heuristic)
-- Focus time 7-day chart: vertical green bars showing Deep Work minutes per day (only shown if data exists)
-- Clear Analytics button with confirmation dialog: "Are you sure? This cannot be undone."
-- Shows "No data yet" when analytics and focusStats are both empty
-- All charts use pure CSS (Tailwind classes) — no charting library
-- Reads from `analytics` and `focusStats` storage keys with live `chrome.storage.onChanged` listener
-- `AnalyticsDailyEntry` and `AnalyticsData` types duplicated locally (same as service worker)
-- Files changed: `src/sidepanel/SettingsPanel.tsx`
-- **Learnings for future iterations:**
-  - `AnalyticsSection` receives `workspaces` prop to resolve workspace IDs to names/emojis
-  - Aggregation logic (all days) is computed inline — no caching needed since data is small (max 30 days)
-  - Memory estimate is a rough heuristic (closed tabs * 50 MB) — not based on actual memory measurements
-  - Focus stats chart is conditionally rendered only when there's at least one day with data > 0
----
-
-## Iteration 23 - Fri Feb 20 13:05:59 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-23.log
----
-**US-023 is complete.** Committed as `2299348` (code) + `ab5ae2b` (PRD/progress).
-
-**US-023 Summary:**
-- Added `AnalyticsSection` component to `SettingsPanel.tsx` — self-contained analytics dashboard
-- **Tabs chart:** 7 vertical bars showing opened (accent color) vs closed (muted gray) per day, labeled with day names
-- **Workspace time:** horizontal progress bars per workspace with emoji labels, hours/minutes display
-- **Top domains:** numbered list of top 5 domains sorted by visit count descending
-- **Memory saved:** estimated total MB from closed/suspended tabs (~50 MB per tab)
-- **Focus time:** 7 vertical green bars showing Deep Work minutes per day (conditional render)
-- **Clear Analytics** button with confirmation dialog: "Are you sure? This cannot be undone."
-- Shows "No data yet" when both analytics and focusStats are empty
-- All charts use pure CSS (Tailwind) — no charting library
-- Reads from `analytics` and `focusStats` storage keys with live `chrome.storage.onChanged` listener
-- Typecheck passes, lint passes
-- File changed: `src/sidepanel/SettingsPanel.tsx`
-
-There are still 7 stories with `passes: false` (US-024 through US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-024
-- Added automatic daily session snapshots in service worker
-- Created `chrome.alarms` for `arcflow-daily-snapshot` with `periodInMinutes: 1440` (24h)
-- `captureDailySnapshot()`: captures all workspaces (id, name, emoji), groups open tabs by workspace (url, title, favicon)
-- Stored in `chrome.storage.local` under `dailySnapshots` key as `{[YYYY-MM-DD]: {workspaces, tabs, createdAt}}`
-- Max 7 entries, oldest removed when exceeded (FIFO)
-- Added "Daily Snapshots" subsection to SessionManager.tsx with:
-  - "Restore yesterday's tabs" shortcut button at top (only shown if yesterday's snapshot exists)
-  - Each snapshot row: date, tab count, workspace names, "Restore" button
-  - Restore uses synthetic Session + existing onRestore callback with replace/add mode dialog
-- Added "Restore yesterday's tabs" command palette entry in commandRegistry.ts
-- Wired `restoreYesterdayTabs` callback in App.tsx: reads yesterday's snapshot from storage, opens all tabs
-- Files changed: `src/background/service-worker.ts`, `src/sidepanel/SessionManager.tsx`, `src/sidepanel/commandRegistry.ts`, `src/sidepanel/commandRegistry.test.ts`, `src/sidepanel/App.tsx`
-- **Learnings for future iterations:**
-  - `DailySnapshot` type is local to both service-worker.ts and SessionManager.tsx (duplicated, same shape)
-  - `dailySnapshots` storage key maps date strings (YYYY-MM-DD) to snapshot objects
-  - `captureDailySnapshot` reuses `getAnalyticsTodayKey()` for consistent date formatting
-  - Synthetic Session objects can be created for ad-hoc restore flows (no need to save to sessions storage)
-  - The alarm fires at 24h intervals from creation, not exactly at midnight — close enough for daily captures
----
-
-## Iteration 24 - Fri Feb 20 13:10:03 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-24.log
----
-**US-024 is complete.** Committed as `6f6af82` (code) + `7dd6b9b` (PRD/progress).
-
-**US-024 Summary:**
-- Added `chrome.alarms.create` for `arcflow-daily-snapshot` with `periodInMinutes: 1440` (24h)
-- `captureDailySnapshot()`: captures all workspaces (id, name, emoji) and groups open tabs by workspace ID (url, title, favicon)
-- Stored in `chrome.storage.local` under `dailySnapshots` as `{[YYYY-MM-DD]: {workspaces, tabs, createdAt}}`
-- Max 7 entries (FIFO), oldest removed when exceeded
-- **SessionManager.tsx**: Added "Daily Snapshots" subsection with:
-  - "Restore yesterday's tabs" shortcut button (shown only if yesterday's snapshot exists)
-  - Each snapshot row: date, tab count, workspace names, "Restore" button
-  - Restore creates synthetic Session and uses existing replace/add mode dialog
-- **Command palette**: Added "Restore yesterday's tabs" entry
-- **App.tsx**: Wired `restoreYesterdayTabs` callback that reads yesterday's snapshot and opens all tabs
-- All 8 tests pass, typecheck passes, lint passes
-- Files changed: `src/background/service-worker.ts`, `src/sidepanel/SessionManager.tsx`, `src/sidepanel/commandRegistry.ts`, `src/sidepanel/commandRegistry.test.ts`, `src/sidepanel/App.tsx`
-
-There are still 6 stories with `passes: false` (US-025 through US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-025
-- Created `src/shared/energyScore.ts` with `calculateEnergyScore(tab, activationCount, lastActiveAt)` function
-- Score = freshness (0-40) + visitFrequency (0-30) + memoryEstimate (0-30), clamped to 1-100
-- Freshness: active=40, <1h=35, <4h=25, <1d=15, <3d=5, >3d=0
-- Visit frequency: 10+=30, 5+=20, 2+=10, 1=5, 0=0
-- Memory estimate: media sites (youtube, netflix, etc.)=10, unknown/general=20, simple=30 (simple not explicitly detected, defaults to 20)
-- Added in-memory `tabActivationCounts` Map in service worker tracking activation timestamps per tab
-- `trackTabActivation(tabId)` called from `onActivated` listener to record each activation
-- `getActivationCountLast24h(tabId)` prunes timestamps older than 24h and returns count
-- `recalculateEnergyScores()` queries all tabs, builds lastActiveAt from folder items, calculates scores, stores in `tabEnergyScores` storage key
-- `chrome.alarms.create("arcflow-energy-recalc", { periodInMinutes: 5 })` registered in onInstalled
-- Alarm handler triggers `recalculateEnergyScores()` every 5 minutes
-- Cleans up activation counts for removed tabs during recalculation
-- Files changed: `src/shared/energyScore.ts` (new), `src/background/service-worker.ts`
-- **Learnings for future iterations:**
-  - `tabActivationCounts` is in-memory only (Map<number, number[]>) — lost on service worker restart, but rebuilds naturally as tabs are activated
-  - `tabEnergyScores` storage key maps `{[tabId]: number}` — used by UI components (US-026) to show energy dots
-  - Energy scores are recalculated every 5 minutes, not on every event — UI reads from storage
-  - `calculateEnergyScore` is a pure function in shared/ — can be unit tested independently
-  - Media domains list is a simple Set — can be extended as needed
----
-
-## Iteration 25 - Fri Feb 20 13:13:03 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-25.log
----
-**US-025 is complete.** Committed as `30a94d2` (code) + `8febda7` (PRD/progress).
-
-**US-025 Summary:**
-- Created `src/shared/energyScore.ts` — pure function `calculateEnergyScore(tab, activationCount, lastActiveAt)` returning a score from 1-100
-- **Freshness (0-40):** active=40, <1h=35, <4h=25, <1d=15, <3d=5, >3d=0
-- **Visit frequency (0-30):** 10+ activations in 24h=30, 5+=20, 2+=10, 1=5, 0=0
-- **Memory estimate (0-30):** media sites (youtube, netflix, etc.)=10, unknown/general=20
-- Added in-memory `tabActivationCounts` (Map) in service worker, tracking activation timestamps per tab
-- `trackTabActivation()` called from `onActivated` listener
-- `recalculateEnergyScores()` runs every 5 minutes via `arcflow-energy-recalc` alarm — queries all tabs, computes scores, stores in `tabEnergyScores` storage key
-- Cleans up activation counts for removed tabs during recalculation
-- Typecheck passes, lint passes
-- Files changed: `src/shared/energyScore.ts` (new), `src/background/service-worker.ts`
-
-There are still 5 stories with `passes: false` (US-026 through US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-026
-- Added 8px colored energy score dots to DraggableTabItem in App.tsx, rendered left of favicon
-- Dot color: green (70-100), yellow (40-69), red (1-39) with descriptive tooltips
-- Added `tabEnergyScores` state to App.tsx, loaded from chrome.storage.local on mount, reactive via storage change listener
-- Passed `energyScore` prop through both virtualized (VirtualTabRow) and non-virtualized tab rendering paths
-- Added workspace health bar to WorkspaceSwitcher.tsx: thin (h-0.5) bar below each workspace emoji button
-- `getWorkspaceAverageEnergy()` helper computes average score from tabWorkspaceMap + tabEnergyScores
-- Health bar fill width = average percentage, color follows same green/yellow/red scheme
-- WorkspaceSwitcher now accepts `tabEnergyScores` and `tabWorkspaceMap` props from App.tsx
-- Files changed: `src/sidepanel/App.tsx`, `src/sidepanel/WorkspaceSwitcher.tsx`
-- **Learnings for future iterations:**
-  - `tabEnergyScores` keys are string tab IDs (from storage), so use `String(tab.id)` when looking up
-  - Health bar uses `getWorkspaceAverageEnergy()` inline — no caching needed since workspace count is small
-  - WorkspaceSwitcher workspace buttons are now wrapped in a `<div>` container to stack the button + health bar
----
-
-## Iteration 26 - Fri Feb 20 13:18:24 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-26.log
----
-**US-026 is complete.** Committed as `86074c8` (code) + `4f62a02` (PRD/progress).
-
-**US-026 Summary:**
-- Added 8px colored energy score dots to `DraggableTabItem` in `App.tsx`, rendered left of favicon
-- Dot color: `bg-green-400` (70-100), `bg-yellow-400` (40-69), `bg-red-400` (1-39)
-- Tooltip on hover: "Energy: XX — [description]" with context-appropriate descriptions
-- Scores read from `tabEnergyScores` in `chrome.storage.local`, loaded on mount and updated reactively via storage change listener
-- Added thin health bar (`h-0.5`) below each workspace emoji button in `WorkspaceSwitcher.tsx`
-- Bar color based on average energy score of tabs in that workspace, with `bg-gray-700` background
-- Both virtualized and non-virtualized tab rendering paths pass the energy score prop
-- All 8 tests pass, typecheck passes, lint passes
-- Files changed: `src/sidepanel/App.tsx`, `src/sidepanel/WorkspaceSwitcher.tsx`
-
-There are still 4 stories with `passes: false` (US-027 through US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-027
-- Added workspace export functionality via JSON file download
-- Context menu on workspace emoji: "Export Workspace" option in WorkspaceSwitcher.tsx
-- Command palette entry: "Export current workspace" in commandRegistry.ts
-- Export JSON includes: version '2.0', type 'arcflow-workspace', name, emoji, accentColor, pinnedApps, folders (with items), notes
-- Does NOT include: open tab states, openRouterApiKey, settings, tabWorkspaceMap
-- File downloaded as `arcflow-workspace-[name]-[YYYY-MM-DD].json` via `URL.createObjectURL` + anchor click
-- Export logic duplicated in both WorkspaceSwitcher (for context menu) and App.tsx (for command palette) — kept simple since it's a small pure function
-- Files changed: `src/sidepanel/WorkspaceSwitcher.tsx`, `src/sidepanel/App.tsx`, `src/sidepanel/commandRegistry.ts`, `src/sidepanel/commandRegistry.test.ts`
-- **Learnings for future iterations:**
-  - `handleExportWorkspace` takes a `Workspace` object directly — all needed data (pinnedApps, folders, notes) is already on the Workspace type
-  - File download pattern: `URL.createObjectURL(blob)` + temporary anchor + click + `URL.revokeObjectURL(url)` — works in Chrome extension sidepanel
-  - Workspace name is sanitized for filename via `toLowerCase().replace(/[^a-z0-9]+/g, "-")`
-  - US-028 (import) will need to validate the JSON structure and create a new workspace from it
----
-
-## Iteration 27 - Fri Feb 20 13:21:40 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-27.log
----
-**US-027 is complete.** Committed as `6bf878f` (code) + `b7d9db2` (PRD/progress).
-
-**US-027 Summary:**
-- Added "Export Workspace" context menu item on workspace emoji buttons in `WorkspaceSwitcher.tsx`
-- Added "Export current workspace" command palette entry in `commandRegistry.ts`
-- Export JSON includes: `version: "2.0"`, `type: "arcflow-workspace"`, workspace name, emoji, accentColor, pinnedApps, folders (with items), notes
-- Does NOT include: open tab states, openRouterApiKey, settings, tabWorkspaceMap
-- File downloaded as `arcflow-workspace-[name]-[YYYY-MM-DD].json` via `URL.createObjectURL` + anchor click
-- All 8 tests pass, typecheck passes
-- Files changed: `src/sidepanel/WorkspaceSwitcher.tsx`, `src/sidepanel/App.tsx`, `src/sidepanel/commandRegistry.ts`, `src/sidepanel/commandRegistry.test.ts`
-
-There are still 3 stories with `passes: false` (US-028, US-029, US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-028
-- Added workspace import functionality via JSON file picker
-- Created `ImportWorkspaceSection` component in SettingsPanel.tsx: file input accepting .json, validates version/type, creates workspace with imported data
-- Validates JSON: `version === "2.0"`, `type === "arcflow-workspace"`, required `name` field
-- If workspace name already exists, appends " (imported)" to avoid collision
-- Creates new workspace with imported pinnedApps (new IDs), folders (new IDs with parentId remapping), and notes
-- Folder items also get new IDs; folder parentId references remapped via folderIdMap
-- Success toast: "Workspace [emoji] [name] imported with X pinned apps and Y folders"
-- Invalid file shows error: "Invalid workspace file"
-- User switched to newly imported workspace after import
-- Command palette entry: "Import workspace" triggers file picker via programmatic `<input>` element
-- Added `onImportWorkspace` callback to commandRegistry.ts
-- Added `importWorkspace` handler in App.tsx using `document.createElement("input")` + click pattern
-- Files changed: `src/sidepanel/SettingsPanel.tsx`, `src/sidepanel/App.tsx`, `src/sidepanel/commandRegistry.ts`, `src/sidepanel/commandRegistry.test.ts`
-- **Learnings for future iterations:**
-  - File picker from command palette uses programmatic `<input type="file">` creation + `.click()` — same pattern works for any command-palette-triggered file selection
-  - `ImportWorkspaceSection` is self-contained in SettingsPanel (reads/writes storage directly, no props needed)
-  - Folder ID remapping is critical for import — old IDs must map to new UUIDs, and parentId references must also be updated
-  - Import duplicates the workspace creation + update pattern: `createWorkspace(name)` then `updateWorkspace(id, data)` to apply all imported fields
----
-
-## Iteration 28 - Fri Feb 20 13:26:34 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-28.log
----
-**US-028 is complete.** Committed as `68fbf21` (code) + `e71990d` (PRD/progress).
-
-**US-028 Summary:**
-- Added `ImportWorkspaceSection` component to `SettingsPanel.tsx` with file input accepting `.json`
-- Validates JSON structure: `version === "2.0"`, `type === "arcflow-workspace"`, required `name` field
-- If workspace name already exists, appends " (imported)" to avoid collision
-- Creates new workspace with imported pinnedApps, folders (with items), and notes — all IDs remapped to fresh UUIDs
-- Success toast: "Workspace [emoji] [name] imported with X pinned apps and Y folders"
-- Invalid file shows error toast: "Invalid workspace file"
-- User switched to newly imported workspace after import
-- Command palette entry: "Import workspace" (triggers file picker)
-- All 8 tests pass, typecheck passes
-- Files changed: `src/sidepanel/SettingsPanel.tsx`, `src/sidepanel/App.tsx`, `src/sidepanel/commandRegistry.ts`, `src/sidepanel/commandRegistry.test.ts`
-
-There are still 2 stories with `passes: false` (US-029, US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-029
-- Added contextual snippets storage and content script for saving text snippets from any webpage
-- Added `Snippet` type to `shared/types.ts` with id, text, annotation, sourceUrl, sourceTitle, savedAt fields
-- Added `SAVE_SNIPPET_MENU_ID` context menu item "Save Snippet to ArcFlow" with `contexts: ['selection']` in service worker
-- Added `handleSaveSnippet()` in service worker: sends `ARCFLOW_CAPTURE_SNIPPET` message to content script for annotation popup, saves to `snippets_[workspaceId]` storage key
-- Content script handles `ARCFLOW_CAPTURE_SNIPPET` by reusing existing `createOverlayPopup` — Cancel dismisses without saving, Save stores with annotation
-- Snippets stored as `Snippet[]` in chrome.storage.local under `snippets_[activeWorkspaceId]`
-- Max 50 entries per workspace; on exceed, oldest removed and warning logged
-- Enter key in annotation field triggers save, Escape closes popup without saving
-- Added `snippet-saved` message type to `ServiceWorkerMessage` union — sidepanel shows toast on receipt
-- Files changed: `src/shared/types.ts`, `src/background/service-worker.ts`, `src/content/capture.ts`, `src/sidepanel/App.tsx`
-- **Learnings for future iterations:**
-  - Snippet storage is per-workspace using dynamic key `snippets_[wsId]` — SnippetsSection (US-030) reads from this key
-  - Content script `createOverlayPopup` is reusable for different capture flows — just handle Save/Cancel differently per message type
-  - `chrome.storage.local.get()` returns `Record<string, any>` — cast result explicitly (e.g., `as Snippet[] | undefined`) to satisfy TypeScript
----
-
-## Iteration 29 - Fri Feb 20 13:30:23 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-29.log
----
-**US-029 is complete.** Committed as `10091cf` (code) + `1a2c17a` (PRD/progress).
-
-**US-029 Summary:**
-- Added `Snippet` type to `shared/types.ts` with `id`, `text`, `annotation`, `sourceUrl`, `sourceTitle`, `savedAt` fields
-- Registered "Save Snippet to ArcFlow" context menu item with `contexts: ['selection']` in the service worker
-- Added `handleSaveSnippet()` in service worker: sends `ARCFLOW_CAPTURE_SNIPPET` message to content script for annotation popup, saves to `snippets_[workspaceId]` in chrome.storage.local
-- Content script handles `ARCFLOW_CAPTURE_SNIPPET` by reusing existing `createOverlayPopup` — Cancel dismisses without saving, Save stores with optional annotation
-- Max 50 snippets per workspace (FIFO), oldest removed when exceeded
-- Enter key in annotation triggers save, Escape closes without saving
-- Added `snippet-saved` message type — sidepanel shows toast on receipt
-- All 8 tests pass, typecheck passes, lint passes
-- Files changed: `src/shared/types.ts`, `src/background/service-worker.ts`, `src/content/capture.ts`, `src/sidepanel/App.tsx`
-
-There is still 1 story with `passes: false` (US-030), so more iterations are needed.
----
-
-## 2026-02-20 - US-030
-- Created `SnippetsSection.tsx` component following the collapsible section pattern (like RecentlyClosedSection)
-- Section placed between Quick Notes and Workspace Switcher (footer) in App.tsx
-- Header: 'Snippets (N)' with count badge and collapse toggle chevron + text icon
-- Each snippet row: first line of text (truncated 80 chars), source domain favicon (via Google favicon API), relative time
-- Click row: expands inline to show full text, annotation (if any, prefixed with pencil emoji), and clickable source link
-- Source link opens original page in new tab via `chrome.tabs.create`
-- Delete (X) button on each snippet (appears on hover), instant delete (no confirmation)
-- 'Clear all' button at section bottom with inline confirmation dialog ("Clear all snippets? Yes / No")
-- Section hidden when no snippets exist for current workspace
-- Reads from `snippets_[currentWorkspaceId]` in chrome.storage.local, listens for storage changes
-- Workspace change resets expanded/confirmClear state via derived state pattern (avoids React lint errors)
-- Files changed: `src/sidepanel/SnippetsSection.tsx` (new), `src/sidepanel/App.tsx`
-- **Learnings for future iterations:**
-  - React 19 strict lint doesn't allow `setState` synchronously in `useEffect` — use derived state pattern (compare prop vs tracked state in render body) instead
-  - Google favicon API (`https://www.google.com/s2/favicons?domain=...&sz=16`) is a reliable fallback for favicons when you only have a URL
-  - Per-workspace storage keys (`snippets_[wsId]`) require re-reading storage when workspace changes — track storageKey in useEffect deps
----
-
-## Iteration 30 - Fri Feb 20 13:33:48 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260220-120129/iter-30.log
----
-<promise>COMPLETE</promise>
-
-All 30 user stories are complete and passing. Here's a summary of US-030:
-
-**US-030: Add snippets sidebar section**
-- Created `src/sidepanel/SnippetsSection.tsx` — new collapsible section following the existing pattern
-- **Header:** "Snippets (N)" with count badge and collapse toggle
-- **Each snippet row:** first line of text (truncated 80 chars), source domain favicon, relative time
-- **Click to expand:** shows full text, annotation (with pencil emoji), and clickable source link
-- **Delete (X):** per-snippet button, appears on hover, instant delete
-- **Clear all:** at section bottom with inline confirmation dialog
-- **Section hidden** when no snippets exist for the current workspace
-- **Reads from** `snippets_[currentWorkspaceId]` with live storage change listener
-- Placed between Quick Notes and Workspace Switcher in App.tsx
-- Committed as `85d486a` (code) + `e687e70` (PRD/progress)
-- All 8 tests pass, typecheck passes, lint passes
+  - useSwipeGesture handles both touch and trackpad wheel events — cooldown must apply to both paths via handleSwipe
+  - Wheel events use accumulation + timeout pattern; touch events fire directly on touchend
+  - The cooldown is set before firing the callback to ensure it's active even if the callback triggers synchronous re-renders
 ---
