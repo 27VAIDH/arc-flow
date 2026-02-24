@@ -518,3 +518,34 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - Command registry pattern: add handler param + type signature + test defaultHandlers simultaneously
   - Section placement in App.tsx: after TimeMachineSection, before RecentlyClosedSection
 ---
+
+## Iteration 1 - Tue Feb 24 21:46:37 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-214252/iter-1.log
+---
+**US-A-04 is complete.** There are still stories with `passes: false` remaining (US-AP-04 is next at priority 17).
+
+**US-A-04 Summary:**
+- Created `src/sidepanel/AnnotationsSection.tsx` — collapsible sidebar section with:
+  - Annotations grouped by page URL, each group showing page title + annotation count + last annotated date
+  - Expand group to see individual annotations with color indicator dot + text snippet + optional comment
+  - Delete button per annotation (visible on hover)
+  - Empty state message when no annotations exist
+  - Live updates via `chrome.storage.onChanged` listener on `annotations` key
+- Registered "Annotations" command in `commandRegistry.ts` with scroll-to-section action
+- Updated test file with `onAnnotations` handler
+- Section rendered in `App.tsx` between Time Machine and Recently Closed sections
+- Typecheck and tests pass
+---
+
+## 2026-02-24 - US-AP-04
+- Implemented Autopilot Settings UI in SettingsPanel.tsx
+- Files modified: src/sidepanel/SettingsPanel.tsx
+- **Learnings for future iterations:**
+  - Autopilot rules stored in chrome.storage.local under key `autopilotRules` — loaded/saved independently from Settings
+  - AutopilotRulesSection manages its own state for rules (separate from Settings state) with chrome.storage.onChanged listener
+  - Rule editor uses local component state (name, conditions, targetWorkspaceId, priority) — only persisted on Save
+  - Condition type change resets value to empty string to avoid stale format mismatches
+  - CONDITION_TYPE_OPTIONS and PRIORITY_OPTIONS defined as module-level constants for reuse
+  - Target workspace dropdown populated from workspaces prop — same pattern as RoutingRulesSection
+---
