@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Settings, Workspace, RoutingRule } from "../shared/types";
+import type { Settings, Workspace, RoutingRule, AutopilotRule, AutopilotCondition } from "../shared/types";
 import {
   getSettings,
   updateSettings,
@@ -619,6 +619,379 @@ function RoutingRulesSection({
   );
 }
 
+const CONDITION_TYPE_OPTIONS = [
+  { label: "Time Range", value: "time" },
+  { label: "Domain Pattern", value: "domain" },
+  { label: "Display Count", value: "displayCount" },
+] as const;
+
+const PRIORITY_OPTIONS = [
+  { label: "1 (Low)", value: 1 },
+  { label: "2", value: 2 },
+  { label: "3 (Medium)", value: 3 },
+  { label: "4", value: 4 },
+  { label: "5 (High)", value: 5 },
+] as const;
+
+function AutopilotRulesSection({
+  settings,
+  workspaces,
+  onUpdate,
+}: {
+  settings: Settings;
+  workspaces: Workspace[];
+  onUpdate: (data: Partial<Settings>) => void;
+}) {
+  const [rules, setRules] = useState<AutopilotRule[]>([]);
+  const [editingRule, setEditingRule] = useState<AutopilotRule | null>(null);
+
+  useEffect(() => {
+    chrome.storage.local.get(["autopilotRules"], (result) => {
+      setRules((result.autopilotRules as AutopilotRule[]) ?? []);
+    });
+    const handleChange = (changes: { [key: string]: chrome.storage.StorageChange }, area: string) => {
+      if (area === "local" && changes.autopilotRules) {
+        setRules((changes.autopilotRules.newValue as AutopilotRule[]) ?? []);
+      }
+    };
+    chrome.storage.onChanged.addListener(handleChange);
+    return () => chrome.storage.onChanged.removeListener(handleChange);
+  }, []);
+
+  const saveRules = (updated: AutopilotRule[]) => {
+    setRules(updated);
+    chrome.storage.local.set({ autopilotRules: updated });
+  };
+
+  const handleDeleteRule = (id: string) => {
+    saveRules(rules.filter((r) => r.id !== id));
+  };
+
+  const handleToggleRule = (id: string) => {
+    saveRules(rules.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)));
+  };
+
+  const handleSaveRule = (rule: AutopilotRule) => {
+    const existing = rules.find((r) => r.id === rule.id);
+    if (existing) {
+      saveRules(rules.map((r) => (r.id === rule.id ? rule : r)));
+    } else {
+      saveRules([...rules, rule]);
+    }
+    setEditingRule(null);
+  };
+
+  const handleStartAdd = () => {
+    setEditingRule({
+      id: crypto.randomUUID(),
+      name: "",
+      enabled: true,
+      conditions: [],
+      targetWorkspaceId: workspaces[0]?.id ?? "",
+      priority: 3,
+      createdAt: Date.now(),
+    });
+  };
+
+  return (
+    <section>
+      <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
+        Autopilot
+      </h3>
+      <div className="space-y-3">
+        {/* Enable toggle */}
+        <div className="flex items-center justify-between gap-4">
+          <label className="text-sm text-gray-700 dark:text-arc-text-primary shrink-0">
+            Enable Autopilot
+          </label>
+          <button
+            onClick={() => onUpdate({ autopilotEnabled: !settings.autopilotEnabled })}
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+              settings.autopilotEnabled
+                ? "bg-arc-accent"
+                : "bg-gray-300 dark:bg-arc-surface-hover"
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                settings.autopilotEnabled ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+
+        {/* Notification toggle */}
+        <div className="flex items-center justify-between gap-4">
+          <label className="text-sm text-gray-700 dark:text-arc-text-primary shrink-0">
+            Show notifications
+          </label>
+          <button
+            onClick={() => onUpdate({ autopilotNotify: !settings.autopilotNotify })}
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+              settings.autopilotNotify
+                ? "bg-arc-accent"
+                : "bg-gray-300 dark:bg-arc-surface-hover"
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                settings.autopilotNotify ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+
+        <p className="text-xs text-gray-500 dark:text-arc-text-secondary">
+          Automatically switch workspaces based on time, domain, or display rules.
+        </p>
+
+        {/* Rules list */}
+        {rules.length > 0 && (
+          <div className="space-y-2">
+            {rules.map((rule) => (
+              <div
+                key={rule.id}
+                className={`p-2 rounded-lg border border-gray-200 dark:border-arc-border bg-white/50 dark:bg-arc-surface/50 ${
+                  !rule.enabled ? "opacity-50" : ""
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-700 dark:text-arc-text-primary truncate flex-1 min-w-0 font-medium">
+                    {rule.name || "Untitled Rule"}
+                  </span>
+                  <span className="text-[10px] text-gray-400 dark:text-arc-text-secondary shrink-0">
+                    P{rule.priority}
+                  </span>
+                  {/* Toggle */}
+                  <button
+                    onClick={() => handleToggleRule(rule.id)}
+                    className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                      rule.enabled
+                        ? "bg-arc-accent"
+                        : "bg-gray-300 dark:bg-arc-surface-hover"
+                    }`}
+                    aria-label={rule.enabled ? "Disable rule" : "Enable rule"}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-3 w-3 rounded-full bg-white shadow transition-transform ${
+                        rule.enabled ? "translate-x-3" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                  {/* Edit */}
+                  <button
+                    onClick={() => setEditingRule({ ...rule })}
+                    className="text-xs text-arc-accent dark:text-arc-accent-hover hover:text-indigo-700 dark:hover:text-indigo-300"
+                  >
+                    Edit
+                  </button>
+                  {/* Delete */}
+                  <button
+                    onClick={() => handleDeleteRule(rule.id)}
+                    className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-red-500 dark:hover:text-red-400 shrink-0"
+                    aria-label="Delete rule"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+                      <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
+                    </svg>
+                  </button>
+                </div>
+                {/* Conditions summary */}
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {rule.conditions.map((c, i) => (
+                    <span
+                      key={i}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary"
+                    >
+                      {c.type === "time" ? `Time: ${c.value}` : c.type === "domain" ? `Domain: ${c.value}` : `Displays: ${c.value}`}
+                    </span>
+                  ))}
+                  {rule.conditions.length === 0 && (
+                    <span className="text-[10px] text-gray-400 dark:text-arc-text-secondary italic">No conditions</span>
+                  )}
+                </div>
+                <div className="mt-1 text-[10px] text-gray-400 dark:text-arc-text-secondary">
+                  Target: {workspaces.find((w) => w.id === rule.targetWorkspaceId)
+                    ? `${workspaces.find((w) => w.id === rule.targetWorkspaceId)!.emoji} ${workspaces.find((w) => w.id === rule.targetWorkspaceId)!.name}`
+                    : "Unknown"}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Rule editor */}
+        {editingRule && (
+          <AutopilotRuleEditor
+            rule={editingRule}
+            workspaces={workspaces}
+            onSave={handleSaveRule}
+            onCancel={() => setEditingRule(null)}
+          />
+        )}
+
+        {/* Add button */}
+        {!editingRule && (
+          <button
+            onClick={handleStartAdd}
+            className="text-sm text-arc-accent dark:text-arc-accent-hover hover:text-indigo-700 dark:hover:text-indigo-300"
+          >
+            + Add Rule
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function AutopilotRuleEditor({
+  rule,
+  workspaces,
+  onSave,
+  onCancel,
+}: {
+  rule: AutopilotRule;
+  workspaces: Workspace[];
+  onSave: (rule: AutopilotRule) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(rule.name);
+  const [conditions, setConditions] = useState<AutopilotCondition[]>([...rule.conditions]);
+  const [targetWorkspaceId, setTargetWorkspaceId] = useState(rule.targetWorkspaceId);
+  const [priority, setPriority] = useState(rule.priority);
+
+  const handleAddCondition = () => {
+    setConditions([...conditions, { type: "domain", value: "" }]);
+  };
+
+  const handleRemoveCondition = (index: number) => {
+    setConditions(conditions.filter((_, i) => i !== index));
+  };
+
+  const handleConditionChange = (index: number, field: "type" | "value", val: string) => {
+    const updated = [...conditions];
+    if (field === "type") {
+      updated[index] = { ...updated[index], type: val as AutopilotCondition["type"], value: "" };
+    } else {
+      updated[index] = { ...updated[index], value: val };
+    }
+    setConditions(updated);
+  };
+
+  const handleSave = () => {
+    if (!name.trim()) return;
+    onSave({
+      ...rule,
+      name: name.trim(),
+      conditions,
+      targetWorkspaceId,
+      priority,
+    });
+  };
+
+  return (
+    <div className="space-y-2 p-2 rounded-lg border border-gray-200 dark:border-arc-border bg-white/50 dark:bg-arc-surface/50">
+      {/* Name */}
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Rule name"
+        className="text-sm bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 w-full"
+        autoFocus
+      />
+
+      {/* Conditions */}
+      <div className="space-y-2">
+        <label className="text-xs text-gray-500 dark:text-arc-text-secondary">Conditions</label>
+        {conditions.map((cond, i) => (
+          <div key={i} className="flex items-center gap-1">
+            <select
+              value={cond.type}
+              onChange={(e) => handleConditionChange(i, "type", e.target.value)}
+              className="text-xs bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-1.5 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 w-28 shrink-0"
+            >
+              {CONDITION_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={cond.value}
+              onChange={(e) => handleConditionChange(i, "value", e.target.value)}
+              placeholder={
+                cond.type === "time" ? "09:00-17:00" :
+                cond.type === "domain" ? "*.github.com" : "2"
+              }
+              className="text-xs bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 flex-1 min-w-0"
+            />
+            <button
+              onClick={() => handleRemoveCondition(i)}
+              className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-red-500 dark:hover:text-red-400 shrink-0"
+              aria-label="Remove condition"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
+              </svg>
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={handleAddCondition}
+          className="text-xs text-arc-accent dark:text-arc-accent-hover hover:text-indigo-700 dark:hover:text-indigo-300"
+        >
+          + Add Condition
+        </button>
+      </div>
+
+      {/* Target workspace */}
+      <div className="flex items-center justify-between gap-2">
+        <label className="text-xs text-gray-500 dark:text-arc-text-secondary shrink-0">Target workspace</label>
+        <select
+          value={targetWorkspaceId}
+          onChange={(e) => setTargetWorkspaceId(e.target.value)}
+          className="text-xs bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 flex-1 min-w-0"
+        >
+          {workspaces.map((ws) => (
+            <option key={ws.id} value={ws.id}>{ws.emoji} {ws.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Priority */}
+      <div className="flex items-center justify-between gap-2">
+        <label className="text-xs text-gray-500 dark:text-arc-text-secondary shrink-0">Priority</label>
+        <select
+          value={priority}
+          onChange={(e) => setPriority(parseInt(e.target.value, 10))}
+          className="text-xs bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 w-28"
+        >
+          {PRIORITY_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          onClick={handleSave}
+          disabled={!name.trim()}
+          className="text-sm text-arc-accent dark:text-arc-accent-hover hover:text-indigo-700 dark:hover:text-indigo-300 disabled:opacity-50"
+        >
+          Save
+        </button>
+        <button
+          onClick={onCancel}
+          className="text-sm text-gray-500 dark:text-arc-text-secondary hover:text-gray-700 dark:hover:text-gray-300"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ImportWorkspaceSection() {
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -1188,6 +1561,13 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         {/* Auto-routing */}
         <RoutingRulesSection
+          settings={settings}
+          workspaces={workspaces}
+          onUpdate={handleUpdate}
+        />
+
+        {/* Autopilot */}
+        <AutopilotRulesSection
           settings={settings}
           workspaces={workspaces}
           onUpdate={handleUpdate}
