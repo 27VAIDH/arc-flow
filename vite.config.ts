@@ -37,6 +37,10 @@ export default defineConfig({
           __dirname,
           "src/content/capture.ts"
         ),
+        "content-research": resolve(
+          __dirname,
+          "src/content/research.ts"
+        ),
       },
       output: {
         entryFileNames: "[name].js",

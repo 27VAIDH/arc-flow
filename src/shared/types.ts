@@ -89,7 +89,8 @@ export type ServiceWorkerMessage =
       existingWorkspaceName: string;
     }
   | { type: "notes-saved-from-page"; workspaceName: string }
-  | { type: "snippet-saved"; workspaceName: string };
+  | { type: "snippet-saved"; workspaceName: string }
+  | { type: "PAGE_TEXT_CAPTURED"; data: PageCapture };
 
 // Messages sent from side panel to service worker
 export type SidePanelMessage =
@@ -109,7 +110,8 @@ export type SidePanelMessage =
       enabled: boolean;
       redirectRules: { blockedPattern: string; redirectUrl: string }[];
     }
-  | { type: "GET_TAB_INFO"; tabId: number };
+  | { type: "GET_TAB_INFO"; tabId: number }
+  | { type: "CAPTURE_PAGE_TEXT" };
 
 export interface Session {
   id: string;
@@ -236,6 +238,23 @@ export interface GraphEdge {
 export interface GraphData {
   nodes: GraphNode[];
   edges: GraphEdge[];
+}
+
+export interface PageCapture {
+  id: string;
+  url: string;
+  title: string;
+  text: string;
+  sessionId: string;
+  capturedAt: number;
+  summary?: string;
+}
+
+export interface ResearchSession {
+  id: string;
+  name: string;
+  pageIds: string[];
+  createdAt: number;
 }
 
 export interface Settings {

@@ -59,6 +59,11 @@
       "matches": ["<all_urls>"],
       "js": ["content-capture.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-research.js"],
+      "run_at": "document_idle"
     }
   ]
 }
