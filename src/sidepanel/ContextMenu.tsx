@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import Popover from "./Popover";
 
 export interface ContextMenuItem {
   label: string;
@@ -18,49 +19,16 @@ export default function ContextMenu({
   items,
   onClose,
 }: ContextMenuProps) {
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [onClose]);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Focus first item on mount
   useEffect(() => {
-    const firstBtn = menuRef.current?.querySelector("button");
+    const firstBtn = containerRef.current?.querySelector("button");
     firstBtn?.focus();
   }, []);
 
-  // Adjust position to stay within viewport
-  useEffect(() => {
-    if (!menuRef.current) return;
-    const rect = menuRef.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-
-    if (rect.right > vw) {
-      menuRef.current.style.left = `${vw - rect.width - 4}px`;
-    }
-    if (rect.bottom > vh) {
-      menuRef.current.style.top = `${vh - rect.height - 4}px`;
-    }
-  }, [x, y]);
-
   const handleMenuKeyDown = (e: React.KeyboardEvent) => {
-    const buttons = menuRef.current?.querySelectorAll("button");
+    const buttons = containerRef.current?.querySelectorAll("button");
     if (!buttons || buttons.length === 0) return;
     const focused = document.activeElement as HTMLElement;
     const idx = Array.from(buttons).indexOf(focused as HTMLButtonElement);
@@ -83,27 +51,27 @@ export default function ContextMenu({
   };
 
   return (
-    <div
-      ref={menuRef}
-      role="menu"
-      aria-label="Context menu"
-      className="fixed z-50 min-w-[160px] py-1 rounded-xl shadow-2xl bg-white dark:bg-[#1e1e2a] backdrop-frosted border border-gray-200 dark:border-white/10 animate-slide-up"
-      style={{ left: x, top: y }}
-      onKeyDown={handleMenuKeyDown}
-    >
-      {items.map((item) => (
-        <button
-          key={item.label}
-          role="menuitem"
-          onClick={() => {
-            item.onClick();
-            onClose();
-          }}
-          className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-arc-text-primary hover:bg-gray-100 dark:hover:bg-arc-surface-hover focus:outline-none focus:bg-gray-100 dark:focus:bg-arc-surface-hover transition-colors duration-200"
-        >
-          {item.label}
-        </button>
-      ))}
-    </div>
+    <Popover x={x} y={y} onClose={onClose}>
+      <div
+        ref={containerRef}
+        role="menu"
+        aria-label="Context menu"
+        onKeyDown={handleMenuKeyDown}
+      >
+        {items.map((item) => (
+          <button
+            key={item.label}
+            role="menuitem"
+            onClick={() => {
+              item.onClick();
+              onClose();
+            }}
+            className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-arc-text-primary hover:bg-gray-100 dark:hover:bg-arc-surface-hover focus:outline-none focus:bg-gray-100 dark:focus:bg-arc-surface-hover transition-colors duration-200"
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </Popover>
   );
 }

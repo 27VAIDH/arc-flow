@@ -1,21 +1,50 @@
 import type { TabInfo } from "./types";
 
+export interface FolderContext {
+  name: string;
+  itemCount: number;
+}
+
+export interface WorkspaceContext {
+  name: string;
+}
+
 interface AIGroupSuggestion {
   name: string;
   tabIndices: number[];
+  target: "new" | "existing";
+  existingFolderName?: string;
+  suggestedWorkspace?: string;
 }
 
-interface AIGroupingResult {
-  groups: { name: string; tabs: TabInfo[] }[];
+export interface AIGroupingResult {
+  groups: {
+    name: string;
+    tabs: TabInfo[];
+    target: "new" | "existing";
+    existingFolderName?: string;
+    suggestedWorkspace?: string;
+  }[];
   source: "ai" | "fallback";
 }
 
 async function callOpenRouterAPI(
   apiKey: string,
-  tabs: { title: string; url: string }[]
+  tabs: { title: string; url: string }[],
+  folders: FolderContext[],
+  workspaces: WorkspaceContext[]
 ): Promise<AIGroupSuggestion[]> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  const folderContext =
+    folders.length > 0
+      ? `\n\nExisting folders:\n${JSON.stringify(folders)}`
+      : "";
+  const workspaceContext =
+    workspaces.length > 0
+      ? `\n\nWorkspaces:\n${JSON.stringify(workspaces)}`
+      : "";
 
   try {
     const response = await fetch(
@@ -33,7 +62,7 @@ async function callOpenRouterAPI(
           messages: [
             {
               role: "user",
-              content: `Group these browser tabs into logical folders. Return ONLY a JSON array where each element has "name" (folder name) and "tabIndices" (array of 0-based tab indices). Group by topic/purpose, not just domain. Minimum 2 tabs per group. Ungrouped tabs should be omitted.\n\nTabs:\n${JSON.stringify(tabs)}`,
+              content: `Group these browser tabs into logical folders. Return ONLY a JSON array where each element has "name" (folder name), "tabIndices" (array of 0-based tab indices), "target" ("new" or "existing"), optionally "existingFolderName" (if target is "existing"), and optionally "suggestedWorkspace" (workspace name the group belongs in). Group by topic/purpose, not just domain. Minimum 2 tabs per group. Ungrouped tabs should be omitted. If tabs fit an existing folder, reference it by name instead of creating a new one. Also suggest workspace moves if a tab clearly belongs elsewhere.${folderContext}${workspaceContext}\n\nTabs:\n${JSON.stringify(tabs)}`,
             },
           ],
         }),
@@ -64,10 +93,10 @@ function parseAIResponse(text: string): AIGroupSuggestion[] {
   const parsed = JSON.parse(jsonMatch[0]);
   if (!Array.isArray(parsed)) throw new Error("AI response is not an array");
 
-  // Validate structure
+  // Validate structure and normalize new fields
   return parsed
     .filter(
-      (item: unknown): item is { name: string; tabIndices: number[] } =>
+      (item: unknown): item is Record<string, unknown> =>
         typeof item === "object" &&
         item !== null &&
         typeof (item as Record<string, unknown>).name === "string" &&
@@ -76,12 +105,32 @@ function parseAIResponse(text: string): AIGroupSuggestion[] {
           (i) => typeof i === "number"
         )
     )
-    .filter((item) => item.tabIndices.length >= 2);
+    .filter((item) => (item.tabIndices as number[]).length >= 2)
+    .map((item) => {
+      const target =
+        item.target === "new" || item.target === "existing"
+          ? item.target
+          : "new";
+      return {
+        name: item.name as string,
+        tabIndices: item.tabIndices as number[],
+        target,
+        ...(target === "existing" &&
+          typeof item.existingFolderName === "string" && {
+            existingFolderName: item.existingFolderName,
+          }),
+        ...(typeof item.suggestedWorkspace === "string" && {
+          suggestedWorkspace: item.suggestedWorkspace,
+        }),
+      };
+    });
 }
 
 export async function getAIGroupingSuggestions(
   tabs: TabInfo[],
-  openRouterApiKey: string
+  openRouterApiKey: string,
+  folders: FolderContext[] = [],
+  workspaces: WorkspaceContext[] = []
 ): Promise<AIGroupingResult> {
   if (!openRouterApiKey) {
     return { groups: [], source: "fallback" };
@@ -90,7 +139,12 @@ export async function getAIGroupingSuggestions(
   const tabPayload = tabs.map((t) => ({ title: t.title, url: t.url }));
 
   try {
-    const suggestions = await callOpenRouterAPI(openRouterApiKey, tabPayload);
+    const suggestions = await callOpenRouterAPI(
+      openRouterApiKey,
+      tabPayload,
+      folders,
+      workspaces
+    );
 
     // Convert indices to actual tab objects
     const groups = suggestions
@@ -99,6 +153,9 @@ export async function getAIGroupingSuggestions(
         tabs: s.tabIndices
           .filter((i) => i >= 0 && i < tabs.length)
           .map((i) => tabs[i]),
+        target: s.target,
+        existingFolderName: s.existingFolderName,
+        suggestedWorkspace: s.suggestedWorkspace,
       }))
       .filter((g) => g.tabs.length >= 2);
 

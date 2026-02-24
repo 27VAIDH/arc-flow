@@ -3,24 +3,12 @@ import type { PinnedApp, TabInfo } from "../shared/types";
 import {
   removePinnedApp,
   updatePinnedApp,
-  reorderPinnedApps,
 } from "../shared/storage";
 import type { ContextMenuItem } from "./ContextMenu";
-import {
-  DndContext,
-  closestCenter,
-  DragOverlay,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core";
 import {
   SortableContext,
   horizontalListSortingStrategy,
   useSortable,
-  arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
@@ -66,7 +54,7 @@ function SortablePinnedApp({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: app.id });
+  } = useSortable({ id: `pinned:${app.id}` });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -120,9 +108,6 @@ export default function PinnedAppsRow({
   pinnedApps,
   onContextMenu,
 }: PinnedAppsRowProps) {
-  const [localPinnedApps, setLocalPinnedApps] =
-    useState<PinnedApp[]>(pinnedApps);
-  const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [editingApp, setEditingApp] = useState<{
     id: string;
     field: "title" | "url";
@@ -131,19 +116,6 @@ export default function PinnedAppsRow({
   const editInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 5,
-      },
-    })
-  );
-
-  // Sync local state with prop changes
-  useEffect(() => {
-    setLocalPinnedApps(pinnedApps);
-  }, [pinnedApps]);
-
   useEffect(() => {
     if (editingApp && editInputRef.current) {
       editInputRef.current.focus();
@@ -151,7 +123,7 @@ export default function PinnedAppsRow({
     }
   }, [editingApp]);
 
-  if (localPinnedApps.length === 0 && !editingApp) return null;
+  if (pinnedApps.length === 0 && !editingApp) return null;
 
   // Build set of origins that have open tabs
   const activeOrigins = new Set(
@@ -230,28 +202,6 @@ export default function PinnedAppsRow({
     }
   };
 
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveDragId(event.active.id as string);
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    setActiveDragId(null);
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const oldIndex = localPinnedApps.findIndex((a) => a.id === active.id);
-    const newIndex = localPinnedApps.findIndex((a) => a.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-
-    const reordered = arrayMove(localPinnedApps, oldIndex, newIndex);
-    setLocalPinnedApps(reordered);
-    reorderPinnedApps(reordered.map((a) => a.id));
-  };
-
-  const activeDragApp = activeDragId
-    ? localPinnedApps.find((a) => a.id === activeDragId)
-    : null;
-
   return (
     <nav aria-label="Pinned apps" className="px-3 py-2 pb-2">
       <span className="text-[11px] text-gray-400 dark:text-arc-text-secondary font-medium px-1 mb-1 block">
@@ -275,61 +225,33 @@ export default function PinnedAppsRow({
           />
         </div>
       )}
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        onDragCancel={() => setActiveDragId(null)}
+      <SortableContext
+        items={pinnedApps.map((a) => `pinned:${a.id}`)}
+        strategy={horizontalListSortingStrategy}
       >
-        <SortableContext
-          items={localPinnedApps.map((a) => a.id)}
-          strategy={horizontalListSortingStrategy}
+        <div
+          ref={scrollRef}
+          className="flex flex-wrap gap-2 py-0.5"
+          role="toolbar"
+          aria-label="Pinned applications"
         >
-          <div
-            ref={scrollRef}
-            className="flex flex-wrap gap-2 py-0.5"
-            role="toolbar"
-            aria-label="Pinned applications"
-          >
-            {localPinnedApps.map((app) => {
-              const origin = getOrigin(app.url);
-              const hasOpenTab = activeOrigins.has(origin);
+          {pinnedApps.map((app) => {
+            const origin = getOrigin(app.url);
+            const hasOpenTab = activeOrigins.has(origin);
 
-              return (
-                <SortablePinnedApp
-                  key={app.id}
-                  app={app}
-                  hasOpenTab={hasOpenTab}
-                  onClick={() => handleClick(app)}
-                  onDoubleClick={(e) => handleDoubleClick(e, app)}
-                  onContextMenu={(e) => handlePinnedAppContextMenu(e, app)}
-                />
-              );
-            })}
-          </div>
-        </SortableContext>
-        <DragOverlay>
-          {activeDragApp ? (
-            <div className="flex flex-col items-center">
-              <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-arc-surface flex items-center justify-center shadow-lg border border-gray-200 dark:border-arc-border">
-                {activeDragApp.favicon ? (
-                  <img
-                    src={activeDragApp.favicon}
-                    alt=""
-                    className="w-5 h-5 rounded-full"
-                    draggable={false}
-                  />
-                ) : (
-                  <span className="text-xs font-bold text-gray-500 dark:text-arc-text-secondary">
-                    {activeDragApp.title.charAt(0).toUpperCase()}
-                  </span>
-                )}
-              </div>
-            </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+            return (
+              <SortablePinnedApp
+                key={app.id}
+                app={app}
+                hasOpenTab={hasOpenTab}
+                onClick={() => handleClick(app)}
+                onDoubleClick={(e) => handleDoubleClick(e, app)}
+                onContextMenu={(e) => handlePinnedAppContextMenu(e, app)}
+              />
+            );
+          })}
+        </div>
+      </SortableContext>
     </nav>
   );
 }

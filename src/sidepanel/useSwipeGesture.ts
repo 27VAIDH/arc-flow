@@ -9,14 +9,19 @@ interface SwipeGestureOptions {
 
 export function useSwipeGesture(
   ref: React.RefObject<HTMLElement | null>,
-  { onSwipeLeft, onSwipeRight, threshold = 50, disabled = false }: SwipeGestureOptions
+  { onSwipeLeft, onSwipeRight, threshold = 30, disabled = false }: SwipeGestureOptions
 ) {
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const wheelAccumRef = useRef(0);
   const wheelTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cooldownRef = useRef(false);
+  const cooldownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSwipe = useCallback(
     (deltaX: number, deltaY: number) => {
+      // During cooldown, ignore swipes to prevent double-firing
+      if (cooldownRef.current) return;
+
       const absDx = Math.abs(deltaX);
       const absDy = Math.abs(deltaY);
 
@@ -26,6 +31,12 @@ export function useSwipeGesture(
       // Horizontal distance must be greater than vertical (angle < 30° from horizontal)
       // tan(30°) ≈ 0.577, so absDy/absDx must be < 0.577
       if (absDy / absDx >= 0.577) return;
+
+      // Start cooldown to prevent rapid double-firing
+      cooldownRef.current = true;
+      cooldownTimeoutRef.current = setTimeout(() => {
+        cooldownRef.current = false;
+      }, 300);
 
       if (deltaX > 0) {
         onSwipeRight();
@@ -72,16 +83,12 @@ export function useSwipeGesture(
       wheelTimeoutRef.current = setTimeout(() => {
         const accum = wheelAccumRef.current;
         wheelAccumRef.current = 0;
-        // deltaX positive = scroll right = swipe left (next)
-        // deltaX negative = scroll left = swipe right (prev)
-        if (Math.abs(accum) >= threshold) {
-          if (accum > 0) {
-            onSwipeLeft();
-          } else {
-            onSwipeRight();
-          }
-        }
-      }, 150);
+        // Route through handleSwipe so cooldown applies to trackpad swipes too.
+        // Negate accum because wheel deltaX has opposite sign convention:
+        // wheel deltaX positive = scroll right = swipe left, but
+        // handleSwipe deltaX positive = finger moved right = swipe right
+        handleSwipe(-accum, 0);
+      }, 50);
     };
 
     el.addEventListener("touchstart", onTouchStart, { passive: true });
@@ -95,6 +102,8 @@ export function useSwipeGesture(
       el.removeEventListener("touchend", onTouchEnd);
       el.removeEventListener("wheel", onWheel);
       if (wheelTimeoutRef.current) clearTimeout(wheelTimeoutRef.current);
+      if (cooldownTimeoutRef.current) clearTimeout(cooldownTimeoutRef.current);
+      cooldownRef.current = false;
     };
   }, [ref, disabled, handleSwipe, threshold, onSwipeLeft, onSwipeRight]);
 }

@@ -1,13 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { TabInfo, Folder, FolderItem } from "../shared/types";
 import { createFolder, addItemToFolder } from "../shared/folderStorage";
-import { getAIGroupingSuggestions } from "../shared/aiGroupingService";
+import {
+  getAIGroupingSuggestions,
+  type FolderContext,
+  type WorkspaceContext,
+} from "../shared/aiGroupingService";
 import { getSettings } from "../shared/settingsStorage";
+import { assignTabToWorkspace } from "../shared/workspaceStorage";
 
 interface TabGroup {
   name: string;
   hostname: string;
   tabs: TabInfo[];
+  target: "new" | "existing";
+  existingFolderName?: string;
+  suggestedWorkspace?: string;
 }
 
 /**
@@ -97,7 +105,12 @@ function getHostname(url: string): string {
  * - Only suggests groups with 2+ tabs
  * - Excludes tabs already in folders
  */
-function groupTabsByDomain(tabs: TabInfo[], folders: Folder[]): TabGroup[] {
+function groupTabsByDomain(tabs: TabInfo[], folders: Folder[], allFolders: Folder[]): TabGroup[] {
+  // Build a set of existing folder names (lowercase) for matching
+  const existingFolderNames = new Map<string, string>();
+  for (const f of allFolders) {
+    existingFolderNames.set(f.name.toLowerCase(), f.name);
+  }
   // Collect all tab IDs that are already in folders
   const tabIdsInFolders = new Set<number>();
   for (const folder of folders) {
@@ -134,18 +147,20 @@ function groupTabsByDomain(tabs: TabInfo[], folders: Folder[]): TabGroup[] {
   const groups: TabGroup[] = [];
   const singletons: TabGroup[] = [];
   for (const [domain, groupTabs] of domainMap) {
+    const displayName = getDisplayName(domain);
+    const matchedFolder = existingFolderNames.get(displayName.toLowerCase());
+    const target = matchedFolder ? "existing" : "new";
+    const group: TabGroup = {
+      name: displayName,
+      hostname: domain,
+      tabs: groupTabs,
+      target,
+      ...(target === "existing" && { existingFolderName: matchedFolder }),
+    };
     if (groupTabs.length >= 2) {
-      groups.push({
-        name: getDisplayName(domain),
-        hostname: domain,
-        tabs: groupTabs,
-      });
+      groups.push(group);
     } else {
-      singletons.push({
-        name: getDisplayName(domain),
-        hostname: domain,
-        tabs: groupTabs,
-      });
+      singletons.push(group);
     }
   }
 
@@ -163,10 +178,14 @@ function groupTabsByDomain(tabs: TabInfo[], folders: Folder[]): TabGroup[] {
 export default function OrganizeTabsModal({
   tabs,
   folders,
+  workspaces,
+  activeWorkspaceId,
   onClose,
 }: {
   tabs: TabInfo[];
   folders: Folder[];
+  workspaces: { id: string; name: string }[];
+  activeWorkspaceId: string;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -179,7 +198,7 @@ export default function OrganizeTabsModal({
   );
 
   const domainGroups = useMemo(
-    () => groupTabsByDomain(tabs, folders),
+    () => groupTabsByDomain(tabs, folders, folders),
     [tabs, folders]
   );
 
@@ -212,10 +231,21 @@ export default function OrganizeTabsModal({
 
       if (ungroupedTabs.length < 2) return;
 
+      // Build folder and workspace context for AI
+      const folderContext: FolderContext[] = folders.map((f) => ({
+        name: f.name,
+        itemCount: f.items.length,
+      }));
+      const workspaceContext: WorkspaceContext[] = workspaces.map((w) => ({
+        name: w.name,
+      }));
+
       setLoading(true);
       const result = await getAIGroupingSuggestions(
         ungroupedTabs,
-        settings.openRouterApiKey
+        settings.openRouterApiKey,
+        folderContext,
+        workspaceContext
       );
 
       if (cancelled) return;
@@ -226,6 +256,9 @@ export default function OrganizeTabsModal({
           name: g.name,
           hostname: `ai-group-${i}`,
           tabs: g.tabs,
+          target: g.target,
+          existingFolderName: g.existingFolderName,
+          suggestedWorkspace: g.suggestedWorkspace,
         }));
         setAiGroups(aiTabGroups);
         setTimeout(() => {
@@ -239,9 +272,39 @@ export default function OrganizeTabsModal({
     return () => {
       cancelled = true;
     };
-  }, [tabs, folders]);
+  }, [tabs, folders, workspaces]);
 
-  const groups = aiGroups && groupingSource === "ai" ? aiGroups : domainGroups;
+  const allGroups = aiGroups && groupingSource === "ai" ? aiGroups : domainGroups;
+
+  // Separate folder groups from workspace move suggestions
+  const groups = allGroups;
+  const workspaceMoves = useMemo(() => {
+    if (groupingSource !== "ai" || !aiGroups) return [];
+    // Collect tabs that have workspace suggestions and group them
+    const moveMap = new Map<string, TabInfo[]>();
+    for (const g of aiGroups) {
+      if (g.suggestedWorkspace) {
+        // Only suggest moves for workspaces that aren't the current one
+        const targetWs = workspaces.find(
+          (w) =>
+            w.name.toLowerCase() === g.suggestedWorkspace!.toLowerCase() &&
+            w.id !== activeWorkspaceId
+        );
+        if (targetWs) {
+          const existing = moveMap.get(targetWs.name) ?? [];
+          existing.push(...g.tabs);
+          moveMap.set(targetWs.name, existing);
+        }
+      }
+    }
+    return Array.from(moveMap.entries()).map(([wsName, tabs], i) => ({
+      name: wsName,
+      hostname: `ws-move-${i}`,
+      tabs,
+      target: "new" as const,
+      suggestedWorkspace: wsName,
+    }));
+  }, [aiGroups, groupingSource, workspaces, activeWorkspaceId]);
 
   // Select all groups by default (for domain groups)
   useEffect(() => {
@@ -252,6 +315,8 @@ export default function OrganizeTabsModal({
       }, 0);
     }
   }, [domainGroups, groupingSource]);
+
+  const totalSelectable = groups.length + workspaceMoves.length;
 
   // Close on Escape
   useEffect(() => {
@@ -285,54 +350,86 @@ export default function OrganizeTabsModal({
     });
   };
 
+  const acceptGroup = async (group: TabGroup) => {
+    let folderId: string;
+
+    if (group.target === "existing" && group.existingFolderName) {
+      // Find the existing folder by name (case-insensitive)
+      const matched = folders.find(
+        (f) => f.name.toLowerCase() === group.existingFolderName!.toLowerCase()
+      );
+      if (matched) {
+        folderId = matched.id;
+      } else {
+        // Folder was deleted between suggestion and accept — fall back to creating new
+        const newFolder = await createFolder(group.name);
+        folderId = newFolder.id;
+      }
+    } else {
+      const newFolder = await createFolder(group.name);
+      folderId = newFolder.id;
+    }
+
+    for (const tab of group.tabs) {
+      const newItem: FolderItem = {
+        id: crypto.randomUUID(),
+        type: "tab",
+        tabId: tab.id,
+        url: tab.url,
+        title: tab.title || tab.url,
+        favicon: tab.favIconUrl || "",
+        isArchived: false,
+        lastActiveAt: Date.now(),
+      };
+      await addItemToFolder(folderId, newItem);
+    }
+  };
+
   const handleAcceptSelected = async () => {
     setApplying(true);
     try {
+      // Accept folder groups
       for (const group of groups) {
         if (!selectedGroups.has(group.hostname)) continue;
-        // Create the folder
-        const folder = await createFolder(group.name);
-        // Add each tab as a FolderItem
-        for (const tab of group.tabs) {
-          const newItem: FolderItem = {
-            id: crypto.randomUUID(),
-            type: "tab",
-            tabId: tab.id,
-            url: tab.url,
-            title: tab.title || tab.url,
-            favicon: tab.favIconUrl || "",
-            isArchived: false,
-            lastActiveAt: Date.now(),
-          };
-          await addItemToFolder(folder.id, newItem);
+        await acceptGroup(group);
+      }
+      // Accept workspace moves
+      for (const move of workspaceMoves) {
+        if (!selectedGroups.has(move.hostname)) continue;
+        const targetWs = workspaces.find(
+          (w) => w.name.toLowerCase() === move.suggestedWorkspace!.toLowerCase()
+        );
+        if (targetWs) {
+          for (const tab of move.tabs) {
+            await assignTabToWorkspace(tab.id, targetWs.id);
+          }
         }
       }
       onClose();
     } catch {
-      // Silently fail — folder creation errors are non-critical
       onClose();
     }
   };
 
   const handleAcceptAll = async () => {
-    // Select all then apply
-    setSelectedGroups(new Set(groups.map((g) => g.hostname)));
+    const allKeys = new Set([
+      ...groups.map((g) => g.hostname),
+      ...workspaceMoves.map((m) => m.hostname),
+    ]);
+    setSelectedGroups(allKeys);
     setApplying(true);
     try {
       for (const group of groups) {
-        const folder = await createFolder(group.name);
-        for (const tab of group.tabs) {
-          const newItem: FolderItem = {
-            id: crypto.randomUUID(),
-            type: "tab",
-            tabId: tab.id,
-            url: tab.url,
-            title: tab.title || tab.url,
-            favicon: tab.favIconUrl || "",
-            isArchived: false,
-            lastActiveAt: Date.now(),
-          };
-          await addItemToFolder(folder.id, newItem);
+        await acceptGroup(group);
+      }
+      for (const move of workspaceMoves) {
+        const targetWs = workspaces.find(
+          (w) => w.name.toLowerCase() === move.suggestedWorkspace!.toLowerCase()
+        );
+        if (targetWs) {
+          for (const tab of move.tabs) {
+            await assignTabToWorkspace(tab.id, targetWs.id);
+          }
         }
       }
       onClose();
@@ -435,7 +532,7 @@ export default function OrganizeTabsModal({
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-sm font-semibold">Organize Tabs</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {groups.length} group{groups.length !== 1 ? "s" : ""} suggested
+            {totalSelectable} suggestion{totalSelectable !== 1 ? "s" : ""}
             {groupingSource === "ai" ? " by AI" : " based on domains"}
           </p>
         </div>
@@ -463,6 +560,15 @@ export default function OrganizeTabsModal({
                   <path d="M3.75 3A1.75 1.75 0 0 0 2 4.75v3.26a3.235 3.235 0 0 1 1.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0 0 16.25 5h-4.836a.25.25 0 0 1-.177-.073L9.823 3.513A1.75 1.75 0 0 0 8.586 3H3.75ZM3.75 9A1.75 1.75 0 0 0 2 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0 0 18 15.25v-4.5A1.75 1.75 0 0 0 16.25 9H3.75Z" />
                 </svg>
                 <span className="text-sm font-medium flex-1">{group.name}</span>
+                {group.target === "existing" ? (
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                    Existing
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                    New
+                  </span>
+                )}
                 <span className="text-xs text-gray-500 dark:text-gray-400">
                   {group.tabs.length} tabs
                 </span>
@@ -492,6 +598,83 @@ export default function OrganizeTabsModal({
               </div>
             </div>
           ))}
+
+          {/* Workspace move suggestions */}
+          {workspaceMoves.length > 0 && (
+            <>
+              <div className="mt-3 mb-2 px-1">
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                  Suggested Moves
+                </p>
+              </div>
+              {workspaceMoves.map((move) => (
+                <div
+                  key={move.hostname}
+                  className="mb-2 rounded border border-purple-200 dark:border-purple-800/50"
+                >
+                  <label className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750">
+                    <input
+                      type="checkbox"
+                      checked={selectedGroups.has(move.hostname)}
+                      onChange={() => toggleGroup(move.hostname)}
+                      className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500"
+                    />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="w-4 h-4 shrink-0 text-purple-500 dark:text-purple-400"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M3 4.25A2.25 2.25 0 0 1 5.25 2h5.5A2.25 2.25 0 0 1 13 4.25v2a.75.75 0 0 1-1.5 0v-2a.75.75 0 0 0-.75-.75h-5.5a.75.75 0 0 0-.75.75v11.5c0 .414.336.75.75.75h5.5a.75.75 0 0 0 .75-.75v-2a.75.75 0 0 1 1.5 0v2A2.25 2.25 0 0 1 10.75 18h-5.5A2.25 2.25 0 0 1 3 15.75V4.25Z"
+                        clipRule="evenodd"
+                      />
+                      <path
+                        fillRule="evenodd"
+                        d="M19 10a.75.75 0 0 0-.75-.75H8.704l1.048-.943a.75.75 0 1 0-1.004-1.114l-2.5 2.25a.75.75 0 0 0 0 1.114l2.5 2.25a.75.75 0 1 0 1.004-1.114l-1.048-.943h9.546A.75.75 0 0 0 19 10Z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <span className="text-sm font-medium flex-1">
+                      Move to {move.suggestedWorkspace}
+                    </span>
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                      Move
+                    </span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {move.tabs.length} tabs
+                    </span>
+                  </label>
+                  <div className="px-3 pb-2">
+                    {move.tabs.map((tab) => (
+                      <div
+                        key={tab.id}
+                        className="flex items-center gap-2 py-0.5 text-xs text-gray-500 dark:text-gray-400"
+                      >
+                        {tab.favIconUrl ? (
+                          <img
+                            src={tab.favIconUrl}
+                            alt=""
+                            className="w-3 h-3 shrink-0"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display =
+                                "none";
+                            }}
+                          />
+                        ) : (
+                          <span className="w-3 h-3 shrink-0 rounded bg-gray-300 dark:bg-gray-600" />
+                        )}
+                        <span className="truncate">
+                          {tab.title || tab.url}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
 
         {/* Actions */}

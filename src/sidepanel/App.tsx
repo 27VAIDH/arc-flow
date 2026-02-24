@@ -14,6 +14,7 @@ import { useTheme, applyPanelColor } from "./useTheme";
 import {
   addPinnedApp,
   removePinnedApp,
+  reorderPinnedApps,
 } from "../shared/storage";
 import { getSettings, updateSettings } from "../shared/settingsStorage";
 import {
@@ -54,12 +55,14 @@ import TabPreviewCard from "./TabPreviewCard";
 import type { TabPreviewInfo } from "./TabPreviewCard";
 import { buildCommands } from "./commandRegistry";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
+import Popover from "./Popover";
 import {
   DndContext,
   PointerSensor,
   KeyboardSensor,
   useSensor,
   useSensors,
+  useDroppable,
   type DragEndEvent,
   type DragStartEvent,
   DragOverlay,
@@ -272,6 +275,7 @@ const DraggableTabItem = memo(function DraggableTabItem({
       ref={setNodeRef}
       style={style}
       {...attributes}
+      {...listeners}
       role="option"
       aria-selected={tab.active}
       aria-label={srLabel}
@@ -298,11 +302,10 @@ const DraggableTabItem = memo(function DraggableTabItem({
           : ""
       } ${tab.discarded ? "opacity-40 italic" : ""}`}
     >
-      {/* Drag grip */}
+      {/* Drag grip (visual hint only — drag listeners on full row) */}
       <span
-        {...listeners}
-        className="shrink-0 flex items-center cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 touch-none opacity-0 group-hover:opacity-100 transition-opacity"
-        aria-label="Drag to reorder"
+        className="shrink-0 flex items-center text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-30 transition-opacity pointer-events-none"
+        aria-hidden="true"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -481,33 +484,6 @@ function FolderPickerDropdown({
   onSelect: (folderId: string) => void;
   onClose: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [onClose]);
-
-  // Adjust position to stay within viewport
-  const style: React.CSSProperties = {
-    position: "fixed",
-    left: Math.min(x, window.innerWidth - 200),
-    top: Math.min(y, window.innerHeight - 200),
-    zIndex: 1000,
-  };
-
   const renderFolderOption = (
     folder: Folder,
     depth: number
@@ -517,7 +493,7 @@ function FolderPickerDropdown({
       <div key={folder.id}>
         <button
           onClick={() => onSelect(folder.id)}
-          className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-arc-surface-hover flex items-center gap-2 transition-colors duration-200"
+          className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-arc-text-primary hover:bg-gray-100 dark:hover:bg-arc-surface-hover flex items-center gap-2 transition-colors duration-200"
           style={{ paddingLeft: 12 + depth * 16 }}
         >
           <svg
@@ -537,17 +513,92 @@ function FolderPickerDropdown({
 
   const topLevelFolders = folders.filter((f) => f.parentId === null);
 
+  const [isCreating, setIsCreating] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isCreating && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isCreating]);
+
+  const handleCreateFolder = async () => {
+    const trimmed = newFolderName.trim();
+    if (!trimmed) return;
+    const folder = await createFolder(trimmed, null);
+    onSelect(folder.id);
+  };
+
   return (
-    <div
-      ref={ref}
-      style={style}
-      className="min-w-[180px] max-w-[240px] bg-white dark:bg-arc-surface border border-gray-200 dark:border-arc-border rounded-xl shadow-xl py-1 max-h-[200px] overflow-y-auto"
-    >
+    <Popover x={x} y={y} onClose={onClose} className="max-w-[240px]">
       <div className="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 font-medium">
         Save to folder
       </div>
-      {topLevelFolders.map((folder) => renderFolderOption(folder, 0))}
-    </div>
+      <div className="max-h-[160px] overflow-y-auto">
+        {topLevelFolders.map((folder) => renderFolderOption(folder, 0))}
+      </div>
+      <div className="border-t border-gray-200 dark:border-white/10 mt-1 pt-1">
+        {!isCreating ? (
+          <button
+            onClick={() => setIsCreating(true)}
+            className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-arc-text-primary hover:bg-gray-100 dark:hover:bg-arc-surface-hover flex items-center gap-2 transition-colors duration-200"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="w-4 h-4 shrink-0 text-gray-500 dark:text-gray-400"
+            >
+              <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
+            </svg>
+            <span className="truncate">New Folder</span>
+          </button>
+        ) : (
+          <div className="px-3 py-1.5 flex items-center gap-1">
+            <input
+              ref={inputRef}
+              type="text"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.stopPropagation();
+                  handleCreateFolder();
+                } else if (e.key === "Escape") {
+                  e.stopPropagation();
+                  setIsCreating(false);
+                  setNewFolderName("");
+                }
+              }}
+              placeholder="Folder name"
+              className="flex-1 min-w-0 text-sm bg-transparent border border-gray-300 dark:border-white/20 rounded px-2 py-1 outline-none focus:border-arc-accent dark:text-white"
+            />
+            <button
+              onClick={handleCreateFolder}
+              className="p-1 text-green-500 hover:text-green-400 transition-colors"
+              title="Create"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+              </svg>
+            </button>
+            <button
+              onClick={() => {
+                setIsCreating(false);
+                setNewFolderName("");
+              }}
+              className="p-1 text-gray-400 hover:text-gray-300 transition-colors"
+              title="Cancel"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+              </svg>
+            </button>
+          </div>
+        )}
+      </div>
+    </Popover>
   );
 }
 
@@ -557,7 +608,7 @@ interface ContextMenuState {
   items: ContextMenuItem[];
 }
 
-// Custom collision detection: prefer droppable folder targets, then fall back to closest center
+// Custom collision detection: prefer droppable folder targets, then zone targets, then fall back to closest center
 const customCollisionDetection: CollisionDetection = (args) => {
   // First check for pointer-within collisions (good for drop targets like folders)
   const pointerCollisions = pointerWithin(args);
@@ -567,11 +618,47 @@ const customCollisionDetection: CollisionDetection = (args) => {
       String(c.id).startsWith("folder-drop:")
     );
     if (folderDrops.length > 0) return folderDrops;
+    // Then check for pinned-drop-zone and tablist-drop-zone
+    const zoneDrops = pointerCollisions.filter((c) => {
+      const id = String(c.id);
+      return id === "pinned-drop-zone" || id === "tablist-drop-zone";
+    });
+    if (zoneDrops.length > 0) return zoneDrops;
     return pointerCollisions;
   }
   // Fall back to rect intersection for sortable items
   return rectIntersection(args);
 };
+
+// Droppable zone wrapper for pinned apps area
+function DroppablePinnedZone({ children }: { children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: "pinned-drop-zone" });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`transition-all duration-200 ${
+        isOver ? "ring-1 ring-arc-accent/30 rounded-xl" : ""
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Droppable zone wrapper for tab list area
+function DroppableTabListZone({ children }: { children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: "tablist-drop-zone" });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`transition-all duration-200 ${
+        isOver ? "ring-1 ring-arc-accent/30 rounded-xl" : ""
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
 
 export default function App() {
   const [tabs, setTabs] = useState<TabInfo[]>([]);
@@ -581,6 +668,7 @@ export default function App() {
   const [activeDragTab, setActiveDragTab] = useState<TabInfo | null>(null);
   const [activeDragFolder, setActiveDragFolder] = useState<Folder | null>(null);
   const [activeDragFolderItem, setActiveDragFolderItem] = useState<FolderItem | null>(null);
+  const [activeDragPinned, setActiveDragPinned] = useState<PinnedApp | null>(null);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState("default");
   const [tabWorkspaceMap, setTabWorkspaceMap] = useState<
     Record<string, string>
@@ -1677,9 +1765,15 @@ export default function App() {
             break;
           }
         }
+      } else if (id.startsWith("pinned:")) {
+        const pinnedId = id.replace("pinned:", "");
+        const app = pinnedApps.find((a) => a.id === pinnedId);
+        if (app) {
+          setActiveDragPinned(app);
+        }
       }
     },
-    [tabs, folders]
+    [tabs, folders, pinnedApps]
   );
 
   const handleDragEnd = useCallback(
@@ -1687,6 +1781,7 @@ export default function App() {
       setActiveDragTab(null);
       setActiveDragFolder(null);
       setActiveDragFolderItem(null);
+      setActiveDragPinned(null);
       setIsDraggingTabs(false);
       const { active, over } = event;
       if (!over) return;
@@ -1701,10 +1796,17 @@ export default function App() {
         const tab = tabs.find((t) => t.id === tabId);
         if (!tab) return;
 
+        // Duplicate check: skip if same URL already exists in target folder
+        const targetFolder = folders.find((f) => f.id === folderId);
+        if (targetFolder?.items.some((i) => i.url === tab.url)) {
+          setToast("Already saved in this folder");
+          return;
+        }
+
         const newItem: FolderItem = {
           id: crypto.randomUUID(),
-          type: "tab",
-          tabId: tab.id,
+          type: "link",
+          tabId: null,
           url: tab.url,
           title: tab.title || tab.url,
           favicon: tab.favIconUrl || "",
@@ -1713,6 +1815,118 @@ export default function App() {
         };
 
         await addItemToFolder(folderId, newItem);
+        return;
+      }
+
+      // Case 1b: Tab dropped onto pinned apps zone
+      if (activeId.startsWith("tab:") && overId === "pinned-drop-zone") {
+        const tabId = parseInt(activeId.replace("tab:", ""), 10);
+        const tab = tabs.find((t) => t.id === tabId);
+        if (!tab) return;
+
+        // Duplicate check: skip if URL already pinned
+        if (pinnedApps.some((app) => app.url === tab.url)) {
+          setToast("Already pinned");
+          return;
+        }
+
+        await addPinnedApp({
+          id: crypto.randomUUID(),
+          url: tab.url,
+          title: tab.title || tab.url,
+          favicon: tab.favIconUrl || "",
+        });
+        return;
+      }
+
+      // Case 1c: Pinned app dropped onto a folder
+      if (activeId.startsWith("pinned:") && overId.startsWith("folder-drop:")) {
+        const pinnedId = activeId.replace("pinned:", "");
+        const folderId = overId.replace("folder-drop:", "");
+        const app = pinnedApps.find((a) => a.id === pinnedId);
+        if (!app) return;
+
+        // Duplicate check: skip if same URL already exists in target folder
+        const targetFolder = folders.find((f) => f.id === folderId);
+        if (targetFolder?.items.some((i) => i.url === app.url)) {
+          setToast("Already saved in this folder");
+          return;
+        }
+
+        const newItem: FolderItem = {
+          id: crypto.randomUUID(),
+          type: "link",
+          tabId: null,
+          url: app.url,
+          title: app.title,
+          favicon: app.favicon || "",
+          isArchived: false,
+          lastActiveAt: Date.now(),
+        };
+
+        await addItemToFolder(folderId, newItem);
+        return;
+      }
+
+      // Case 1d: Folder item dropped onto pinned apps zone
+      if (activeId.startsWith("folder-item:") && overId === "pinned-drop-zone") {
+        const itemId = activeId.replace("folder-item:", "");
+        let folderItem: FolderItem | undefined;
+        for (const folder of folders) {
+          folderItem = folder.items.find((i) => i.id === itemId);
+          if (folderItem) break;
+        }
+        if (!folderItem || !folderItem.url) return;
+
+        // Duplicate check: skip if URL already pinned
+        if (pinnedApps.some((app) => app.url === folderItem!.url)) {
+          setToast("Already pinned");
+          return;
+        }
+
+        await addPinnedApp({
+          id: crypto.randomUUID(),
+          url: folderItem.url,
+          title: folderItem.title || folderItem.url,
+          favicon: folderItem.favicon || "",
+        });
+        return;
+      }
+
+      // Case 1e: Folder item dropped onto tab list zone (unpin from folder)
+      if (activeId.startsWith("folder-item:") && overId === "tablist-drop-zone") {
+        const itemId = activeId.replace("folder-item:", "");
+        let folderItem: FolderItem | undefined;
+        let sourceFolderId: string | undefined;
+        for (const folder of folders) {
+          folderItem = folder.items.find((i) => i.id === itemId);
+          if (folderItem) {
+            sourceFolderId = folder.id;
+            break;
+          }
+        }
+        if (!folderItem || !sourceFolderId) return;
+
+        if (folderItem.type === "link" && folderItem.url) {
+          // Open the URL in a new tab, then remove from folder
+          await chrome.tabs.create({ url: folderItem.url });
+        }
+        // For type "tab" with valid tabId, tab is already open — just remove from folder
+        await removeItemFromFolder(sourceFolderId, itemId);
+        return;
+      }
+
+      // Case 1f: Reorder pinned apps
+      if (activeId.startsWith("pinned:") && overId.startsWith("pinned:")) {
+        const activePinnedId = activeId.replace("pinned:", "");
+        const overPinnedId = overId.replace("pinned:", "");
+
+        const oldIndex = pinnedApps.findIndex((a) => a.id === activePinnedId);
+        const newIndex = pinnedApps.findIndex((a) => a.id === overPinnedId);
+        if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+
+        const reordered = arrayMove(pinnedApps, oldIndex, newIndex);
+        await reorderPinnedApps(reordered.map((a) => a.id));
         return;
       }
 
@@ -1851,7 +2065,7 @@ export default function App() {
         return;
       }
     },
-    [tabs, folders, setFolders, filteredTabs, activeWorkspaceId]
+    [tabs, folders, setFolders, filteredTabs, activeWorkspaceId, pinnedApps, setToast]
   );
 
   const activeDragType = activeDragTab
@@ -1860,7 +2074,9 @@ export default function App() {
       ? "folder"
       : activeDragFolderItem
         ? "folder-item"
-        : undefined;
+        : activeDragPinned
+          ? "pinned"
+          : undefined;
 
   return (
     <div
@@ -2039,30 +2255,33 @@ export default function App() {
         </div>
       )}
 
+      <DndContext
+        sensors={sensors}
+        collisionDetection={customCollisionDetection}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => {
+          setActiveDragTab(null);
+          setActiveDragFolder(null);
+          setActiveDragFolderItem(null);
+          setActiveDragPinned(null);
+          setIsDraggingTabs(false);
+        }}
+      >
       {/* Pinned Apps Row (Zone 2) */}
-      <PinnedAppsRow
-        tabs={tabs}
-        pinnedApps={pinnedApps}
-        onContextMenu={setContextMenu}
-      />
+      <DroppablePinnedZone>
+        <PinnedAppsRow
+          tabs={tabs}
+          pinnedApps={pinnedApps}
+          onContextMenu={setContextMenu}
+        />
+      </DroppablePinnedZone>
 
       <main
         ref={mainContentRef}
         className={`flex-1 flex flex-col overflow-y-auto${swipeBounce === "left" ? " swipe-bounce-left" : swipeBounce === "right" ? " swipe-bounce-right" : ""}`}
         aria-label="Tab management"
       >
-        <DndContext
-          sensors={sensors}
-          collisionDetection={customCollisionDetection}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onDragCancel={() => {
-            setActiveDragTab(null);
-            setActiveDragFolder(null);
-            setActiveDragFolderItem(null);
-            setIsDraggingTabs(false);
-          }}
-        >
           {/* Folder Tree (Zone 3) */}
           <FolderTree
             onContextMenu={setContextMenu}
@@ -2083,6 +2302,7 @@ export default function App() {
           />
 
           {/* Tab list */}
+          <DroppableTabListZone>
           <section className="flex-1 px-1 pt-2" aria-label="Open tabs" data-drop-section="tabs">
             <div className="flex items-center justify-between px-2 py-1">
               <p
@@ -2156,6 +2376,7 @@ export default function App() {
               )}
             </SortableContext>
           </section>
+          </DroppableTabListZone>
 
           <DragOverlay>
             {activeDragTab ? (
@@ -2164,9 +2385,25 @@ export default function App() {
               <FolderDragOverlay folder={activeDragFolder} />
             ) : activeDragFolderItem ? (
               <FolderItemDragOverlay item={activeDragFolderItem} />
+            ) : activeDragPinned ? (
+              <div className="flex flex-col items-center">
+                <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-arc-surface flex items-center justify-center shadow-lg border border-gray-200 dark:border-arc-border">
+                  {activeDragPinned.favicon ? (
+                    <img
+                      src={activeDragPinned.favicon}
+                      alt=""
+                      className="w-5 h-5 rounded-full"
+                      draggable={false}
+                    />
+                  ) : (
+                    <span className="text-xs font-bold text-gray-500 dark:text-arc-text-secondary">
+                      {activeDragPinned.title.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+              </div>
             ) : null}
           </DragOverlay>
-        </DndContext>
 
         {/* Archive Section (Zone 4) */}
         <ArchiveSection />
@@ -2174,6 +2411,7 @@ export default function App() {
         {/* Recently Closed Section */}
         <RecentlyClosedSection workspaces={workspaces} />
       </main>
+      </DndContext>
 
       {/* Quick Notes */}
       {activeWorkspace && (
@@ -2241,6 +2479,8 @@ export default function App() {
         <OrganizeTabsModal
           tabs={filteredTabs}
           folders={folders}
+          workspaces={workspaces}
+          activeWorkspaceId={activeWorkspaceId}
           onClose={() => setShowOrganizeTabs(false)}
         />
       )}
