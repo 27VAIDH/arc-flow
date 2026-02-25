@@ -6,7 +6,7 @@ import {
   getCaptures,
   deleteSession,
 } from "../shared/researchDb";
-import { connectPages } from "../shared/aiResearchService";
+import { connectPages, generateBrief } from "../shared/aiResearchService";
 
 function truncate(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
@@ -127,8 +127,14 @@ export default function ResearchCopilotSection() {
   const [analysisResult, setAnalysisResult] = useState<string | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [briefTopic, setBriefTopic] = useState("");
+  const [briefResult, setBriefResult] = useState<string | null>(null);
+  const [briefLoading, setBriefLoading] = useState(false);
+  const [briefError, setBriefError] = useState<string | null>(null);
+  const [briefCopied, setBriefCopied] = useState(false);
   // Cache keyed by session ID to avoid re-fetching on re-render
   const analysisCacheRef = useRef<Record<string, string>>({});
+  const briefCacheRef = useRef<Record<string, string>>({});
 
   const loadSessions = useCallback(async () => {
     const all = await getSessions();
@@ -176,6 +182,9 @@ export default function ResearchCopilotSection() {
     setCaptures([]);
     setAnalysisResult(null);
     setAnalysisError(null);
+    setBriefResult(null);
+    setBriefError(null);
+    setBriefTopic("");
     loadSessions();
   }, [loadSessions]);
 
@@ -244,6 +253,62 @@ export default function ResearchCopilotSection() {
     }
   }, [activeSession, captures]);
 
+  const handleGenerateBrief = useCallback(async () => {
+    if (!activeSession || captures.length < 1) return;
+
+    // Build cache key from session ID + topic
+    const cacheKey = `${activeSession.id}::${briefTopic}`;
+    const cached = briefCacheRef.current[cacheKey];
+    if (cached) {
+      setBriefResult(cached);
+      return;
+    }
+
+    setBriefLoading(true);
+    setBriefError(null);
+    try {
+      const summaries = captures
+        .filter((c) => c.summary)
+        .map((c) => c.summary!);
+      if (summaries.length < 1) {
+        setBriefError("Need at least 1 page with a summary to generate a brief.");
+        setBriefLoading(false);
+        return;
+      }
+      const result = await generateBrief(summaries, briefTopic);
+      briefCacheRef.current[cacheKey] = result;
+      setBriefResult(result);
+    } catch (e) {
+      setBriefError(
+        e instanceof Error ? e.message : "Failed to generate brief",
+      );
+    } finally {
+      setBriefLoading(false);
+    }
+  }, [activeSession, captures, briefTopic]);
+
+  const handleCopyBrief = useCallback(async () => {
+    if (!briefResult) return;
+    try {
+      await navigator.clipboard.writeText(briefResult);
+      setBriefCopied(true);
+      setTimeout(() => setBriefCopied(false), 2000);
+    } catch {
+      // Fallback: select and copy
+    }
+  }, [briefResult]);
+
+  const handleExportBriefMarkdown = useCallback(() => {
+    if (!briefResult) return;
+    const blob = new Blob([briefResult], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `research-brief-${new Date().toISOString().slice(0, 10)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [briefResult]);
+
   const handleRestoreSession = useCallback(
     async (sessionId: string) => {
       const session = sessions.find((s) => s.id === sessionId);
@@ -251,10 +316,13 @@ export default function ResearchCopilotSection() {
         setActiveSession(session);
         await loadCaptures(sessionId);
         setHistoryCollapsed(true);
-        // Restore cached analysis or clear
+        // Restore cached analysis and brief or clear
         const cached = analysisCacheRef.current[sessionId];
         setAnalysisResult(cached ?? null);
         setAnalysisError(null);
+        setBriefResult(null);
+        setBriefError(null);
+        setBriefTopic("");
       }
     },
     [sessions, loadCaptures],
@@ -373,6 +441,52 @@ export default function ResearchCopilotSection() {
                 {analysisResult && (
                   <div className="mt-2 p-2 rounded bg-gray-100 dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
                     {analysisResult}
+                  </div>
+                )}
+              </div>
+
+              {/* Generate Brief */}
+              <div className="mt-2">
+                <input
+                  type="text"
+                  value={briefTopic}
+                  onChange={(e) => setBriefTopic(e.target.value)}
+                  placeholder="Topic (optional)"
+                  className="w-full text-xs px-2 py-1 mb-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:border-arc-accent"
+                />
+                <button
+                  onClick={handleGenerateBrief}
+                  disabled={captures.length < 1 || briefLoading}
+                  className="w-full text-xs px-2 py-1 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {briefLoading ? "Generating\u2026" : "Generate Brief"}
+                </button>
+
+                {briefError && (
+                  <p className="text-[10px] text-red-500 mt-1">
+                    {briefError}
+                  </p>
+                )}
+
+                {briefResult && (
+                  <div className="mt-2">
+                    <div className="p-2 rounded bg-gray-100 dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+                      {briefResult}
+                    </div>
+                    <div className="flex gap-1.5 mt-1.5">
+                      <button
+                        onClick={handleCopyBrief}
+                        className="flex-1 text-[10px] px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        {briefCopied ? "Copied!" : "Copy to Clipboard"}
+                      </button>
+                      <button
+                        onClick={handleExportBriefMarkdown}
+                        className="flex-1 text-[10px] px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        Export Markdown
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
