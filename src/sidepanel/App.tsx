@@ -59,10 +59,7 @@ import PomodoroTimer from "./PomodoroTimer";
 import MorningBriefing from "./MorningBriefing";
 import QuickNotes from "./QuickNotes";
 import SnippetsSection from "./SnippetsSection";
-import TimeMachineSection from "./TimeMachineSection";
-import AnnotationsSection from "./AnnotationsSection";
-import TabGraphSection from "./TabGraphSection";
-import ResearchCopilotSection from "./ResearchCopilotSection";
+import ToolsPanel from "./ToolsPanel";
 import AutopilotBanner from "./AutopilotBanner";
 import TabPreviewCard from "./TabPreviewCard";
 import type { TabPreviewInfo } from "./TabPreviewCard";
@@ -728,6 +725,7 @@ export default function App() {
     y: number;
   } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showToolsPanel, setShowToolsPanel] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showOrganizeTabs, setShowOrganizeTabs] = useState(false);
   const [showSessionManager, setShowSessionManager] = useState(false);
@@ -2318,6 +2316,25 @@ export default function App() {
           </svg>
         </button>
         <button
+          onClick={() => setShowToolsPanel(true)}
+          className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-200"
+          title="Tools"
+          aria-label="Open Tools panel"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="w-4 h-4"
+          >
+            <path
+              fillRule="evenodd"
+              d="M14.5 10a4.5 4.5 0 0 0 4.284-5.882c-.105-.324-.51-.391-.752-.15L15.34 6.66a.454.454 0 0 1-.493.101 3.046 3.046 0 0 1-1.608-1.607.454.454 0 0 1 .1-.493l2.693-2.692c.24-.241.174-.647-.15-.752a4.5 4.5 0 0 0-5.873 4.575c.055.873-.128 1.808-.8 2.368l-7.23 6.024a2.724 2.724 0 1 0 3.837 3.837l6.024-7.23c.56-.672 1.495-.855 2.368-.8.096.007.193.01.29.01ZM5 16a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </button>
+        <button
           onClick={() => setShowOrganizeTabs(true)}
           className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary transition-colors duration-200"
           title="Organize Tabs"
@@ -2589,18 +2606,6 @@ export default function App() {
           {/* Archive Section (Zone 4) */}
           <ArchiveSection />
 
-          {/* Time Machine Section */}
-          <TimeMachineSection />
-
-          {/* Annotations Section */}
-          <AnnotationsSection />
-
-          {/* Tab Graph Section */}
-          <TabGraphSection />
-
-          {/* Research Copilot Section */}
-          <ResearchCopilotSection />
-
           {/* Recently Closed Section */}
           <RecentlyClosedSection workspaces={workspaces} />
         </main>
@@ -2658,6 +2663,11 @@ export default function App() {
 
       {/* Settings Panel */}
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+
+      {/* Tools Panel */}
+      {showToolsPanel && (
+        <ToolsPanel onClose={() => setShowToolsPanel(false)} />
+      )}
 
       {/* Command Palette */}
       {showCommandPalette && (

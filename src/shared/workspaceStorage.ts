@@ -350,6 +350,19 @@ async function saveWorkspaces(workspaces: Workspace[]): Promise<void> {
   }
 }
 
+export async function reorderWorkspaces(
+  orderedIds: string[]
+): Promise<void> {
+  const workspaces = await getWorkspaces();
+  for (let i = 0; i < orderedIds.length; i++) {
+    const ws = workspaces.find((w) => w.id === orderedIds[i]);
+    if (ws) {
+      ws.sortOrder = i;
+    }
+  }
+  await saveWorkspaces(workspaces);
+}
+
 // ── Workspace-scoped Pinned Apps CRUD ──
 
 export async function getWorkspacePinnedApps(

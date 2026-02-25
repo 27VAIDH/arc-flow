@@ -7,10 +7,25 @@ import {
   updateWorkspace,
   deleteWorkspace,
   setActiveWorkspace,
+  reorderWorkspaces,
 } from "../shared/workspaceStorage";
 import { applyPanelColor } from "./useTheme";
 import { getSettings } from "../shared/settingsStorage";
 import WorkspaceTemplatesModal from "./WorkspaceTemplates";
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 const CURATED_EMOJIS = [
   "🏠",
@@ -76,6 +91,87 @@ function getWorkspaceAverageEnergy(
     .filter((s): s is number => s != null);
   if (scores.length === 0) return null;
   return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+}
+
+interface SortableWorkspaceButtonProps {
+  ws: Workspace;
+  isActive: boolean;
+  avgEnergy: number | null;
+  onClick: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
+}
+
+function SortableWorkspaceButton({
+  ws,
+  isActive,
+  avgEnergy,
+  onClick,
+  onContextMenu,
+}: SortableWorkspaceButtonProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `ws:${ws.id}` });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition: transition || "transform 200ms ease",
+    opacity: isDragging ? 0.3 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="flex flex-col items-center shrink-0 gap-0.5 touch-none"
+    >
+      <button
+        onClick={onClick}
+        onContextMenu={onContextMenu}
+        className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-arc-accent/50 ${
+          isActive
+            ? "ring-2 ring-offset-1 dark:ring-offset-arc-bg scale-105"
+            : "opacity-60 hover:opacity-100 hover:scale-105"
+        }`}
+        style={{
+          backgroundColor: ws.accentColor + "20",
+          ...(isActive
+            ? {
+                ringColor: ws.accentColor,
+                boxShadow: `0 0 0 2px ${ws.accentColor}`,
+              }
+            : {}),
+        }}
+        tabIndex={isActive ? 0 : -1}
+        title={ws.name}
+        aria-label={`Switch to ${ws.name} workspace${isActive ? " (active)" : ""}`}
+        aria-pressed={isActive}
+      >
+        {ws.emoji}
+      </button>
+      {/* Energy health bar */}
+      <div className="w-5 h-0.5 rounded-full bg-gray-700 overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-300 ${
+            avgEnergy == null
+              ? "bg-gray-600"
+              : avgEnergy >= 70
+                ? "bg-green-400"
+                : avgEnergy >= 40
+                  ? "bg-yellow-400"
+                  : "bg-red-400"
+          }`}
+          style={{ width: avgEnergy != null ? `${avgEnergy}%` : "0%" }}
+        />
+      </div>
+    </div>
+  );
 }
 
 export default function WorkspaceSwitcher({
@@ -405,6 +501,29 @@ export default function WorkspaceSwitcher({
     ]
   );
 
+  const wsSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+
+  const handleWsDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+
+      const activeId = String(active.id).replace("ws:", "");
+      const overId = String(over.id).replace("ws:", "");
+
+      const oldIndex = workspaces.findIndex((ws) => ws.id === activeId);
+      const newIndex = workspaces.findIndex((ws) => ws.id === overId);
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      const reordered = arrayMove(workspaces, oldIndex, newIndex);
+      setWorkspaces(reordered);
+      reorderWorkspaces(reordered.map((ws) => ws.id));
+    },
+    [workspaces]
+  );
+
   return (
     <div className="relative">
       {/* Inline rename input */}
@@ -447,60 +566,31 @@ export default function WorkspaceSwitcher({
           }
         }}
       >
-        {workspaces.map((ws) => {
-          const isActive = ws.id === activeWorkspaceId;
-          const avgEnergy = getWorkspaceAverageEnergy(
-            ws.id,
-            tabEnergyScores,
-            tabWorkspaceMap
-          );
-          return (
-            <div
-              key={ws.id}
-              className="flex flex-col items-center shrink-0 gap-0.5"
-            >
-              <button
-                onClick={() => handleSwitchWorkspace(ws.id)}
-                onContextMenu={(e) => handleContextMenu(e, ws)}
-                className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-arc-accent/50 ${
-                  isActive
-                    ? "ring-2 ring-offset-1 dark:ring-offset-arc-bg scale-105"
-                    : "opacity-60 hover:opacity-100 hover:scale-105"
-                }`}
-                style={{
-                  backgroundColor: ws.accentColor + "20",
-                  ...(isActive
-                    ? {
-                        ringColor: ws.accentColor,
-                        boxShadow: `0 0 0 2px ${ws.accentColor}`,
-                      }
-                    : {}),
-                }}
-                tabIndex={isActive ? 0 : -1}
-                title={ws.name}
-                aria-label={`Switch to ${ws.name} workspace${isActive ? " (active)" : ""}`}
-                aria-pressed={isActive}
-              >
-                {ws.emoji}
-              </button>
-              {/* Energy health bar */}
-              <div className="w-5 h-0.5 rounded-full bg-gray-700 overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-300 ${
-                    avgEnergy == null
-                      ? "bg-gray-600"
-                      : avgEnergy >= 70
-                        ? "bg-green-400"
-                        : avgEnergy >= 40
-                          ? "bg-yellow-400"
-                          : "bg-red-400"
-                  }`}
-                  style={{ width: avgEnergy != null ? `${avgEnergy}%` : "0%" }}
+        <DndContext sensors={wsSensors} onDragEnd={handleWsDragEnd}>
+          <SortableContext
+            items={workspaces.map((ws) => `ws:${ws.id}`)}
+            strategy={horizontalListSortingStrategy}
+          >
+            {workspaces.map((ws) => {
+              const isActive = ws.id === activeWorkspaceId;
+              const avgEnergy = getWorkspaceAverageEnergy(
+                ws.id,
+                tabEnergyScores,
+                tabWorkspaceMap
+              );
+              return (
+                <SortableWorkspaceButton
+                  key={ws.id}
+                  ws={ws}
+                  isActive={isActive}
+                  avgEnergy={avgEnergy}
+                  onClick={() => handleSwitchWorkspace(ws.id)}
+                  onContextMenu={(e) => handleContextMenu(e, ws)}
                 />
-              </div>
-            </div>
-          );
-        })}
+              );
+            })}
+          </SortableContext>
+        </DndContext>
 
         {/* Add workspace button */}
         <button
