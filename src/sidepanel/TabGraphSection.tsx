@@ -28,6 +28,10 @@ function truncate(text: string, maxLen: number): string {
   return text.slice(0, maxLen) + "\u2026";
 }
 
+type ViewMode = "graph" | "list";
+
+const STORAGE_KEY_VIEW_MODE = "tabGraphViewMode";
+
 export default function TabGraphSection() {
   const [collapsed, setCollapsed] = useState(false);
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], edges: [] });
@@ -36,7 +40,26 @@ export default function TabGraphSection() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; domain: string } | null>(null);
   const [clusterSummary, setClusterSummary] = useState<{ domain: string; text: string } | null>(null);
   const [summarizing, setSummarizing] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("graph");
   const contextMenuRef = useRef<HTMLDivElement>(null);
+
+  // Load persisted view preference
+  useEffect(() => {
+    chrome.storage.local.get(STORAGE_KEY_VIEW_MODE, (result) => {
+      const stored = result[STORAGE_KEY_VIEW_MODE];
+      if (stored === "graph" || stored === "list") {
+        setViewMode(stored);
+      }
+    });
+  }, []);
+
+  const toggleViewMode = useCallback(() => {
+    setViewMode((prev) => {
+      const next: ViewMode = prev === "graph" ? "list" : "graph";
+      chrome.storage.local.set({ [STORAGE_KEY_VIEW_MODE]: next });
+      return next;
+    });
+  }, []);
 
   const loadGraphData = useCallback(async () => {
     try {
@@ -250,28 +273,66 @@ export default function TabGraphSection() {
     return () => document.removeEventListener("mousedown", handler);
   }, [contextMenu]);
 
+  // Group nodes by domain, sorted by visit count
+  const groupedNodes = useMemo(() => {
+    const groups = new Map<string, GraphNode[]>();
+    const sorted = [...graphData.nodes].sort((a, b) => b.visitCount - a.visitCount);
+    for (const node of sorted) {
+      const list = groups.get(node.domain) ?? [];
+      list.push(node);
+      groups.set(node.domain, list);
+    }
+    // Sort groups by total visit count
+    return [...groups.entries()].sort(
+      (a, b) =>
+        b[1].reduce((s, n) => s + n.visitCount, 0) -
+        a[1].reduce((s, n) => s + n.visitCount, 0)
+    );
+  }, [graphData.nodes]);
+
   const isEmpty = graphData.nodes.length === 0;
 
   return (
     <section aria-label="Tab Graph" className="mb-2">
-      <button
-        onClick={() => setCollapsed((prev) => !prev)}
-        className="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hover:bg-gray-100 dark:hover:bg-arc-surface-hover"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          className={`w-3 h-3 transition-transform ${collapsed ? "" : "rotate-90"}`}
+      <div className="flex items-center">
+        <button
+          onClick={() => setCollapsed((prev) => !prev)}
+          className="flex items-center gap-1.5 flex-1 px-3 py-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hover:bg-gray-100 dark:hover:bg-arc-surface-hover"
         >
-          <path
-            fillRule="evenodd"
-            d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z"
-            clipRule="evenodd"
-          />
-        </svg>
-        Tab Graph
-      </button>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className={`w-3 h-3 transition-transform ${collapsed ? "" : "rotate-90"}`}
+          >
+            <path
+              fillRule="evenodd"
+              d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z"
+              clipRule="evenodd"
+            />
+          </svg>
+          Tab Graph
+        </button>
+        {!collapsed && !isEmpty && (
+          <button
+            onClick={toggleViewMode}
+            title={viewMode === "graph" ? "Switch to list view" : "Switch to graph view"}
+            className="px-2 py-1 mr-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            {viewMode === "graph" ? (
+              /* List icon */
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                <path fillRule="evenodd" d="M6 4.75A.75.75 0 0 1 6.75 4h10.5a.75.75 0 0 1 0 1.5H6.75A.75.75 0 0 1 6 4.75ZM6 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H6.75A.75.75 0 0 1 6 10Zm0 5.25a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H6.75a.75.75 0 0 1-.75-.75ZM1.99 4.75a1 1 0 0 1 1-1h.01a1 1 0 0 1 0 2h-.01a1 1 0 0 1-1-1ZM2.99 9a1 1 0 1 0 0 2h.01a1 1 0 1 0 0-2h-.01ZM1.99 15.25a1 1 0 0 1 1-1h.01a1 1 0 0 1 0 2h-.01a1 1 0 0 1-1-1Z" clipRule="evenodd" />
+              </svg>
+            ) : (
+              /* Graph icon */
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                <path d="M15.5 2A1.5 1.5 0 0 0 14 3.5v13a1.5 1.5 0 0 0 1.5 1.5h1a1.5 1.5 0 0 0 1.5-1.5v-13A1.5 1.5 0 0 0 16.5 2h-1ZM9.5 6A1.5 1.5 0 0 0 8 7.5v9A1.5 1.5 0 0 0 9.5 18h1a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 10.5 6h-1ZM3.5 10A1.5 1.5 0 0 0 2 11.5v5A1.5 1.5 0 0 0 3.5 18h1A1.5 1.5 0 0 0 6 16.5v-5A1.5 1.5 0 0 0 4.5 10h-1Z" />
+              </svg>
+            )}
+          </button>
+        )}
+      </div>
 
       {!collapsed && (
         <div className="px-3 py-1">
@@ -279,6 +340,44 @@ export default function TabGraphSection() {
             <p className="text-xs text-gray-400 dark:text-gray-500 py-4 text-center">
               No browsing data yet. Start browsing to see your tab relationships.
             </p>
+          ) : viewMode === "list" ? (
+            /* List View */
+            <div className="max-h-[300px] overflow-y-auto">
+              {groupedNodes.map(([domain, nodes]) => (
+                <div key={domain} className="mb-2">
+                  <div className="flex items-center gap-1.5 py-1 text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                    <span
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: getDomainColor(domain, domainColorMap) }}
+                    />
+                    {domain}
+                    <span className="text-gray-300 dark:text-gray-600">({nodes.length})</span>
+                  </div>
+                  {nodes.map((node) => (
+                    <button
+                      key={node.id}
+                      onClick={() => handleNodeClick(node)}
+                      className="flex items-center gap-2 w-full px-2 py-1 text-xs rounded hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-left"
+                    >
+                      <img
+                        src={`https://www.google.com/s2/favicons?domain=${node.domain}&sz=16`}
+                        alt=""
+                        className="w-3 h-3 flex-shrink-0"
+                      />
+                      <span className="flex-1 truncate text-gray-700 dark:text-gray-300">
+                        {truncate(node.title || node.url, 50)}
+                      </span>
+                      <span className="text-[10px] text-gray-400 dark:text-gray-500 flex-shrink-0">
+                        {node.visitCount}
+                      </span>
+                      {node.isOpen && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" title="Tab open" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="relative">
               <svg
