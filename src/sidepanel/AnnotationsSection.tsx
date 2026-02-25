@@ -68,11 +68,13 @@ function getColorDot(color: string): string {
 }
 
 function scrollToAnnotation(annotation: Annotation): void {
-  chrome.runtime.sendMessage({
-    type: "SCROLL_TO_ANNOTATION",
-    annotationId: annotation.id,
-    url: annotation.url,
-  }).catch(() => {});
+  chrome.runtime
+    .sendMessage({
+      type: "SCROLL_TO_ANNOTATION",
+      annotationId: annotation.id,
+      url: annotation.url,
+    })
+    .catch(() => {});
 }
 
 function AnnotationItem({
@@ -197,14 +199,20 @@ export default function AnnotationsSection() {
   }, []);
 
   useEffect(() => {
-    loadAnnotations();
-  }, [loadAnnotations]);
+    let cancelled = false;
+    getAllAnnotations().then((all) => {
+      if (!cancelled) setAnnotations(all);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Listen for storage changes (live updates)
   useEffect(() => {
     const handleStorageChange = (
       changes: { [key: string]: chrome.storage.StorageChange },
-      area: string,
+      area: string
     ) => {
       if (area === "local" && changes.annotations) {
         loadAnnotations();
@@ -222,7 +230,7 @@ export default function AnnotationsSection() {
       await deleteAnnotation(id);
       loadAnnotations();
     },
-    [loadAnnotations],
+    [loadAnnotations]
   );
 
   // Close export menu on outside click
@@ -353,7 +361,8 @@ export default function AnnotationsSection() {
         <div id="annotations-list">
           {groups.length === 0 ? (
             <p className="text-xs text-gray-400 dark:text-gray-500 px-2 py-2 text-center">
-              No annotations yet. Select text on any page to highlight or add notes.
+              No annotations yet. Select text on any page to highlight or add
+              notes.
             </p>
           ) : (
             <div className="flex flex-col gap-0.5">

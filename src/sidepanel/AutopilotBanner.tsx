@@ -29,16 +29,14 @@ export default function AutopilotBanner() {
 
   // Countdown timer — auto-dismiss after reaching 0
   useEffect(() => {
-    if (!banner) return;
-    if (banner.countdown <= 0) {
-      setBanner(null);
-      return;
-    }
+    if (!banner || banner.countdown <= 0) return;
 
     const timer = setTimeout(() => {
-      setBanner((prev) =>
-        prev ? { ...prev, countdown: prev.countdown - 1 } : null
-      );
+      setBanner((prev) => {
+        if (!prev) return null;
+        if (prev.countdown <= 1) return null;
+        return { ...prev, countdown: prev.countdown - 1 };
+      });
     }, 1000);
 
     return () => clearTimeout(timer);

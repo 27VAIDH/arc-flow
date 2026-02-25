@@ -26,7 +26,7 @@ function collectDomains(trees: NavTreeNode[]): string[] {
 function nodeMatchesFilter(
   node: NavTreeNode,
   searchLower: string,
-  domainFilter: string,
+  domainFilter: string
 ): boolean {
   const titleMatch =
     !searchLower ||
@@ -40,11 +40,11 @@ function nodeMatchesFilter(
 function treeHasMatch(
   node: NavTreeNode,
   searchLower: string,
-  domainFilter: string,
+  domainFilter: string
 ): boolean {
   if (nodeMatchesFilter(node, searchLower, domainFilter)) return true;
   return node.children.some((child) =>
-    treeHasMatch(child, searchLower, domainFilter),
+    treeHasMatch(child, searchLower, domainFilter)
   );
 }
 
@@ -59,7 +59,11 @@ function useDebounce<T>(value: T, delay: number): T {
 
 function getTimeRange(range: DateRange): { start: number; end: number } {
   const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const todayStart = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  ).getTime();
   const todayEnd = now.getTime();
 
   switch (range) {
@@ -113,9 +117,16 @@ function treeToMarkdown(node: NavTreeNode, depth: number): string {
   return md;
 }
 
-function exportTreesAsMarkdown(trees: NavTreeNode[], dateRange: DateRange): string {
+function exportTreesAsMarkdown(
+  trees: NavTreeNode[],
+  dateRange: DateRange
+): string {
   const rangeLabel =
-    dateRange === "today" ? "Today" : dateRange === "yesterday" ? "Yesterday" : "This Week";
+    dateRange === "today"
+      ? "Today"
+      : dateRange === "yesterday"
+        ? "Yesterday"
+        : "This Week";
   let md = `# Time Machine Export — ${rangeLabel}\n\n`;
   for (const tree of trees) {
     md += treeToMarkdown(tree, 0);
@@ -131,7 +142,7 @@ function collectPathUrls(ancestorUrls: string[], node: NavTreeNode): string[] {
 async function restorePath(urls: string[]) {
   if (urls.length > 5) {
     const confirmed = window.confirm(
-      `This will open ${urls.length} tabs in a new window. Continue?`,
+      `This will open ${urls.length} tabs in a new window. Continue?`
     );
     if (!confirmed) return;
   }
@@ -164,11 +175,8 @@ function TreeNode({
   // Auto-expand when filtering and this subtree has matches
   const hasMatchInSubtree = useMemo(
     () => (isFiltering ? treeHasMatch(node, searchLower, domainFilter) : true),
-    [node, searchLower, domainFilter, isFiltering],
+    [node, searchLower, domainFilter, isFiltering]
   );
-
-  // Hide this entire subtree if no matches
-  if (isFiltering && !hasMatchInSubtree) return null;
 
   const selfMatches = isFiltering
     ? nodeMatchesFilter(node, searchLower, domainFilter)
@@ -184,8 +192,11 @@ function TreeNode({
       e.stopPropagation();
       restorePath(pathUrls);
     },
-    [pathUrls],
+    [pathUrls]
   );
+
+  // Hide this entire subtree if no matches (after all hooks)
+  if (isFiltering && !hasMatchInSubtree) return null;
 
   return (
     <div className="relative">
@@ -336,16 +347,28 @@ export default function TimeMachineSection() {
   }, [dateRange]);
 
   useEffect(() => {
-    loadTrees();
-  }, [loadTrees]);
+    let cancelled = false;
+    (async () => {
+      const settings = await getSettings();
+      if (cancelled) return;
+      setEnabled(settings.timeMachineEnabled);
+      if (!settings.timeMachineEnabled) return;
+      const { start, end } = getTimeRange(dateRange);
+      const result = await getTreesForTimeRange(start, end);
+      if (!cancelled) setTrees(result);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dateRange]);
 
   // Listen for storage changes (live updates)
   useEffect(() => {
     const handleStorageChange = (
-      changes: { [key: string]: chrome.storage.StorageChange },
-      area: string,
+      _changes: { [key: string]: chrome.storage.StorageChange },
+      area: string
     ) => {
-      if (area === "local" && changes.settings) {
+      if (area === "local") {
         loadTrees();
       }
     };
@@ -415,12 +438,8 @@ export default function TimeMachineSection() {
             fill="currentColor"
             className="w-3.5 h-3.5"
           >
-            <path
-              d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z"
-            />
-            <path
-              d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z"
-            />
+            <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
+            <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
           </svg>
         </button>
       )}

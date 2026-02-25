@@ -114,7 +114,7 @@ export type SidePanelMessage =
       redirectRules: { blockedPattern: string; redirectUrl: string }[];
     }
   | { type: "GET_TAB_INFO"; tabId: number }
-  | { type: "CAPTURE_PAGE_TEXT" }
+  | { type: "CAPTURE_PAGE_TEXT"; sessionId: string }
   | { type: "SAVE_ANNOTATION"; annotation: Annotation }
   | { type: "DELETE_ANNOTATION"; id: string }
   | { type: "GET_ANNOTATIONS"; url: string }
@@ -190,7 +190,7 @@ export interface Annotation {
   id: string;
   url: string;
   pageTitle: string;
-  type: 'highlight' | 'note';
+  type: "highlight" | "note";
   text: string;
   comment?: string;
   color: string;
@@ -202,7 +202,7 @@ export interface Annotation {
 }
 
 export interface AutopilotCondition {
-  type: 'time' | 'domain' | 'displayCount';
+  type: "time" | "domain" | "displayCount";
   value: string;
 }
 
@@ -240,7 +240,7 @@ export interface GraphEdge {
   source: string;
   target: string;
   weight: number;
-  type: 'navigation' | 'switch';
+  type: "navigation" | "switch";
 }
 
 export interface GraphData {

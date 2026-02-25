@@ -26,7 +26,11 @@ import { matchRoute } from "../shared/routingEngine";
 import { calculateEnergyScore } from "../shared/energyScore";
 import { addNavEvent, pruneOldEvents } from "../shared/navigationDb";
 import { recordSwitch } from "../shared/affinityStorage";
-import { saveAnnotation, deleteAnnotation, getAnnotationsForUrl } from "../shared/annotationStorage";
+import {
+  saveAnnotation,
+  deleteAnnotation,
+  getAnnotationsForUrl,
+} from "../shared/annotationStorage";
 import { getBestMatch } from "../shared/autopilotEngine";
 import { savePageCapture } from "../shared/researchDb";
 import { summarizePage } from "../shared/aiResearchService";
@@ -151,7 +155,10 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 // --- Recently closed tabs: in-memory tab info cache ---
 // We cache tab info because chrome.tabs.get() doesn't work after a tab is removed.
-const tabInfoCache = new Map<number, { url: string; title: string; favIconUrl: string }>();
+const tabInfoCache = new Map<
+  number,
+  { url: string; title: string; favIconUrl: string }
+>();
 const RECENTLY_CLOSED_KEY = "recentlyClosed";
 const MAX_RECENTLY_CLOSED = 20;
 
@@ -314,10 +321,10 @@ async function handleSaveToNotes(
 
   // Send message to content script to show annotation popup
   try {
-    const response = await chrome.tabs.sendMessage(tabId, {
+    const response = (await chrome.tabs.sendMessage(tabId, {
       type: "ARCFLOW_CAPTURE_SELECTION",
       selectedText,
-    }) as { action: string; annotation?: string } | undefined;
+    })) as { action: string; annotation?: string } | undefined;
 
     if (!response || response.action === "cancel") return;
 
@@ -333,7 +340,9 @@ async function handleSaveToNotes(
     const newNotes = currentNotes + noteEntry;
     if (newNotes.length > MAX_NOTES_CHARS) {
       // Notify content script that notes are full
-      chrome.tabs.sendMessage(tabId, { type: "ARCFLOW_NOTES_FULL" }).catch(() => {});
+      chrome.tabs
+        .sendMessage(tabId, { type: "ARCFLOW_NOTES_FULL" })
+        .catch(() => {});
       return;
     }
 
@@ -353,7 +362,9 @@ async function handleSaveToNotes(
     });
   } catch {
     // Content script may not be injected (e.g., chrome:// pages)
-    console.error("Failed to save to ArcFlow Notes — content script not available");
+    console.error(
+      "Failed to save to ArcFlow Notes — content script not available"
+    );
   }
 }
 
@@ -376,10 +387,10 @@ async function handleSaveSnippet(
   const wsName = ws ? `${ws.emoji} ${ws.name}` : "Default";
 
   try {
-    const response = await chrome.tabs.sendMessage(tabId, {
+    const response = (await chrome.tabs.sendMessage(tabId, {
       type: "ARCFLOW_CAPTURE_SNIPPET",
       selectedText,
-    }) as { action: string; annotation?: string } | undefined;
+    })) as { action: string; annotation?: string } | undefined;
 
     if (!response || response.action === "cancel") return;
 
@@ -387,7 +398,8 @@ async function handleSaveSnippet(
     const storageKey = `snippets_${wsId}`;
 
     const result = await chrome.storage.local.get(storageKey);
-    const snippets: Snippet[] = (result[storageKey] as Snippet[] | undefined) ?? [];
+    const snippets: Snippet[] =
+      (result[storageKey] as Snippet[] | undefined) ?? [];
 
     const newSnippet: Snippet = {
       id: crypto.randomUUID(),
@@ -417,7 +429,9 @@ async function handleSaveSnippet(
     chrome.runtime.sendMessage(notifyMessage).catch(() => {});
 
     if (warning) {
-      console.warn(`Snippets for workspace ${wsId} exceeded ${MAX_SNIPPETS_PER_WORKSPACE} — oldest removed`);
+      console.warn(
+        `Snippets for workspace ${wsId} exceeded ${MAX_SNIPPETS_PER_WORKSPACE} — oldest removed`
+      );
     }
   } catch {
     console.error("Failed to save snippet — content script not available");
@@ -459,7 +473,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     const selectedText = info.selectionText ?? "";
     if (!selectedText) return;
 
-    await handleSaveToNotes(tab.id, selectedText, tab.title ?? "", tab.url ?? "");
+    await handleSaveToNotes(
+      tab.id,
+      selectedText,
+      tab.title ?? "",
+      tab.url ?? ""
+    );
     return;
   }
 
@@ -468,7 +487,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     const selectedText = info.selectionText ?? "";
     if (!selectedText) return;
 
-    await handleSaveSnippet(tab.id, selectedText, tab.title ?? "", tab.url ?? "");
+    await handleSaveSnippet(
+      tab.id,
+      selectedText,
+      tab.title ?? "",
+      tab.url ?? ""
+    );
     return;
   }
 });
@@ -553,7 +577,8 @@ async function trackRecentlyClosed(tabId: number): Promise<void> {
   };
 
   const result = await chrome.storage.local.get(RECENTLY_CLOSED_KEY);
-  const existing = (result[RECENTLY_CLOSED_KEY] as RecentlyClosedTab[] | undefined) ?? [];
+  const existing =
+    (result[RECENTLY_CLOSED_KEY] as RecentlyClosedTab[] | undefined) ?? [];
   existing.unshift(entry);
   const capped = existing.slice(0, MAX_RECENTLY_CLOSED);
   await chrome.storage.local.set({ [RECENTLY_CLOSED_KEY]: capped });
@@ -564,7 +589,10 @@ async function trackRecentlyClosed(tabId: number): Promise<void> {
 
 async function incrementTabCounter(field: "opened" | "closed"): Promise<void> {
   const result = await chrome.storage.local.get("tabSessionCounters");
-  const counters = (result.tabSessionCounters as { opened: number; closed: number }) ?? { opened: 0, closed: 0 };
+  const counters = (result.tabSessionCounters as {
+    opened: number;
+    closed: number;
+  }) ?? { opened: 0, closed: 0 };
   counters[field] += 1;
   await chrome.storage.local.set({ tabSessionCounters: counters });
 }
@@ -591,7 +619,12 @@ const analyticsBuffer: {
   closedDelta: number;
   domainDeltas: Record<string, number>;
   workspaceMinutesDeltas: Record<string, number>;
-} = { openedDelta: 0, closedDelta: 0, domainDeltas: {}, workspaceMinutesDeltas: {} };
+} = {
+  openedDelta: 0,
+  closedDelta: 0,
+  domainDeltas: {},
+  workspaceMinutesDeltas: {},
+};
 
 // Track last activation for workspace time calculation
 let lastActivationTime: number = 0;
@@ -616,7 +649,8 @@ function analyticsTrackDomain(url: string): void {
   try {
     const hostname = new URL(url).hostname.replace(/^www\./, "");
     if (!hostname) return;
-    analyticsBuffer.domainDeltas[hostname] = (analyticsBuffer.domainDeltas[hostname] ?? 0) + 1;
+    analyticsBuffer.domainDeltas[hostname] =
+      (analyticsBuffer.domainDeltas[hostname] ?? 0) + 1;
     analyticsDirty = true;
   } catch {
     // Malformed URL
@@ -631,7 +665,8 @@ function analyticsTrackWorkspaceTime(): void {
     const capped = Math.min(elapsedMinutes, 30);
     if (capped > 0.01) {
       analyticsBuffer.workspaceMinutesDeltas[lastActivationWorkspaceId] =
-        (analyticsBuffer.workspaceMinutesDeltas[lastActivationWorkspaceId] ?? 0) + capped;
+        (analyticsBuffer.workspaceMinutesDeltas[lastActivationWorkspaceId] ??
+          0) + capped;
       analyticsDirty = true;
     }
   }
@@ -652,10 +687,17 @@ async function flushAnalytics(): Promise<void> {
 
   const todayKey = getAnalyticsTodayKey();
   const result = await chrome.storage.local.get("analytics");
-  const analytics: AnalyticsData = (result.analytics as AnalyticsData) ?? { daily: {} };
+  const analytics: AnalyticsData = (result.analytics as AnalyticsData) ?? {
+    daily: {},
+  };
 
   if (!analytics.daily[todayKey]) {
-    analytics.daily[todayKey] = { opened: 0, closed: 0, domains: {}, workspaceMinutes: {} };
+    analytics.daily[todayKey] = {
+      opened: 0,
+      closed: 0,
+      domains: {},
+      workspaceMinutes: {},
+    };
   }
 
   const today = analytics.daily[todayKey];
@@ -666,8 +708,11 @@ async function flushAnalytics(): Promise<void> {
     today.domains[domain] = (today.domains[domain] ?? 0) + count;
   }
 
-  for (const [wsId, minutes] of Object.entries(analyticsBuffer.workspaceMinutesDeltas)) {
-    today.workspaceMinutes[wsId] = (today.workspaceMinutes[wsId] ?? 0) + minutes;
+  for (const [wsId, minutes] of Object.entries(
+    analyticsBuffer.workspaceMinutesDeltas
+  )) {
+    today.workspaceMinutes[wsId] =
+      (today.workspaceMinutes[wsId] ?? 0) + minutes;
   }
 
   // Prune old entries
@@ -729,7 +774,9 @@ async function recalculateEnergyScores(): Promise<void> {
   for (const tab of allTabs) {
     if (tab.id == null || !tab.url || isIgnoredUrl(tab.url)) continue;
     const activationCount = getActivationCountLast24h(tab.id);
-    const lastActiveAt = tab.active ? Date.now() : (tabLastActiveMap.get(tab.id) ?? 0);
+    const lastActiveAt = tab.active
+      ? Date.now()
+      : (tabLastActiveMap.get(tab.id) ?? 0);
     scores[String(tab.id)] = calculateEnergyScore(
       { tabId: tab.id, url: tab.url, active: tab.active },
       activationCount,
@@ -740,7 +787,9 @@ async function recalculateEnergyScores(): Promise<void> {
   await chrome.storage.local.set({ tabEnergyScores: scores });
 
   // Clean up activation counts for tabs that no longer exist
-  const currentTabIds = new Set(allTabs.map((t) => t.id).filter((id): id is number => id != null));
+  const currentTabIds = new Set(
+    allTabs.map((t) => t.id).filter((id): id is number => id != null)
+  );
   for (const tabId of tabActivationCounts.keys()) {
     if (!currentTabIds.has(tabId)) {
       tabActivationCounts.delete(tabId);
@@ -821,7 +870,10 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
   trackTabActivation(activeInfo.tabId);
 
   // Record tab switch for affinity tracking
-  if (previousActiveTabId !== null && previousActiveTabId !== activeInfo.tabId) {
+  if (
+    previousActiveTabId !== null &&
+    previousActiveTabId !== activeInfo.tabId
+  ) {
     recordSwitch(previousActiveTabId, activeInfo.tabId).catch(() => {});
   }
   previousActiveTabId = activeInfo.tabId;
@@ -850,8 +902,15 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
 
 chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
   // Update tab info cache on URL or title changes
-  if (tab.id != null && (changeInfo.url || changeInfo.title || changeInfo.favIconUrl)) {
-    const existing = tabInfoCache.get(tab.id) ?? { url: "", title: "", favIconUrl: "" };
+  if (
+    tab.id != null &&
+    (changeInfo.url || changeInfo.title || changeInfo.favIconUrl)
+  ) {
+    const existing = tabInfoCache.get(tab.id) ?? {
+      url: "",
+      title: "",
+      favIconUrl: "",
+    };
     tabInfoCache.set(tab.id, {
       url: changeInfo.url ?? existing.url,
       title: changeInfo.title ?? existing.title,
@@ -1111,7 +1170,10 @@ async function captureDailySnapshot(): Promise<void> {
   }));
 
   // Group tabs by workspace
-  const tabsByWs: Record<string, { url: string; title: string; favicon: string }[]> = {};
+  const tabsByWs: Record<
+    string,
+    { url: string; title: string; favicon: string }[]
+  > = {};
   for (const tab of allTabs) {
     if (!tab.url || tab.id == null || isIgnoredUrl(tab.url)) continue;
     const wsId = tabMap[String(tab.id)] ?? "default";
@@ -1355,10 +1417,7 @@ async function checkForWorkspaceSuggestion(): Promise<void> {
   let suggestion: WorkspaceSuggestion | null = null;
 
   if (settings.openRouterApiKey) {
-    suggestion = await getAISuggestion(
-      settings.openRouterApiKey,
-      unorganized
-    );
+    suggestion = await getAISuggestion(settings.openRouterApiKey, unorganized);
   }
 
   // Fallback to domain clustering if AI unavailable or returned no suggestion
@@ -1392,13 +1451,17 @@ async function evaluateAutopilot(): Promise<void> {
 
   // Load autopilot rules from storage
   const result = await chrome.storage.local.get("autopilotRules");
-  const rules: AutopilotRule[] = (result.autopilotRules as AutopilotRule[] | undefined) ?? [];
+  const rules: AutopilotRule[] =
+    (result.autopilotRules as AutopilotRule[] | undefined) ?? [];
   if (rules.length === 0) return;
 
   // Build context: current time, active tab URL, display count
   let activeTabUrl = "";
   try {
-    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [activeTab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
     if (activeTab?.url) {
       activeTabUrl = activeTab.url;
     }
@@ -1488,17 +1551,19 @@ async function evaluateAutopilot(): Promise<void> {
 }
 
 // Handle notification button click (cancel autopilot switch)
-chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
-  if (notificationId === "arcflow-autopilot-switch" && buttonIndex === 0) {
-    // Cancel the pending switch
-    if (autopilotSwitchTimer !== null) {
-      clearTimeout(autopilotSwitchTimer);
-      autopilotSwitchTimer = null;
+chrome.notifications.onButtonClicked.addListener(
+  (notificationId, buttonIndex) => {
+    if (notificationId === "arcflow-autopilot-switch" && buttonIndex === 0) {
+      // Cancel the pending switch
+      if (autopilotSwitchTimer !== null) {
+        clearTimeout(autopilotSwitchTimer);
+        autopilotSwitchTimer = null;
+      }
+      autopilotPreviousWorkspaceId = null;
+      chrome.notifications.clear("arcflow-autopilot-switch");
     }
-    autopilotPreviousWorkspaceId = null;
-    chrome.notifications.clear("arcflow-autopilot-switch");
   }
-});
+);
 
 async function undoAutopilotSwitch(): Promise<void> {
   if (!autopilotPreviousWorkspaceId) return;
@@ -1526,7 +1591,7 @@ const LEARNING_SUGGESTION_KEY = "autopilotLearningSuggestion";
 const LEARNING_MIN_PATTERN_COUNT = 5;
 
 // Track autopilot-initiated workspace IDs to filter from learning mode
- 
+
 let lastAutopilotSwitchedTo: string | null = null;
 
 async function recordManualSwitch(workspaceId: string): Promise<void> {
@@ -1536,7 +1601,10 @@ async function recordManualSwitch(workspaceId: string): Promise<void> {
   // Get active tab URL for domain context
   let domain = "";
   try {
-    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [activeTab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
     if (activeTab?.url) {
       try {
         domain = new URL(activeTab.url).hostname;
@@ -1556,7 +1624,8 @@ async function recordManualSwitch(workspaceId: string): Promise<void> {
   };
 
   const result = await chrome.storage.local.get(LEARNING_STORAGE_KEY);
-  const log: LearningEntry[] = (result[LEARNING_STORAGE_KEY] as LearningEntry[] | undefined) ?? [];
+  const log: LearningEntry[] =
+    (result[LEARNING_STORAGE_KEY] as LearningEntry[] | undefined) ?? [];
   log.push(entry);
 
   // Cap at 500 entries
@@ -1586,13 +1655,23 @@ async function checkLearningPatterns(log: LearningEntry[]): Promise<void> {
   }
 
   // Find strongest pattern that meets threshold
-  let bestPattern: { type: 'time' | 'domain'; value: string; workspaceId: string; count: number } | null = null;
+  let bestPattern: {
+    type: "time" | "domain";
+    value: string;
+    workspaceId: string;
+    count: number;
+  } | null = null;
 
   for (const [key, count] of Object.entries(hourPatterns)) {
     if (count >= LEARNING_MIN_PATTERN_COUNT) {
       const match = key.match(/^time:(\d+-\d+)\|ws:(.+)$/);
       if (match && (!bestPattern || count > bestPattern.count)) {
-        bestPattern = { type: 'time', value: `${match[1].replace('-', ':00-')}:00`, workspaceId: match[2], count };
+        bestPattern = {
+          type: "time",
+          value: `${match[1].replace("-", ":00-")}:00`,
+          workspaceId: match[2],
+          count,
+        };
       }
     }
   }
@@ -1601,7 +1680,12 @@ async function checkLearningPatterns(log: LearningEntry[]): Promise<void> {
     if (count >= LEARNING_MIN_PATTERN_COUNT) {
       const match = key.match(/^domain:(.+)\|ws:(.+)$/);
       if (match && (!bestPattern || count > bestPattern.count)) {
-        bestPattern = { type: 'domain', value: match[1], workspaceId: match[2], count };
+        bestPattern = {
+          type: "domain",
+          value: match[1],
+          workspaceId: match[2],
+          count,
+        };
       }
     }
   }
@@ -1609,12 +1693,14 @@ async function checkLearningPatterns(log: LearningEntry[]): Promise<void> {
   if (bestPattern) {
     // Check if we already have a rule for this pattern
     const rulesResult = await chrome.storage.local.get("autopilotRules");
-    const existingRules: AutopilotRule[] = (rulesResult.autopilotRules as AutopilotRule[] | undefined) ?? [];
+    const existingRules: AutopilotRule[] =
+      (rulesResult.autopilotRules as AutopilotRule[] | undefined) ?? [];
 
-    const alreadyExists = existingRules.some((rule) =>
-      rule.conditions.some(
-        (c) => c.type === bestPattern!.type && c.value === bestPattern!.value
-      ) && rule.targetWorkspaceId === bestPattern!.workspaceId
+    const alreadyExists = existingRules.some(
+      (rule) =>
+        rule.conditions.some(
+          (c) => c.type === bestPattern!.type && c.value === bestPattern!.value
+        ) && rule.targetWorkspaceId === bestPattern!.workspaceId
     );
 
     if (!alreadyExists) {
@@ -1634,7 +1720,9 @@ async function checkLearningPatterns(log: LearningEntry[]): Promise<void> {
 // Listen for workspace changes to detect manual switches
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes.activeWorkspaceId) {
-    const newWorkspaceId = changes.activeWorkspaceId.newValue as string | undefined;
+    const newWorkspaceId = changes.activeWorkspaceId.newValue as
+      | string
+      | undefined;
     if (newWorkspaceId) {
       // Skip autopilot-initiated switches
       if (lastAutopilotSwitchedTo === newWorkspaceId) {
@@ -1763,7 +1851,10 @@ chrome.omnibox.setDefaultSuggestion({
 });
 
 chrome.omnibox.onInputChanged.addListener(
-  (text: string, suggest: (suggestions: chrome.omnibox.SuggestResult[]) => void) => {
+  (
+    text: string,
+    suggest: (suggestions: chrome.omnibox.SuggestResult[]) => void
+  ) => {
     (async () => {
       const settings = await getSettings();
       if (!settings.omniboxEnabled) {
@@ -1780,7 +1871,8 @@ chrome.omnibox.onInputChanged.addListener(
       const allTabs = await chrome.tabs.query({});
       const tabMap = await getTabWorkspaceMap();
       const result = await chrome.storage.local.get("activeWorkspaceId");
-      const activeWsId = (result.activeWorkspaceId as string | undefined) ?? "default";
+      const activeWsId =
+        (result.activeWorkspaceId as string | undefined) ?? "default";
 
       const currentWsMatches: { tab: chrome.tabs.Tab; hostname: string }[] = [];
       const otherWsMatches: { tab: chrome.tabs.Tab; hostname: string }[] = [];
@@ -1807,8 +1899,14 @@ chrome.omnibox.onInputChanged.addListener(
         .slice(0, 5)
         .map(({ tab, hostname }) => {
           // Escape XML special characters for omnibox description
-          const title = (tab.title ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-          const domain = hostname.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          const title = (tab.title ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+          const domain = hostname
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
           return {
             content: String(tab.id),
             description: `${title} &ndash; <url>${domain}</url> (Switch to Tab)`,
@@ -1822,44 +1920,44 @@ chrome.omnibox.onInputChanged.addListener(
   }
 );
 
-chrome.omnibox.onInputEntered.addListener(
-  (text: string) => {
-    (async () => {
-      const tabId = parseInt(text, 10);
-      if (!isNaN(tabId)) {
-        // User selected a tab suggestion — activate it
-        const tabMap = await getTabWorkspaceMap();
-        const result = await chrome.storage.local.get("activeWorkspaceId");
-        const activeWsId = (result.activeWorkspaceId as string | undefined) ?? "default";
-        const tabWsId = tabMap[String(tabId)] ?? "default";
+chrome.omnibox.onInputEntered.addListener((text: string) => {
+  (async () => {
+    const tabId = parseInt(text, 10);
+    if (!isNaN(tabId)) {
+      // User selected a tab suggestion — activate it
+      const tabMap = await getTabWorkspaceMap();
+      const result = await chrome.storage.local.get("activeWorkspaceId");
+      const activeWsId =
+        (result.activeWorkspaceId as string | undefined) ?? "default";
+      const tabWsId = tabMap[String(tabId)] ?? "default";
 
-        if (tabWsId !== activeWsId) {
-          // Cross-workspace: switch workspace first
-          await setActiveWorkspace(tabWsId);
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
+      if (tabWsId !== activeWsId) {
+        // Cross-workspace: switch workspace first
+        await setActiveWorkspace(tabWsId);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
 
-        await chrome.tabs.update(tabId, { active: true });
-        // Focus the tab's window
-        const tab = await chrome.tabs.get(tabId);
-        if (tab.windowId) {
-          await chrome.windows.update(tab.windowId, { focused: true });
-        }
-      } else {
-        // No matching tab — open as URL or Google search
-        let url: string;
-        if (text.includes(".")) {
-          url = text.startsWith("http://") || text.startsWith("https://")
+      await chrome.tabs.update(tabId, { active: true });
+      // Focus the tab's window
+      const tab = await chrome.tabs.get(tabId);
+      if (tab.windowId) {
+        await chrome.windows.update(tab.windowId, { focused: true });
+      }
+    } else {
+      // No matching tab — open as URL or Google search
+      let url: string;
+      if (text.includes(".")) {
+        url =
+          text.startsWith("http://") || text.startsWith("https://")
             ? text
             : `https://${text}`;
-        } else {
-          url = `https://www.google.com/search?q=${encodeURIComponent(text)}`;
-        }
-        await chrome.tabs.create({ url });
+      } else {
+        url = `https://www.google.com/search?q=${encodeURIComponent(text)}`;
       }
-    })().catch(() => {});
-  }
-);
+      await chrome.tabs.create({ url });
+    }
+  })().catch(() => {});
+});
 
 // Handle messages from side panel
 chrome.runtime.onMessage.addListener(
@@ -1933,7 +2031,11 @@ chrome.runtime.onMessage.addListener(
             for (const w of workspaces) {
               for (const folder of w.folders) {
                 for (const item of folder.items) {
-                  if (item.type === "tab" && item.tabId === message.tabId && item.lastActiveAt) {
+                  if (
+                    item.type === "tab" &&
+                    item.tabId === message.tabId &&
+                    item.lastActiveAt
+                  ) {
                     lastActiveAt = item.lastActiveAt;
                   }
                 }
@@ -1984,11 +2086,13 @@ chrome.runtime.onMessage.addListener(
       });
     }
     if (message.type === "GET_ANNOTATIONS") {
-      getAnnotationsForUrl(message.url).then((annotations) => {
-        sendResponse({ annotations });
-      }).catch(() => {
-        sendResponse({ annotations: [] });
-      });
+      getAnnotationsForUrl(message.url)
+        .then((annotations) => {
+          sendResponse({ annotations });
+        })
+        .catch(() => {
+          sendResponse({ annotations: [] });
+        });
       return true; // async sendResponse
     }
     if (message.type === "SCROLL_TO_ANNOTATION") {
@@ -2007,10 +2111,12 @@ chrome.runtime.onMessage.addListener(
               await chrome.windows.update(tabs[0].windowId, { focused: true });
             }
             // Send scroll message to content script
-            chrome.tabs.sendMessage(targetTabId, {
-              type: "SCROLL_TO_ANNOTATION",
-              annotationId,
-            }).catch(() => {});
+            chrome.tabs
+              .sendMessage(targetTabId, {
+                type: "SCROLL_TO_ANNOTATION",
+                annotationId,
+              })
+              .catch(() => {});
           } else {
             // Open URL in new tab, then scroll after load
             const newTab = await chrome.tabs.create({ url, active: true });
@@ -2018,16 +2124,21 @@ chrome.runtime.onMessage.addListener(
               const tabId = newTab.id;
               const onUpdated = (
                 updatedTabId: number,
-                changeInfo: { status?: string },
+                changeInfo: { status?: string }
               ) => {
-                if (updatedTabId === tabId && changeInfo.status === "complete") {
+                if (
+                  updatedTabId === tabId &&
+                  changeInfo.status === "complete"
+                ) {
                   chrome.tabs.onUpdated.removeListener(onUpdated);
                   // Small delay for content script to initialize and render annotations
                   setTimeout(() => {
-                    chrome.tabs.sendMessage(tabId, {
-                      type: "SCROLL_TO_ANNOTATION",
-                      annotationId,
-                    }).catch(() => {});
+                    chrome.tabs
+                      .sendMessage(tabId, {
+                        type: "SCROLL_TO_ANNOTATION",
+                        annotationId,
+                      })
+                      .catch(() => {});
                   }, 500);
                 }
               };
@@ -2053,16 +2164,16 @@ chrome.runtime.onMessage.addListener(
           });
           if (!activeTab?.id) return;
 
-          const response = await chrome.tabs.sendMessage(activeTab.id, {
+          const response = (await chrome.tabs.sendMessage(activeTab.id, {
             type: "CAPTURE_PAGE_TEXT",
-          }) as { text: string; title: string; url: string };
+          })) as { text: string; title: string; url: string };
 
           const capture: import("../shared/types").PageCapture = {
             id: crypto.randomUUID(),
             url: response.url,
             title: response.title,
             text: response.text,
-            sessionId: "",
+            sessionId: message.sessionId,
             capturedAt: Date.now(),
           };
 
