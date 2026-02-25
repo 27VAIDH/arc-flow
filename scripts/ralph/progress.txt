@@ -905,3 +905,25 @@ The next iteration will pick up US-R-04.
   - useRef for caching is preferable to useState to avoid triggering re-renders on cache writes
   - Analysis error state should be separate from result state for clean UX
 ---
+
+## Iteration 2 - Wed Feb 25 09:42:11 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260225-093709/iter-2.log
+---
+**US-R-04 complete.** There is still one story with `passes: false` — **US-R-05: Generate Research Brief** (priority 30). Another iteration will pick it up.
+---
+
+## 2026-02-25 09:43 - US-R-05
+- Implemented Generate Research Brief feature in ResearchCopilotSection.tsx
+- Added optional topic input field for focused briefs
+- Added 'Generate Brief' button (enabled when >=1 page captured)
+- Brief results displayed with formatted output (Summary, Key Findings, Sources sections rendered via whitespace-pre-wrap)
+- Added 'Copy to Clipboard' button with copied confirmation state
+- Added 'Export Markdown' button that downloads .md file
+- Brief results cached per session+topic combo to avoid re-fetching on re-render
+- Files changed: src/sidepanel/ResearchCopilotSection.tsx
+- **Learnings for future iterations:**
+  - The generateBrief() function in aiResearchService.ts was already fully implemented — only UI integration was needed
+  - Brief caching uses session ID + topic as composite key since different topics produce different briefs
+  - Blob URL download pattern: create Blob → URL.createObjectURL → click anchor → revokeObjectURL for file downloads from extension sidepanel
+---
