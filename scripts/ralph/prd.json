@@ -674,7 +674,7 @@
         "npm run typecheck passes",
         "npm run test:run passes"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-R-04",

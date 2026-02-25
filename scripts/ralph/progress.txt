@@ -854,3 +854,29 @@ Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/ar
   - OpenRouter API pattern: same base URL, Bearer auth, model "google/gemini-2.0-flash-001" — used across aiGroupingService.ts and aiResearchService.ts
   - Context menu positioning: use .closest(".relative")?.getBoundingClientRect() for container-relative positioning
 ---
+
+## Iteration 3 - Wed Feb 25 01:01:13 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260225-005010/iter-3.log
+---
+US-G-04 is complete. There are still stories with `passes: false` (US-G-05, US-R-04, US-R-05), so another iteration will pick up the next one.
+
+**Summary of US-G-04 implementation:**
+- Added right-click context menu on graph nodes showing cluster actions for same-domain node groups
+- **Create Folder**: Creates a new folder in the active workspace with all pages from the domain cluster
+- **AI Summarize**: Sends the cluster's page titles/URLs to OpenRouter API and displays a summary card below the graph
+- Context menu dismisses on click outside
+- All quality checks pass (typecheck + tests)
+---
+
+## 2026-02-25 09:39 - US-G-05
+- Implemented toggle between SVG graph view and flat list view in TabGraphSection.tsx
+- List view shows nodes sorted by visit count with domain grouping headers and color indicators
+- Same click behavior (switch to tab or open URL) in both views
+- View preference persisted in chrome.storage.local under key `tabGraphViewMode`
+- Toggle button in section header shows list icon when in graph mode and graph icon when in list mode
+- Files changed: src/sidepanel/TabGraphSection.tsx
+- **Learnings for future iterations:**
+  - The `domainColorMap` useMemo is computed from layout.nodes (graph view data), so it can be reused in list view too
+  - `getDomainColor` mutates the Map passed to it — used existing pattern rather than creating a new one
+---
