@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { PageCapture, ResearchSession } from "../shared/types";
 import {
   saveSession,
@@ -6,6 +6,7 @@ import {
   getCaptures,
   deleteSession,
 } from "../shared/researchDb";
+import { connectPages } from "../shared/aiResearchService";
 
 function truncate(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
@@ -123,6 +124,11 @@ export default function ResearchCopilotSection() {
   const [sessions, setSessions] = useState<ResearchSession[]>([]);
   const [historyCollapsed, setHistoryCollapsed] = useState(true);
   const [capturing, setCapturing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  // Cache keyed by session ID to avoid re-fetching on re-render
+  const analysisCacheRef = useRef<Record<string, string>>({});
 
   const loadSessions = useCallback(async () => {
     const all = await getSessions();
@@ -168,6 +174,8 @@ export default function ResearchCopilotSection() {
   const handleStopResearch = useCallback(() => {
     setActiveSession(null);
     setCaptures([]);
+    setAnalysisResult(null);
+    setAnalysisError(null);
     loadSessions();
   }, [loadSessions]);
 
@@ -203,6 +211,39 @@ export default function ResearchCopilotSection() {
     [activeSession, loadSessions],
   );
 
+  const handleAnalyzeConnections = useCallback(async () => {
+    if (!activeSession || captures.length < 2) return;
+
+    // Check cache first
+    const cached = analysisCacheRef.current[activeSession.id];
+    if (cached) {
+      setAnalysisResult(cached);
+      return;
+    }
+
+    setAnalysisLoading(true);
+    setAnalysisError(null);
+    try {
+      const summaries = captures
+        .filter((c) => c.summary)
+        .map((c) => c.summary!);
+      if (summaries.length < 2) {
+        setAnalysisError("Need at least 2 pages with summaries to analyze.");
+        setAnalysisLoading(false);
+        return;
+      }
+      const result = await connectPages(summaries);
+      analysisCacheRef.current[activeSession.id] = result;
+      setAnalysisResult(result);
+    } catch (e) {
+      setAnalysisError(
+        e instanceof Error ? e.message : "Failed to analyze connections",
+      );
+    } finally {
+      setAnalysisLoading(false);
+    }
+  }, [activeSession, captures]);
+
   const handleRestoreSession = useCallback(
     async (sessionId: string) => {
       const session = sessions.find((s) => s.id === sessionId);
@@ -210,6 +251,10 @@ export default function ResearchCopilotSection() {
         setActiveSession(session);
         await loadCaptures(sessionId);
         setHistoryCollapsed(true);
+        // Restore cached analysis or clear
+        const cached = analysisCacheRef.current[sessionId];
+        setAnalysisResult(cached ?? null);
+        setAnalysisError(null);
       }
     },
     [sessions, loadCaptures],
@@ -308,6 +353,29 @@ export default function ResearchCopilotSection() {
                   ))}
                 </div>
               )}
+
+              {/* Analyze Connections */}
+              <div className="mt-2">
+                <button
+                  onClick={handleAnalyzeConnections}
+                  disabled={captures.length < 2 || analysisLoading}
+                  className="w-full text-xs px-2 py-1 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {analysisLoading ? "Analyzing\u2026" : "Analyze Connections"}
+                </button>
+
+                {analysisError && (
+                  <p className="text-[10px] text-red-500 mt-1">
+                    {analysisError}
+                  </p>
+                )}
+
+                {analysisResult && (
+                  <div className="mt-2 p-2 rounded bg-gray-100 dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+                    {analysisResult}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
