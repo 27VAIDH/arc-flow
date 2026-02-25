@@ -41,8 +41,13 @@ export default function MorningBriefing({
   tabWorkspaceMap,
 }: MorningBriefingProps) {
   const [visible, setVisible] = useState(false);
-  const [yesterdayFocus, setYesterdayFocus] = useState<FocusStatsDay | null>(null);
-  const [tabCounters, setTabCounters] = useState<{ opened: number; closed: number }>({ opened: 0, closed: 0 });
+  const [yesterdayFocus, setYesterdayFocus] = useState<FocusStatsDay | null>(
+    null
+  );
+  const [tabCounters, setTabCounters] = useState<{
+    opened: number;
+    closed: number;
+  }>({ opened: 0, closed: 0 });
   const [aiTip, setAiTip] = useState<string | null>(null);
 
   // Check if briefing should show (first open per calendar day)
@@ -72,7 +77,10 @@ export default function MorningBriefing({
   useEffect(() => {
     if (!visible) return;
     chrome.storage.local.get("tabSessionCounters", (result) => {
-      const counters = (result.tabSessionCounters as { opened: number; closed: number }) ?? { opened: 0, closed: 0 };
+      const counters = (result.tabSessionCounters as {
+        opened: number;
+        closed: number;
+      }) ?? { opened: 0, closed: 0 };
       setTabCounters(counters);
     });
   }, [visible]);
@@ -89,26 +97,44 @@ export default function MorningBriefing({
 
         // Build yesterday's browsing summary from analytics
         const result = await chrome.storage.local.get("analytics");
-        const analytics = result.analytics as { daily?: Record<string, { opened?: number; closed?: number; domains?: Record<string, number>; workspaceMinutes?: Record<string, number> }> } | undefined;
+        const analytics = result.analytics as
+          | {
+              daily?: Record<
+                string,
+                {
+                  opened?: number;
+                  closed?: number;
+                  domains?: Record<string, number>;
+                  workspaceMinutes?: Record<string, number>;
+                }
+              >;
+            }
+          | undefined;
         const yesterday = getYesterdayKey();
         const dayData = analytics?.daily?.[yesterday];
 
         // Build summary parts
         const summaryParts: string[] = [];
         summaryParts.push(`Total tabs open: ${tabs.length}`);
-        if (dayData?.opened) summaryParts.push(`Tabs opened yesterday: ${dayData.opened}`);
+        if (dayData?.opened)
+          summaryParts.push(`Tabs opened yesterday: ${dayData.opened}`);
         if (dayData?.domains) {
           const topDomains = Object.entries(dayData.domains)
             .sort((a, b) => b[1] - a[1])
             .slice(0, 5)
             .map(([d, c]) => `${d} (${c})`);
-          if (topDomains.length > 0) summaryParts.push(`Top domains: ${topDomains.join(", ")}`);
+          if (topDomains.length > 0)
+            summaryParts.push(`Top domains: ${topDomains.join(", ")}`);
         }
         if (workspaces.length > 0) {
-          summaryParts.push(`Workspaces: ${workspaces.map((w) => `${w.emoji} ${w.name}`).join(", ")}`);
+          summaryParts.push(
+            `Workspaces: ${workspaces.map((w) => `${w.emoji} ${w.name}`).join(", ")}`
+          );
         }
         if (yesterdayFocus) {
-          summaryParts.push(`Focus time yesterday: ${formatFocusTime(yesterdayFocus.totalMinutes)} (${yesterdayFocus.sessions} sessions)`);
+          summaryParts.push(
+            `Focus time yesterday: ${formatFocusTime(yesterdayFocus.totalMinutes)} (${yesterdayFocus.sessions} sessions)`
+          );
         }
 
         const summary = summaryParts.join(". ");
@@ -116,25 +142,28 @@ export default function MorningBriefing({
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${settings.openRouterApiKey}`,
-            "HTTP-Referer": "chrome-extension://arcflow",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.0-flash-001",
-            max_tokens: 50,
-            messages: [
-              {
-                role: "user",
-                content: `Based on this browsing summary, give one short productivity tip (under 20 words).\n\n${summary}`,
-              },
-            ],
-          }),
-          signal: controller.signal,
-        });
+        const response = await fetch(
+          "https://openrouter.ai/api/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${settings.openRouterApiKey}`,
+              "HTTP-Referer": "chrome-extension://arcflow",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.0-flash-001",
+              max_tokens: 50,
+              messages: [
+                {
+                  role: "user",
+                  content: `Based on this browsing summary, give one short productivity tip (under 20 words).\n\n${summary}`,
+                },
+              ],
+            }),
+            signal: controller.signal,
+          }
+        );
 
         clearTimeout(timeoutId);
 
@@ -150,7 +179,9 @@ export default function MorningBriefing({
     }
 
     fetchAiTip();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [visible, tabs.length, workspaces, yesterdayFocus]);
 
   // Update lastSessionTimestamp on sidebar visibility change (hidden)
@@ -159,11 +190,14 @@ export default function MorningBriefing({
       if (document.hidden) {
         chrome.storage.local.set({ lastSessionTimestamp: Date.now() });
         // Reset tab counters when sidebar is hidden (new "session" starts)
-        chrome.storage.local.set({ tabSessionCounters: { opened: 0, closed: 0 } });
+        chrome.storage.local.set({
+          tabSessionCounters: { opened: 0, closed: 0 },
+        });
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
 
   const handleDismiss = useCallback(() => {
@@ -174,7 +208,8 @@ export default function MorningBriefing({
   if (!visible) return null;
 
   // Calculate per-workspace tab counts
-  const workspaceTabCounts: { emoji: string; name: string; count: number }[] = [];
+  const workspaceTabCounts: { emoji: string; name: string; count: number }[] =
+    [];
   const wsCounts = new Map<string, number>();
   for (const tab of tabs) {
     const wsId = tabWorkspaceMap[String(tab.id)] || "default";
@@ -222,14 +257,18 @@ export default function MorningBriefing({
             {/* Tabs opened/closed since last session */}
             {(tabCounters.opened > 0 || tabCounters.closed > 0) && (
               <p className="mt-1">
-                {tabCounters.opened} tab{tabCounters.opened !== 1 ? "s" : ""} opened, {tabCounters.closed} closed since last session
+                {tabCounters.opened} tab{tabCounters.opened !== 1 ? "s" : ""}{" "}
+                opened, {tabCounters.closed} closed since last session
               </p>
             )}
 
             {/* Yesterday's focus time */}
             {yesterdayFocus && (
               <p className="mt-1">
-                Yesterday&apos;s focus: {formatFocusTime(yesterdayFocus.totalMinutes)} ({yesterdayFocus.sessions} session{yesterdayFocus.sessions !== 1 ? "s" : ""})
+                Yesterday&apos;s focus:{" "}
+                {formatFocusTime(yesterdayFocus.totalMinutes)} (
+                {yesterdayFocus.sessions} session
+                {yesterdayFocus.sessions !== 1 ? "s" : ""})
               </p>
             )}
 
@@ -237,7 +276,10 @@ export default function MorningBriefing({
             {noteReminders.length > 0 && (
               <div className="mt-1.5 space-y-0.5">
                 {noteReminders.map((nr) => (
-                  <p key={nr.name} className="truncate text-gray-500 dark:text-arc-text-secondary">
+                  <p
+                    key={nr.name}
+                    className="truncate text-gray-500 dark:text-arc-text-secondary"
+                  >
                     {nr.emoji} {nr.note}
                   </p>
                 ))}

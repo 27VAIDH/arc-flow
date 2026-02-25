@@ -3,7 +3,10 @@ import { addPinnedApp, getPinnedApps } from "../shared/storage";
 import { createFolder } from "../shared/folderStorage";
 import { setOnboardingCompleted } from "../shared/onboardingStorage";
 import { WORKSPACE_TEMPLATES } from "../shared/templates";
-import { createWorkspaceFromTemplate, setActiveWorkspace } from "../shared/workspaceStorage";
+import {
+  createWorkspaceFromTemplate,
+  setActiveWorkspace,
+} from "../shared/workspaceStorage";
 
 interface TopSite {
   url: string;
@@ -27,7 +30,9 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
   const [folderName, setFolderName] = useState("");
   const [folderCreated, setFolderCreated] = useState(false);
   const [pinning, setPinning] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
+    null
+  );
   const [templateApplied, setTemplateApplied] = useState(false);
 
   useEffect(() => {
@@ -258,8 +263,8 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
                 Start with a template
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Templates set up a workspace with relevant apps and folders.
-                You can skip this and create workspaces later.
+                Templates set up a workspace with relevant apps and folders. You
+                can skip this and create workspaces later.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-2">

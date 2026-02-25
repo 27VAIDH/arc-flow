@@ -19,7 +19,7 @@ function getXPath(node: Node): string {
   if (!node.parentNode) return "";
 
   const siblings = Array.from(node.parentNode.childNodes).filter(
-    (n) => n.nodeName === node.nodeName,
+    (n) => n.nodeName === node.nodeName
   );
   const index = siblings.indexOf(node as ChildNode) + 1;
   const parentPath = getXPath(node.parentNode);
@@ -28,7 +28,7 @@ function getXPath(node: Node): string {
 }
 
 function getSelectionXPath(
-  range: Range,
+  range: Range
 ): { xpath: string; textOffset: number; textLength: number } | null {
   const startContainer = range.startContainer;
   const parentEl =
@@ -64,7 +64,11 @@ function removeToolbar(): void {
   if (noteInput) noteInput.remove();
 }
 
-function createToolbar(rect: DOMRect, onHighlight: (color: string) => void, onNote: () => void): void {
+function createToolbar(
+  rect: DOMRect,
+  onHighlight: (color: string) => void,
+  onNote: () => void
+): void {
   removeToolbar();
 
   const toolbar = document.createElement("div");
@@ -155,7 +159,7 @@ function createToolbar(rect: DOMRect, onHighlight: (color: string) => void, onNo
 function showNoteInput(
   rect: DOMRect,
   onSave: (comment: string) => void,
-  onCancel: () => void,
+  onCancel: () => void
 ): void {
   // Remove toolbar but keep note input
   const toolbar = document.getElementById(TOOLBAR_ID);
@@ -237,7 +241,7 @@ function createAnnotation(
   textOffset: number,
   textLength: number,
   fallbackScrollY: number,
-  comment?: string,
+  comment?: string
 ): Annotation {
   return {
     id: crypto.randomUUID(),
@@ -256,12 +260,14 @@ function createAnnotation(
 }
 
 function saveAnnotation(annotation: Annotation): void {
-  chrome.runtime.sendMessage({
-    type: "SAVE_ANNOTATION",
-    annotation,
-  }).catch(() => {
-    // Service worker may not be available
-  });
+  chrome.runtime
+    .sendMessage({
+      type: "SAVE_ANNOTATION",
+      annotation,
+    })
+    .catch(() => {
+      // Service worker may not be available
+    });
 }
 
 // --- Selection handler ---
@@ -303,7 +309,7 @@ function handleSelectionChange(): void {
         currentSelection.xpathInfo.xpath,
         currentSelection.xpathInfo.textOffset,
         currentSelection.xpathInfo.textLength,
-        window.scrollY + currentSelection.rect.top,
+        window.scrollY + currentSelection.rect.top
       );
       saveAnnotation(annotation);
       removeToolbar();
@@ -325,7 +331,7 @@ function handleSelectionChange(): void {
             sel.xpathInfo.textOffset,
             sel.xpathInfo.textLength,
             window.scrollY + sel.rect.top,
-            comment,
+            comment
           );
           saveAnnotation(annotation);
           removeToolbar();
@@ -335,9 +341,9 @@ function handleSelectionChange(): void {
         () => {
           removeToolbar();
           currentSelection = null;
-        },
+        }
       );
-    },
+    }
   );
 }
 
@@ -355,11 +361,19 @@ document.addEventListener("mousedown", (e) => {
   const noteInput = document.getElementById(NOTE_INPUT_ID);
   const target = e.target as Node;
 
-  if (toolbar && !toolbar.contains(target) && (!noteInput || !noteInput.contains(target))) {
+  if (
+    toolbar &&
+    !toolbar.contains(target) &&
+    (!noteInput || !noteInput.contains(target))
+  ) {
     removeToolbar();
     currentSelection = null;
   }
-  if (noteInput && !noteInput.contains(target) && (!toolbar || !toolbar.contains(target))) {
+  if (
+    noteInput &&
+    !noteInput.contains(target) &&
+    (!toolbar || !toolbar.contains(target))
+  ) {
     removeToolbar();
     currentSelection = null;
   }
@@ -378,7 +392,7 @@ function resolveXPath(xpath: string): Node | null {
       document,
       null,
       XPathResult.FIRST_ORDERED_NODE_TYPE,
-      null,
+      null
     );
     return result.singleNodeValue;
   } catch {
@@ -389,7 +403,7 @@ function resolveXPath(xpath: string): Node | null {
 function findTextRange(
   parentEl: Element,
   textOffset: number,
-  textLength: number,
+  textLength: number
 ): Range | null {
   const walker = document.createTreeWalker(parentEl, NodeFilter.SHOW_TEXT);
   let current = walker.nextNode();
@@ -424,7 +438,7 @@ function findTextRange(
         // Move to next text node
         const tempWalker = document.createTreeWalker(
           parentEl,
-          NodeFilter.SHOW_TEXT,
+          NodeFilter.SHOW_TEXT
         );
         let found = false;
         let temp = tempWalker.nextNode();
@@ -454,7 +468,7 @@ function findTextRange(
 
 function renderHighlightMark(
   range: Range,
-  annotation: Annotation,
+  annotation: Annotation
 ): HTMLElement | null {
   try {
     const mark = document.createElement("mark");
@@ -529,9 +543,10 @@ function renderFallbackIndicator(annotation: Annotation): void {
     box-shadow: 0 1px 4px rgba(0,0,0,0.3);
     transition: transform 0.15s;
   `;
-  indicator.title = annotation.type === "note"
-    ? `Note: ${annotation.comment || annotation.text.slice(0, 50)}`
-    : `Highlight: ${annotation.text.slice(0, 50)}`;
+  indicator.title =
+    annotation.type === "note"
+      ? `Note: ${annotation.comment || annotation.text.slice(0, 50)}`
+      : `Highlight: ${annotation.text.slice(0, 50)}`;
 
   indicator.addEventListener("mouseenter", () => {
     indicator.style.transform = "scaleX(2)";
@@ -547,11 +562,16 @@ function renderAnnotation(annotation: Annotation): void {
   // Try XPath-based rendering first
   const node = resolveXPath(annotation.xpath);
   if (node) {
-    const el = node.nodeType === Node.ELEMENT_NODE
-      ? (node as Element)
-      : node.parentElement;
+    const el =
+      node.nodeType === Node.ELEMENT_NODE
+        ? (node as Element)
+        : node.parentElement;
     if (el) {
-      const range = findTextRange(el, annotation.textOffset, annotation.textLength);
+      const range = findTextRange(
+        el,
+        annotation.textOffset,
+        annotation.textLength
+      );
       if (range) {
         const mark = renderHighlightMark(range, annotation);
         if (mark) {
@@ -578,8 +598,12 @@ function clearRenderedAnnotations(): void {
       parent.removeChild(mark);
     }
   });
-  document.querySelectorAll(`.${ARCFLOW_NOTE_CLASS}`).forEach((el) => el.remove());
-  document.querySelectorAll(`.${ARCFLOW_FALLBACK_CLASS}`).forEach((el) => el.remove());
+  document
+    .querySelectorAll(`.${ARCFLOW_NOTE_CLASS}`)
+    .forEach((el) => el.remove());
+  document
+    .querySelectorAll(`.${ARCFLOW_FALLBACK_CLASS}`)
+    .forEach((el) => el.remove());
 }
 
 function loadAndRenderAnnotations(): void {
@@ -593,7 +617,7 @@ function loadAndRenderAnnotations(): void {
       for (const annotation of annotations) {
         renderAnnotation(annotation);
       }
-    },
+    }
   );
 }
 
@@ -606,10 +630,10 @@ chrome.runtime.onMessage.addListener((message) => {
     const annotationId = message.annotationId as string;
     // Try to find the mark element
     const mark = document.querySelector(
-      `.${ARCFLOW_MARK_CLASS}[data-annotation-id="${annotationId}"]`,
+      `.${ARCFLOW_MARK_CLASS}[data-annotation-id="${annotationId}"]`
     ) as HTMLElement | null;
     const fallback = document.querySelector(
-      `.${ARCFLOW_FALLBACK_CLASS}[data-annotation-id="${annotationId}"]`,
+      `.${ARCFLOW_FALLBACK_CLASS}[data-annotation-id="${annotationId}"]`
     ) as HTMLElement | null;
 
     const target = mark || fallback;

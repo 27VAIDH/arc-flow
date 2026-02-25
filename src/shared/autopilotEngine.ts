@@ -1,4 +1,9 @@
-import type { AutopilotRule, AutopilotCondition, AutopilotContext, ScoredRule } from './types';
+import type {
+  AutopilotRule,
+  AutopilotCondition,
+  AutopilotContext,
+  ScoredRule,
+} from "./types";
 
 function matchTimeCondition(value: string, currentTime: Date): boolean {
   const match = value.match(/^(\d{2}):(\d{2})-(\d{2}):(\d{2})$/);
@@ -26,36 +31,45 @@ function matchDomainCondition(value: string, activeTabUrl: string): boolean {
     const hostname = url.hostname;
 
     // Support wildcard patterns like '*.example.com' or exact match like 'example.com'
-    if (value.startsWith('*.')) {
+    if (value.startsWith("*.")) {
       const suffix = value.slice(2);
-      return hostname === suffix || hostname.endsWith('.' + suffix);
+      return hostname === suffix || hostname.endsWith("." + suffix);
     }
-    return hostname === value || hostname.endsWith('.' + value);
+    return hostname === value || hostname.endsWith("." + value);
   } catch {
     return false;
   }
 }
 
-function matchDisplayCountCondition(value: string, displayCount: number): boolean {
+function matchDisplayCountCondition(
+  value: string,
+  displayCount: number
+): boolean {
   const expected = parseInt(value, 10);
   if (isNaN(expected)) return false;
   return displayCount === expected;
 }
 
-function matchCondition(condition: AutopilotCondition, context: AutopilotContext): boolean {
+function matchCondition(
+  condition: AutopilotCondition,
+  context: AutopilotContext
+): boolean {
   switch (condition.type) {
-    case 'time':
+    case "time":
       return matchTimeCondition(condition.value, context.currentTime);
-    case 'domain':
+    case "domain":
       return matchDomainCondition(condition.value, context.activeTabUrl);
-    case 'displayCount':
+    case "displayCount":
       return matchDisplayCountCondition(condition.value, context.displayCount);
     default:
       return false;
   }
 }
 
-export function scoreRules(rules: AutopilotRule[], context: AutopilotContext): ScoredRule[] {
+export function scoreRules(
+  rules: AutopilotRule[],
+  context: AutopilotContext
+): ScoredRule[] {
   const scored: ScoredRule[] = [];
 
   for (const rule of rules) {
@@ -86,7 +100,10 @@ export function scoreRules(rules: AutopilotRule[], context: AutopilotContext): S
   return scored;
 }
 
-export function getBestMatch(rules: AutopilotRule[], context: AutopilotContext): AutopilotRule | null {
+export function getBestMatch(
+  rules: AutopilotRule[],
+  context: AutopilotContext
+): AutopilotRule | null {
   const scored = scoreRules(rules, context);
   return scored.length > 0 ? scored[0].rule : null;
 }

@@ -84,7 +84,7 @@ export function buildNavigationTree(events: NavigationEvent[]): NavTreeNode[] {
  */
 export async function getTreesForTimeRange(
   start: number,
-  end: number,
+  end: number
 ): Promise<NavTreeNode[]> {
   const events = await getNavEventsSince(start);
   const filtered = events.filter((e) => e.timestamp <= end);

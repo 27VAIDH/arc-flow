@@ -18,7 +18,7 @@ async function waitForRateLimit(): Promise<void> {
 async function callOpenRouter(
   apiKey: string,
   prompt: string,
-  maxTokens: number = 1024,
+  maxTokens: number = 1024
 ): Promise<string> {
   await waitForRateLimit();
 
@@ -73,9 +73,7 @@ export async function connectPages(summaries: string[]): Promise<string> {
     throw new Error("OpenRouter API key not configured");
   }
 
-  const numbered = summaries
-    .map((s, i) => `Page ${i + 1}:\n${s}`)
-    .join("\n\n");
+  const numbered = summaries.map((s, i) => `Page ${i + 1}:\n${s}`).join("\n\n");
   const prompt = `Analyze the connections between these page summaries. Identify:\n1. Common themes across pages\n2. Contradictions or disagreements\n3. Knowledge gaps (what's missing)\n\nFormat your response with clear sections for each.\n\n${numbered}`;
 
   return callOpenRouter(settings.openRouterApiKey, prompt, 1024);
@@ -83,7 +81,7 @@ export async function connectPages(summaries: string[]): Promise<string> {
 
 export async function generateBrief(
   summaries: string[],
-  topic: string,
+  topic: string
 ): Promise<string> {
   const settings = await getSettings();
   if (!settings.openRouterApiKey) {

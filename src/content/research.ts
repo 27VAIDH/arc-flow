@@ -5,7 +5,11 @@ chrome.runtime.onMessage.addListener(
   (
     message: { type: string },
     _sender: chrome.runtime.MessageSender,
-    sendResponse: (response: { text: string; title: string; url: string }) => void,
+    sendResponse: (response: {
+      text: string;
+      title: string;
+      url: string;
+    }) => void
   ) => {
     if (message.type === "CAPTURE_PAGE_TEXT") {
       const text = document.body.innerText || "";
@@ -15,5 +19,5 @@ chrome.runtime.onMessage.addListener(
         url: window.location.href,
       });
     }
-  },
+  }
 );

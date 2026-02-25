@@ -9,7 +9,12 @@ interface SwipeGestureOptions {
 
 export function useSwipeGesture(
   ref: React.RefObject<HTMLElement | null>,
-  { onSwipeLeft, onSwipeRight, threshold = 30, disabled = false }: SwipeGestureOptions
+  {
+    onSwipeLeft,
+    onSwipeRight,
+    threshold = 30,
+    disabled = false,
+  }: SwipeGestureOptions
 ) {
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const wheelAccumRef = useRef(0);

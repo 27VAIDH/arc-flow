@@ -40,9 +40,7 @@ export async function addNavEvent(event: NavigationEvent): Promise<void> {
   }
 }
 
-export async function getNavEvents(
-  tabId: number,
-): Promise<NavigationEvent[]> {
+export async function getNavEvents(tabId: number): Promise<NavigationEvent[]> {
   const db = await openDb();
   try {
     return await new Promise<NavigationEvent[]>((resolve, reject) => {
@@ -58,7 +56,7 @@ export async function getNavEvents(
 }
 
 export async function getNavEventsSince(
-  timestamp: number,
+  timestamp: number
 ): Promise<NavigationEvent[]> {
   const db = await openDb();
   try {
@@ -76,7 +74,7 @@ export async function getNavEventsSince(
 }
 
 export async function pruneOldEvents(
-  maxAgeDays: number = DEFAULT_MAX_AGE_DAYS,
+  maxAgeDays: number = DEFAULT_MAX_AGE_DAYS
 ): Promise<void> {
   const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
   const db = await openDb();

@@ -165,7 +165,10 @@ export async function getAIGroupingSuggestions(
 
     return { groups, source: "ai" };
   } catch (error) {
-    console.error("OpenRouter AI grouping failed, falling back to heuristic:", error);
+    console.error(
+      "OpenRouter AI grouping failed, falling back to heuristic:",
+      error
+    );
     return { groups: [], source: "fallback" };
   }
 }

@@ -5,9 +5,15 @@ const SETTINGS_KEY = "settings";
 
 export { DEFAULT_SETTINGS };
 
-function migrateSettings(stored: Record<string, unknown>): Record<string, unknown> {
+function migrateSettings(
+  stored: Record<string, unknown>
+): Record<string, unknown> {
   // Migrate old aiGrouping.apiKey to openRouterApiKey
-  if (stored.aiGrouping && typeof stored.aiGrouping === "object" && !stored.openRouterApiKey) {
+  if (
+    stored.aiGrouping &&
+    typeof stored.aiGrouping === "object" &&
+    !stored.openRouterApiKey
+  ) {
     const legacy = stored.aiGrouping as Record<string, unknown>;
     if (legacy.apiKey && typeof legacy.apiKey === "string") {
       stored.openRouterApiKey = legacy.apiKey;
@@ -16,7 +22,9 @@ function migrateSettings(stored: Record<string, unknown>): Record<string, unknow
   }
   // Migrate old routingRules missing "enabled" field
   if (Array.isArray(stored.routingRules)) {
-    stored.routingRules = (stored.routingRules as Record<string, unknown>[]).map((rule) => ({
+    stored.routingRules = (
+      stored.routingRules as Record<string, unknown>[]
+    ).map((rule) => ({
       ...rule,
       enabled: rule.enabled ?? true,
     }));

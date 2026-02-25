@@ -43,9 +43,7 @@ export async function savePageCapture(capture: PageCapture): Promise<void> {
   }
 }
 
-export async function getCaptures(
-  sessionId: string,
-): Promise<PageCapture[]> {
+export async function getCaptures(sessionId: string): Promise<PageCapture[]> {
   const db = await openDb();
   try {
     return await new Promise<PageCapture[]>((resolve, reject) => {

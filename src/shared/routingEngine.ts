@@ -39,10 +39,7 @@ function globToRegex(pattern: string): RegExp {
  * Patterns starting with `*.` match any subdomain,
  * so `*.google.com/*` matches `https://docs.google.com/page`.
  */
-export function matchRoute(
-  url: string,
-  rules: RoutingRule[]
-): string | null {
+export function matchRoute(url: string, rules: RoutingRule[]): string | null {
   // Strip protocol (https://, http://) for matching
   const urlWithoutProtocol = url.replace(/^https?:\/\//, "");
 

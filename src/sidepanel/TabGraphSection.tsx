@@ -11,12 +11,22 @@ const GRAPH_WIDTH = 320;
 const GRAPH_HEIGHT = 280;
 
 const DOMAIN_COLORS = [
-  "#4285F4", "#EA4335", "#FBBC05", "#34A853",
-  "#FF6D01", "#46BDC6", "#7B61FF", "#F538A0",
-  "#00ACC1", "#8D6E63",
+  "#4285F4",
+  "#EA4335",
+  "#FBBC05",
+  "#34A853",
+  "#FF6D01",
+  "#46BDC6",
+  "#7B61FF",
+  "#F538A0",
+  "#00ACC1",
+  "#8D6E63",
 ];
 
-function getDomainColor(domain: string, domainMap: Map<string, string>): string {
+function getDomainColor(
+  domain: string,
+  domainMap: Map<string, string>
+): string {
   if (domainMap.has(domain)) return domainMap.get(domain)!;
   const color = DOMAIN_COLORS[domainMap.size % DOMAIN_COLORS.length];
   domainMap.set(domain, color);
@@ -34,11 +44,23 @@ const STORAGE_KEY_VIEW_MODE = "tabGraphViewMode";
 
 export default function TabGraphSection() {
   const [collapsed, setCollapsed] = useState(false);
-  const [graphData, setGraphData] = useState<GraphData>({ nodes: [], edges: [] });
+  const [graphData, setGraphData] = useState<GraphData>({
+    nodes: [],
+    edges: [],
+  });
   const [hoveredNode, setHoveredNode] = useState<LayoutNode | null>(null);
-  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; domain: string } | null>(null);
-  const [clusterSummary, setClusterSummary] = useState<{ domain: string; text: string } | null>(null);
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(
+    null
+  );
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    domain: string;
+  } | null>(null);
+  const [clusterSummary, setClusterSummary] = useState<{
+    domain: string;
+    text: string;
+  } | null>(null);
   const [summarizing, setSummarizing] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("graph");
   const contextMenuRef = useRef<HTMLDivElement>(null);
@@ -67,7 +89,9 @@ export default function TabGraphSection() {
       const [navEvents, affinityPairs, tabs] = await Promise.all([
         getNavEventsSince(since),
         getAffinityPairs(1),
-        new Promise<chrome.tabs.Tab[]>((resolve) => chrome.tabs.query({}, resolve)),
+        new Promise<chrome.tabs.Tab[]>((resolve) =>
+          chrome.tabs.query({}, resolve)
+        ),
       ]);
 
       const openTabs = tabs.map((t) => ({
@@ -136,9 +160,14 @@ export default function TabGraphSection() {
   const handleNodeMouseEnter = useCallback(
     (node: LayoutNode, event: React.MouseEvent) => {
       setHoveredNode(node);
-      const rect = (event.currentTarget as Element).closest("svg")?.getBoundingClientRect();
+      const rect = (event.currentTarget as Element)
+        .closest("svg")
+        ?.getBoundingClientRect();
       if (rect) {
-        setTooltipPos({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+        setTooltipPos({
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
+        });
       }
     },
     []
@@ -214,12 +243,17 @@ export default function TabGraphSection() {
       try {
         const settings = await getSettings();
         if (!settings.openRouterApiKey) {
-          setClusterSummary({ domain, text: "Set an OpenRouter API key in Settings to use AI features." });
+          setClusterSummary({
+            domain,
+            text: "Set an OpenRouter API key in Settings to use AI features.",
+          });
           setSummarizing(false);
           return;
         }
 
-        const tabList = cluster.map((n) => `- ${n.title} (${n.url})`).join("\n");
+        const tabList = cluster
+          .map((n) => `- ${n.title} (${n.url})`)
+          .join("\n");
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -250,10 +284,14 @@ export default function TabGraphSection() {
 
         if (!response.ok) throw new Error(`API error: ${response.status}`);
         const data = await response.json();
-        const text = data.choices?.[0]?.message?.content ?? "No summary available.";
+        const text =
+          data.choices?.[0]?.message?.content ?? "No summary available.";
         setClusterSummary({ domain, text });
       } catch {
-        setClusterSummary({ domain, text: "Failed to generate summary. Please try again." });
+        setClusterSummary({
+          domain,
+          text: "Failed to generate summary. Please try again.",
+        });
       } finally {
         setSummarizing(false);
       }
@@ -265,7 +303,10 @@ export default function TabGraphSection() {
   useEffect(() => {
     if (!contextMenu) return;
     const handler = (e: MouseEvent) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+      if (
+        contextMenuRef.current &&
+        !contextMenuRef.current.contains(e.target as Node)
+      ) {
         setContextMenu(null);
       }
     };
@@ -276,7 +317,9 @@ export default function TabGraphSection() {
   // Group nodes by domain, sorted by visit count
   const groupedNodes = useMemo(() => {
     const groups = new Map<string, GraphNode[]>();
-    const sorted = [...graphData.nodes].sort((a, b) => b.visitCount - a.visitCount);
+    const sorted = [...graphData.nodes].sort(
+      (a, b) => b.visitCount - a.visitCount
+    );
     for (const node of sorted) {
       const list = groups.get(node.domain) ?? [];
       list.push(node);
@@ -316,17 +359,35 @@ export default function TabGraphSection() {
         {!collapsed && !isEmpty && (
           <button
             onClick={toggleViewMode}
-            title={viewMode === "graph" ? "Switch to list view" : "Switch to graph view"}
+            title={
+              viewMode === "graph"
+                ? "Switch to list view"
+                : "Switch to graph view"
+            }
             className="px-2 py-1 mr-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
           >
             {viewMode === "graph" ? (
               /* List icon */
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-                <path fillRule="evenodd" d="M6 4.75A.75.75 0 0 1 6.75 4h10.5a.75.75 0 0 1 0 1.5H6.75A.75.75 0 0 1 6 4.75ZM6 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H6.75A.75.75 0 0 1 6 10Zm0 5.25a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H6.75a.75.75 0 0 1-.75-.75ZM1.99 4.75a1 1 0 0 1 1-1h.01a1 1 0 0 1 0 2h-.01a1 1 0 0 1-1-1ZM2.99 9a1 1 0 1 0 0 2h.01a1 1 0 1 0 0-2h-.01ZM1.99 15.25a1 1 0 0 1 1-1h.01a1 1 0 0 1 0 2h-.01a1 1 0 0 1-1-1Z" clipRule="evenodd" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="w-3.5 h-3.5"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M6 4.75A.75.75 0 0 1 6.75 4h10.5a.75.75 0 0 1 0 1.5H6.75A.75.75 0 0 1 6 4.75ZM6 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H6.75A.75.75 0 0 1 6 10Zm0 5.25a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H6.75a.75.75 0 0 1-.75-.75ZM1.99 4.75a1 1 0 0 1 1-1h.01a1 1 0 0 1 0 2h-.01a1 1 0 0 1-1-1ZM2.99 9a1 1 0 1 0 0 2h.01a1 1 0 1 0 0-2h-.01ZM1.99 15.25a1 1 0 0 1 1-1h.01a1 1 0 0 1 0 2h-.01a1 1 0 0 1-1-1Z"
+                  clipRule="evenodd"
+                />
               </svg>
             ) : (
               /* Graph icon */
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="w-3.5 h-3.5"
+              >
                 <path d="M15.5 2A1.5 1.5 0 0 0 14 3.5v13a1.5 1.5 0 0 0 1.5 1.5h1a1.5 1.5 0 0 0 1.5-1.5v-13A1.5 1.5 0 0 0 16.5 2h-1ZM9.5 6A1.5 1.5 0 0 0 8 7.5v9A1.5 1.5 0 0 0 9.5 18h1a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 10.5 6h-1ZM3.5 10A1.5 1.5 0 0 0 2 11.5v5A1.5 1.5 0 0 0 3.5 18h1A1.5 1.5 0 0 0 6 16.5v-5A1.5 1.5 0 0 0 4.5 10h-1Z" />
               </svg>
             )}
@@ -338,7 +399,8 @@ export default function TabGraphSection() {
         <div className="px-3 py-1">
           {isEmpty ? (
             <p className="text-xs text-gray-400 dark:text-gray-500 py-4 text-center">
-              No browsing data yet. Start browsing to see your tab relationships.
+              No browsing data yet. Start browsing to see your tab
+              relationships.
             </p>
           ) : viewMode === "list" ? (
             /* List View */
@@ -348,10 +410,14 @@ export default function TabGraphSection() {
                   <div className="flex items-center gap-1.5 py-1 text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                     <span
                       className="w-2 h-2 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: getDomainColor(domain, domainColorMap) }}
+                      style={{
+                        backgroundColor: getDomainColor(domain, domainColorMap),
+                      }}
                     />
                     {domain}
-                    <span className="text-gray-300 dark:text-gray-600">({nodes.length})</span>
+                    <span className="text-gray-300 dark:text-gray-600">
+                      ({nodes.length})
+                    </span>
                   </div>
                   {nodes.map((node) => (
                     <button
@@ -371,7 +437,10 @@ export default function TabGraphSection() {
                         {node.visitCount}
                       </span>
                       {node.isOpen && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" title="Tab open" />
+                        <span
+                          className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0"
+                          title="Tab open"
+                        />
                       )}
                     </button>
                   ))}
@@ -436,9 +505,12 @@ export default function TabGraphSection() {
                     transform: "translateX(-50%)",
                   }}
                 >
-                  <div className="font-medium">{truncate(hoveredNode.title, 40)}</div>
+                  <div className="font-medium">
+                    {truncate(hoveredNode.title, 40)}
+                  </div>
                   <div className="text-gray-300">
-                    {hoveredNode.visitCount} visit{hoveredNode.visitCount !== 1 ? "s" : ""}
+                    {hoveredNode.visitCount} visit
+                    {hoveredNode.visitCount !== 1 ? "s" : ""}
                     {hoveredNode.isOpen && " \u00B7 Open"}
                   </div>
                 </div>
@@ -455,13 +527,19 @@ export default function TabGraphSection() {
                   }}
                 >
                   <div className="px-2 py-1 text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                    {contextMenu.domain} ({getClusterNodes(contextMenu.domain).length} pages)
+                    {contextMenu.domain} (
+                    {getClusterNodes(contextMenu.domain).length} pages)
                   </div>
                   <button
                     onClick={() => handleCreateFolder(contextMenu.domain)}
                     className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="w-3.5 h-3.5"
+                    >
                       <path d="M3.75 3A1.75 1.75 0 0 0 2 4.75v3.26a3.235 3.235 0 0 1 1.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0 0 16.25 5h-4.836a.25.25 0 0 1-.177-.073L9.823 3.513A1.75 1.75 0 0 0 8.586 3H3.75ZM3.75 9A1.75 1.75 0 0 0 2 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0 0 18 15.25v-4.5A1.75 1.75 0 0 0 16.25 9H3.75Z" />
                     </svg>
                     Create Folder
@@ -470,8 +548,17 @@ export default function TabGraphSection() {
                     onClick={() => handleAISummarize(contextMenu.domain)}
                     className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-                      <path fillRule="evenodd" d="M15.988 3.012A2.25 2.25 0 0 1 18 5.25v6.5A2.25 2.25 0 0 1 15.75 14H13.5l-3.712 3.712a.75.75 0 0 1-1.288-.532V14h-2.25A2.25 2.25 0 0 1 4 11.75v-6.5A2.25 2.25 0 0 1 6.25 3h9.5Zm-3.738 6.988a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM10 10a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-2.25-.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" clipRule="evenodd" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="w-3.5 h-3.5"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M15.988 3.012A2.25 2.25 0 0 1 18 5.25v6.5A2.25 2.25 0 0 1 15.75 14H13.5l-3.712 3.712a.75.75 0 0 1-1.288-.532V14h-2.25A2.25 2.25 0 0 1 4 11.75v-6.5A2.25 2.25 0 0 1 6.25 3h9.5Zm-3.738 6.988a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM10 10a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-2.25-.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z"
+                        clipRule="evenodd"
+                      />
                     </svg>
                     AI Summarize
                   </button>
@@ -495,12 +582,19 @@ export default function TabGraphSection() {
                           onClick={() => setClusterSummary(null)}
                           className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                            className="w-3 h-3"
+                          >
                             <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
                           </svg>
                         </button>
                       </div>
-                      <p className="text-xs text-gray-600 dark:text-gray-300">{clusterSummary.text}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-300">
+                        {clusterSummary.text}
+                      </p>
                     </div>
                   ) : null}
                 </div>

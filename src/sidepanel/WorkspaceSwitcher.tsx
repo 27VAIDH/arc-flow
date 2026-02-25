@@ -90,7 +90,9 @@ export default function WorkspaceSwitcher({
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
   const [showColorPicker, setShowColorPicker] = useState<string | null>(null);
-  const [showPanelColorPicker, setShowPanelColorPicker] = useState<string | null>(null);
+  const [showPanelColorPicker, setShowPanelColorPicker] = useState<
+    string | null
+  >(null);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -271,32 +273,38 @@ export default function WorkspaceSwitcher({
     setShowColorPicker(null);
   }, []);
 
-  const handlePanelColorSelect = useCallback(async (wsId: string, color: string) => {
-    try {
-      await updateWorkspace(wsId, { panelColor: color });
-      // Apply immediately if this is the active workspace
-      if (wsId === activeWorkspaceId) {
-        applyPanelColor(color);
+  const handlePanelColorSelect = useCallback(
+    async (wsId: string, color: string) => {
+      try {
+        await updateWorkspace(wsId, { panelColor: color });
+        // Apply immediately if this is the active workspace
+        if (wsId === activeWorkspaceId) {
+          applyPanelColor(color);
+        }
+      } catch {
+        // Ignore errors
       }
-    } catch {
-      // Ignore errors
-    }
-    setShowPanelColorPicker(null);
-  }, [activeWorkspaceId]);
+      setShowPanelColorPicker(null);
+    },
+    [activeWorkspaceId]
+  );
 
-  const handlePanelColorClear = useCallback(async (wsId: string) => {
-    try {
-      await updateWorkspace(wsId, { panelColor: "" });
-      // If this is the active workspace, fall back to global setting
-      if (wsId === activeWorkspaceId) {
-        const settings = await getSettings();
-        applyPanelColor(settings.panelColor);
+  const handlePanelColorClear = useCallback(
+    async (wsId: string) => {
+      try {
+        await updateWorkspace(wsId, { panelColor: "" });
+        // If this is the active workspace, fall back to global setting
+        if (wsId === activeWorkspaceId) {
+          const settings = await getSettings();
+          applyPanelColor(settings.panelColor);
+        }
+      } catch {
+        // Ignore errors
       }
-    } catch {
-      // Ignore errors
-    }
-    setShowPanelColorPicker(null);
-  }, [activeWorkspaceId]);
+      setShowPanelColorPicker(null);
+    },
+    [activeWorkspaceId]
+  );
 
   const handleExportWorkspace = useCallback((ws: Workspace) => {
     const exportData = {
@@ -313,7 +321,10 @@ export default function WorkspaceSwitcher({
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const today = new Date().toISOString().slice(0, 10);
-    const safeName = ws.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const safeName = ws.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
     const a = document.createElement("a");
     a.href = url;
     a.download = `arcflow-workspace-${safeName}-${today}.json`;
@@ -385,7 +396,13 @@ export default function WorkspaceSwitcher({
 
       onContextMenu({ x: e.clientX, y: e.clientY, items });
     },
-    [onContextMenu, handleDelete, handleClone, handleExportWorkspace, onSaveSession]
+    [
+      onContextMenu,
+      handleDelete,
+      handleClone,
+      handleExportWorkspace,
+      onSaveSession,
+    ]
   );
 
   return (
@@ -432,9 +449,16 @@ export default function WorkspaceSwitcher({
       >
         {workspaces.map((ws) => {
           const isActive = ws.id === activeWorkspaceId;
-          const avgEnergy = getWorkspaceAverageEnergy(ws.id, tabEnergyScores, tabWorkspaceMap);
+          const avgEnergy = getWorkspaceAverageEnergy(
+            ws.id,
+            tabEnergyScores,
+            tabWorkspaceMap
+          );
           return (
-            <div key={ws.id} className="flex flex-col items-center shrink-0 gap-0.5">
+            <div
+              key={ws.id}
+              className="flex flex-col items-center shrink-0 gap-0.5"
+            >
               <button
                 onClick={() => handleSwitchWorkspace(ws.id)}
                 onContextMenu={(e) => handleContextMenu(e, ws)}
@@ -593,65 +617,90 @@ export default function WorkspaceSwitcher({
       )}
 
       {/* Workspace dot indicators and arrow navigation */}
-      {workspaces.length > 1 && (() => {
-        const sorted = [...workspaces].sort((a, b) => a.sortOrder - b.sortOrder);
-        const activeIdx = sorted.findIndex((ws) => ws.id === activeWorkspaceId);
-        const isFirst = activeIdx <= 0;
-        const isLast = activeIdx >= sorted.length - 1;
-        return (
-          <div className="flex items-center justify-center gap-2 px-3 pb-1">
-            <button
-              onClick={() => {
-                if (!isFirst) handleSwitchWorkspace(sorted[activeIdx - 1].id);
-              }}
-              disabled={isFirst}
-              className="flex items-center justify-center w-5 h-5 rounded text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-arc-accent-hover transition-colors duration-150 disabled:opacity-0 disabled:pointer-events-none"
-              aria-label="Previous workspace"
-              title="Previous workspace"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-                <path fillRule="evenodd" d="M9.78 4.22a.75.75 0 0 1 0 1.06L7.06 8l2.72 2.72a.75.75 0 1 1-1.06 1.06L5.47 8.53a.75.75 0 0 1 0-1.06l3.25-3.25a.75.75 0 0 1 1.06 0Z" clipRule="evenodd" />
-              </svg>
-            </button>
-            <div className="flex items-center gap-2">
-              {sorted.map((ws) => {
-                const isActive = ws.id === activeWorkspaceId;
-                return (
-                  <button
-                    key={ws.id}
-                    onClick={() => handleSwitchWorkspace(ws.id)}
-                    className="p-0 border-0 bg-transparent cursor-pointer transition-transform duration-150 hover:scale-125"
-                    aria-label={`Switch to ${ws.name}${isActive ? " (active)" : ""}`}
-                    title={ws.name}
-                  >
-                    <span
-                      className="block rounded-full transition-colors duration-150"
-                      style={{
-                        width: 6,
-                        height: 6,
-                        backgroundColor: isActive ? (ws.accentColor || "var(--color-arc-accent)") : "#4b5563",
-                      }}
-                    />
-                  </button>
-                );
-              })}
+      {workspaces.length > 1 &&
+        (() => {
+          const sorted = [...workspaces].sort(
+            (a, b) => a.sortOrder - b.sortOrder
+          );
+          const activeIdx = sorted.findIndex(
+            (ws) => ws.id === activeWorkspaceId
+          );
+          const isFirst = activeIdx <= 0;
+          const isLast = activeIdx >= sorted.length - 1;
+          return (
+            <div className="flex items-center justify-center gap-2 px-3 pb-1">
+              <button
+                onClick={() => {
+                  if (!isFirst) handleSwitchWorkspace(sorted[activeIdx - 1].id);
+                }}
+                disabled={isFirst}
+                className="flex items-center justify-center w-5 h-5 rounded text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-arc-accent-hover transition-colors duration-150 disabled:opacity-0 disabled:pointer-events-none"
+                aria-label="Previous workspace"
+                title="Previous workspace"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  className="w-3 h-3"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M9.78 4.22a.75.75 0 0 1 0 1.06L7.06 8l2.72 2.72a.75.75 0 1 1-1.06 1.06L5.47 8.53a.75.75 0 0 1 0-1.06l3.25-3.25a.75.75 0 0 1 1.06 0Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+              <div className="flex items-center gap-2">
+                {sorted.map((ws) => {
+                  const isActive = ws.id === activeWorkspaceId;
+                  return (
+                    <button
+                      key={ws.id}
+                      onClick={() => handleSwitchWorkspace(ws.id)}
+                      className="p-0 border-0 bg-transparent cursor-pointer transition-transform duration-150 hover:scale-125"
+                      aria-label={`Switch to ${ws.name}${isActive ? " (active)" : ""}`}
+                      title={ws.name}
+                    >
+                      <span
+                        className="block rounded-full transition-colors duration-150"
+                        style={{
+                          width: 6,
+                          height: 6,
+                          backgroundColor: isActive
+                            ? ws.accentColor || "var(--color-arc-accent)"
+                            : "#4b5563",
+                        }}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => {
+                  if (!isLast) handleSwitchWorkspace(sorted[activeIdx + 1].id);
+                }}
+                disabled={isLast}
+                className="flex items-center justify-center w-5 h-5 rounded text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-arc-accent-hover transition-colors duration-150 disabled:opacity-0 disabled:pointer-events-none"
+                aria-label="Next workspace"
+                title="Next workspace"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  className="w-3 h-3"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M6.22 4.22a.75.75 0 0 1 1.06 0l3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06L8.94 8 6.22 5.28a.75.75 0 0 1 0-1.06Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
             </div>
-            <button
-              onClick={() => {
-                if (!isLast) handleSwitchWorkspace(sorted[activeIdx + 1].id);
-              }}
-              disabled={isLast}
-              className="flex items-center justify-center w-5 h-5 rounded text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-arc-accent-hover transition-colors duration-150 disabled:opacity-0 disabled:pointer-events-none"
-              aria-label="Next workspace"
-              title="Next workspace"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
-                <path fillRule="evenodd" d="M6.22 4.22a.75.75 0 0 1 1.06 0l3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06L8.94 8 6.22 5.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
-              </svg>
-            </button>
-          </div>
-        );
-      })()}
+          );
+        })()}
 
       {/* Panel Color Picker Popover (above the footer) */}
       {showPanelColorPicker && (
@@ -673,11 +722,14 @@ export default function WorkspaceSwitcher({
             <button
               onClick={() => handlePanelColorClear(showPanelColorPicker)}
               className={`w-6 h-6 rounded-full focus:outline-none focus:ring-2 focus:ring-arc-accent/50 transition-transform duration-100 hover:scale-110 ${
-                !workspaces.find((w) => w.id === showPanelColorPicker)?.panelColor
+                !workspaces.find((w) => w.id === showPanelColorPicker)
+                  ?.panelColor
                   ? "ring-2 ring-offset-1 ring-gray-400 dark:ring-offset-arc-surface"
                   : ""
               }`}
-              style={{ background: "linear-gradient(135deg, #0f0f17, #1a1a2e)" }}
+              style={{
+                background: "linear-gradient(135deg, #0f0f17, #1a1a2e)",
+              }}
               title="Default (use global setting)"
               aria-label="Reset to default panel color"
             />
@@ -687,7 +739,9 @@ export default function WorkspaceSwitcher({
               return (
                 <button
                   key={color}
-                  onClick={() => handlePanelColorSelect(showPanelColorPicker, color)}
+                  onClick={() =>
+                    handlePanelColorSelect(showPanelColorPicker, color)
+                  }
                   className={`w-6 h-6 rounded-full focus:outline-none focus:ring-2 focus:ring-arc-accent/50 transition-transform duration-100 hover:scale-110 ${isSelected ? "ring-2 ring-offset-1 ring-gray-400 dark:ring-offset-arc-surface" : ""}`}
                   style={{ backgroundColor: color }}
                   title={color}

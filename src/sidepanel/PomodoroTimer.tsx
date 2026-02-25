@@ -59,7 +59,10 @@ function formatFocusTime(totalMinutes: number): string {
   return `${hours}h ${mins}m`;
 }
 
-function getPhaseDuration(phase: "work" | "break", sessionNumber: number): number {
+function getPhaseDuration(
+  phase: "work" | "break",
+  sessionNumber: number
+): number {
   if (phase === "work") return WORK_DURATION_MS;
   return sessionNumber >= TOTAL_SESSIONS ? LONG_BREAK_MS : SHORT_BREAK_MS;
 }
@@ -85,7 +88,10 @@ export default function PomodoroTimer() {
   const [state, setState] = useState<PomodoroState | null>(null);
   const [displayMs, setDisplayMs] = useState(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [todayStats, setTodayStats] = useState<FocusStatsDay>({ totalMinutes: 0, sessions: 0 });
+  const [todayStats, setTodayStats] = useState<FocusStatsDay>({
+    totalMinutes: 0,
+    sessions: 0,
+  });
 
   // Load today's focus stats on mount and listen for changes
   useEffect(() => {
@@ -350,7 +356,8 @@ export default function PomodoroTimer() {
 
       {/* Focus stats for today */}
       <div className="px-3 py-0.5 text-[10px] text-gray-400 dark:text-arc-text-secondary">
-        Today: {formatFocusTime(todayStats.totalMinutes)} ({todayStats.sessions} session{todayStats.sessions !== 1 ? "s" : ""})
+        Today: {formatFocusTime(todayStats.totalMinutes)} ({todayStats.sessions}{" "}
+        session{todayStats.sessions !== 1 ? "s" : ""})
       </div>
     </div>
   );

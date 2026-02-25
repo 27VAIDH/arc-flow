@@ -17,8 +17,7 @@ function formatRelativeTime(timestamp: number): string {
   const days = Math.floor(diff / 86400000);
 
   if (diff < 60000) return "just now";
-  if (minutes < 60)
-    return `${minutes} minute${minutes > 1 ? "s" : ""} ago`;
+  if (minutes < 60) return `${minutes} minute${minutes > 1 ? "s" : ""} ago`;
   if (hours < 24) return `${hours} hour${hours > 1 ? "s" : ""} ago`;
   if (days < 7) return `${days} day${days > 1 ? "s" : ""} ago`;
   return new Date(timestamp).toLocaleDateString("en-US", {
@@ -37,9 +36,12 @@ function escapeHtml(text: string): string {
 
 function renderMarkdownLine(line: string): string {
   // Headers
-  if (line.startsWith("### ")) return `<h3 class="text-xs font-bold mt-2 mb-1">${escapeHtml(line.slice(4))}</h3>`;
-  if (line.startsWith("## ")) return `<h2 class="text-sm font-bold mt-2 mb-1">${escapeHtml(line.slice(3))}</h2>`;
-  if (line.startsWith("# ")) return `<h1 class="text-base font-bold mt-2 mb-1">${escapeHtml(line.slice(2))}</h1>`;
+  if (line.startsWith("### "))
+    return `<h3 class="text-xs font-bold mt-2 mb-1">${escapeHtml(line.slice(4))}</h3>`;
+  if (line.startsWith("## "))
+    return `<h2 class="text-sm font-bold mt-2 mb-1">${escapeHtml(line.slice(3))}</h2>`;
+  if (line.startsWith("# "))
+    return `<h1 class="text-base font-bold mt-2 mb-1">${escapeHtml(line.slice(2))}</h1>`;
 
   // Inline formatting on escaped text
   let html = escapeHtml(line);
@@ -67,7 +69,10 @@ function renderMarkdown(text: string): string {
     // Checklist: - [ ] or - [x]
     const checkMatch = line.match(/^- \[([ xX])\] (.*)$/);
     if (checkMatch) {
-      if (!inList) { result.push('<ul class="list-none pl-0 my-1">'); inList = true; }
+      if (!inList) {
+        result.push('<ul class="list-none pl-0 my-1">');
+        inList = true;
+      }
       const checked = checkMatch[1] !== " ";
       const content = renderMarkdownLine(checkMatch[2]);
       result.push(
@@ -79,13 +84,21 @@ function renderMarkdown(text: string): string {
     // Bullet list: - item
     const bulletMatch = line.match(/^- (.*)$/);
     if (bulletMatch) {
-      if (!inList) { result.push('<ul class="list-disc pl-4 my-1">'); inList = true; }
-      result.push(`<li class="py-0.5 text-xs">${renderMarkdownLine(bulletMatch[1])}</li>`);
+      if (!inList) {
+        result.push('<ul class="list-disc pl-4 my-1">');
+        inList = true;
+      }
+      result.push(
+        `<li class="py-0.5 text-xs">${renderMarkdownLine(bulletMatch[1])}</li>`
+      );
       continue;
     }
 
     // Close list if we were in one
-    if (inList) { result.push("</ul>"); inList = false; }
+    if (inList) {
+      result.push("</ul>");
+      inList = false;
+    }
 
     // Empty line = paragraph break
     if (line.trim() === "") {
@@ -128,12 +141,16 @@ export default function QuickNotes({
 }: QuickNotesProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [localNotes, setLocalNotes] = useState(notes);
-  const [previewState, setPreviewState] = useState<{ wsId: string; preview: boolean }>({ wsId: workspaceId, preview: false });
+  const [previewState, setPreviewState] = useState<{
+    wsId: string;
+    preview: boolean;
+  }>({ wsId: workspaceId, preview: false });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Reset preview mode when workspace changes by tracking wsId in the state itself
   const previewMode = previewState.wsId === workspaceId && previewState.preview;
-  const setPreviewMode = (preview: boolean) => setPreviewState({ wsId: workspaceId, preview });
+  const setPreviewMode = (preview: boolean) =>
+    setPreviewState({ wsId: workspaceId, preview });
 
   // Sync local state when workspace changes or external notes update
   useEffect(() => {
@@ -174,8 +191,15 @@ export default function QuickNotes({
   const handleChecklistClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       const target = e.target as HTMLElement;
-      if (target.tagName !== "INPUT" || target.getAttribute("type") !== "checkbox") return;
-      const lineIndex = parseInt(target.getAttribute("data-check-line") || "-1", 10);
+      if (
+        target.tagName !== "INPUT" ||
+        target.getAttribute("type") !== "checkbox"
+      )
+        return;
+      const lineIndex = parseInt(
+        target.getAttribute("data-check-line") || "-1",
+        10
+      );
       if (lineIndex < 0) return;
 
       const lines = localNotes.split("\n");
@@ -198,7 +222,10 @@ export default function QuickNotes({
   const handleInsertLink = useCallback(async () => {
     if (previewMode) return;
     try {
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      const tabs = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
       const tab = tabs[0];
       if (!tab?.url || !tab.title) return;
       const linkText = `[${tab.title}](${tab.url})`;
@@ -206,7 +233,8 @@ export default function QuickNotes({
       if (textarea) {
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
-        const newValue = localNotes.slice(0, start) + linkText + localNotes.slice(end);
+        const newValue =
+          localNotes.slice(0, start) + linkText + localNotes.slice(end);
         if (newValue.length > MAX_CHARS) return;
         setLocalNotes(newValue);
         debouncedSave(newValue);
@@ -338,11 +366,9 @@ export default function QuickNotes({
             </span>
             <div className="flex items-center gap-2">
               {localNotes.length > SHOW_COUNTER_THRESHOLD && (
-                <span
-                  className="tabular-nums"
-                  aria-live="polite"
-                >
-                  {localNotes.length.toLocaleString()} / {MAX_CHARS.toLocaleString()}
+                <span className="tabular-nums" aria-live="polite">
+                  {localNotes.length.toLocaleString()} /{" "}
+                  {MAX_CHARS.toLocaleString()}
                 </span>
               )}
               {localNotes.length > 0 && (

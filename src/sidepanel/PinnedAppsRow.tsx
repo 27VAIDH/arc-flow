@@ -1,9 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import type { PinnedApp, TabInfo } from "../shared/types";
-import {
-  removePinnedApp,
-  updatePinnedApp,
-} from "../shared/storage";
+import { removePinnedApp, updatePinnedApp } from "../shared/storage";
 import type { ContextMenuItem } from "./ContextMenu";
 import {
   SortableContext,

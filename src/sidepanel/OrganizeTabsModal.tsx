@@ -105,7 +105,11 @@ function getHostname(url: string): string {
  * - Only suggests groups with 2+ tabs
  * - Excludes tabs already in folders
  */
-function groupTabsByDomain(tabs: TabInfo[], folders: Folder[], allFolders: Folder[]): TabGroup[] {
+function groupTabsByDomain(
+  tabs: TabInfo[],
+  folders: Folder[],
+  allFolders: Folder[]
+): TabGroup[] {
   // Build a set of existing folder names (lowercase) for matching
   const existingFolderNames = new Map<string, string>();
   for (const f of allFolders) {
@@ -274,7 +278,8 @@ export default function OrganizeTabsModal({
     };
   }, [tabs, folders, workspaces]);
 
-  const allGroups = aiGroups && groupingSource === "ai" ? aiGroups : domainGroups;
+  const allGroups =
+    aiGroups && groupingSource === "ai" ? aiGroups : domainGroups;
 
   // Separate folder groups from workspace move suggestions
   const groups = allGroups;
@@ -665,9 +670,7 @@ export default function OrganizeTabsModal({
                         ) : (
                           <span className="w-3 h-3 shrink-0 rounded bg-gray-300 dark:bg-gray-600" />
                         )}
-                        <span className="truncate">
-                          {tab.title || tab.url}
-                        </span>
+                        <span className="truncate">{tab.title || tab.url}</span>
                       </div>
                     ))}
                   </div>

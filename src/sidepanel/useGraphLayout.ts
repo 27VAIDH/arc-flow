@@ -1,5 +1,10 @@
 import { useMemo } from "react";
-import type { GraphData, LayoutResult, LayoutNode, LayoutEdge } from "../shared/types";
+import type {
+  GraphData,
+  LayoutResult,
+  LayoutNode,
+  LayoutEdge,
+} from "../shared/types";
 
 const REPULSION = 500;
 const ATTRACTION = 0.01;

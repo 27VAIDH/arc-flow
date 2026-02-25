@@ -1,11 +1,22 @@
 import { useEffect, useState } from "react";
-import type { Settings, Workspace, RoutingRule, AutopilotRule, AutopilotCondition } from "../shared/types";
+import type {
+  Settings,
+  Workspace,
+  RoutingRule,
+  AutopilotRule,
+  AutopilotCondition,
+} from "../shared/types";
 import {
   getSettings,
   updateSettings,
   resetSettings,
 } from "../shared/settingsStorage";
-import { getWorkspaces, createWorkspace, updateWorkspace, setActiveWorkspace } from "../shared/workspaceStorage";
+import {
+  getWorkspaces,
+  createWorkspace,
+  updateWorkspace,
+  setActiveWorkspace,
+} from "../shared/workspaceStorage";
 import {
   AUTO_ARCHIVE_OPTIONS,
   SUSPEND_THRESHOLD_OPTIONS,
@@ -31,9 +42,18 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 const COLOR_PALETTE = [
-  "#2E75B6", "#EF4444", "#F97316", "#EAB308",
-  "#22C55E", "#14B8A6", "#06B6D4", "#6366f1",
-  "#A855F7", "#EC4899", "#78716C", "#64748B",
+  "#2E75B6",
+  "#EF4444",
+  "#F97316",
+  "#EAB308",
+  "#22C55E",
+  "#14B8A6",
+  "#06B6D4",
+  "#6366f1",
+  "#A855F7",
+  "#EC4899",
+  "#78716C",
+  "#64748B",
 ];
 
 function SelectField({
@@ -68,7 +88,9 @@ function SelectField({
 }
 
 function TestConnectionButton({ apiKey }: { apiKey: string }) {
-  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [status, setStatus] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
   const handleTest = async () => {
@@ -119,10 +141,14 @@ function TestConnectionButton({ apiKey }: { apiKey: string }) {
         {status === "loading" ? "Testing..." : "Test Connection"}
       </button>
       {status === "success" && (
-        <span className="text-green-500 text-sm" title="Connection successful">&#10003;</span>
+        <span className="text-green-500 text-sm" title="Connection successful">
+          &#10003;
+        </span>
       )}
       {status === "error" && (
-        <span className="text-red-500 text-xs" title={errorMsg}>&#10007; {errorMsg}</span>
+        <span className="text-red-500 text-xs" title={errorMsg}>
+          &#10007; {errorMsg}
+        </span>
       )}
     </div>
   );
@@ -141,8 +167,14 @@ function SortableRoutingRuleRow({
   onToggle: (index: number) => void;
   onDelete: (index: number) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: `rule:${index}` });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `rule:${index}` });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -228,7 +260,10 @@ interface AnalyticsData {
   daily: Record<string, AnalyticsDailyEntry>;
 }
 
-type FocusStatsData = Record<string, { totalMinutes: number; sessions: number }>;
+type FocusStatsData = Record<
+  string,
+  { totalMinutes: number; sessions: number }
+>;
 
 function getDateKey(daysAgo: number): string {
   const d = new Date();
@@ -256,10 +291,15 @@ function AnalyticsSection({ workspaces }: { workspaces: Workspace[] }) {
       setLoading(false);
     });
 
-    const handleChange = (changes: { [key: string]: chrome.storage.StorageChange }, area: string) => {
+    const handleChange = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      area: string
+    ) => {
       if (area !== "local") return;
       if (changes.analytics) {
-        setAnalytics((changes.analytics.newValue as AnalyticsData) ?? { daily: {} });
+        setAnalytics(
+          (changes.analytics.newValue as AnalyticsData) ?? { daily: {} }
+        );
       }
       if (changes.focusStats) {
         setFocusStats((changes.focusStats.newValue as FocusStatsData) ?? {});
@@ -280,7 +320,8 @@ function AnalyticsSection({ workspaces }: { workspaces: Workspace[] }) {
   if (loading) return null;
 
   const daily = analytics?.daily ?? {};
-  const hasData = Object.keys(daily).length > 0 || Object.keys(focusStats).length > 0;
+  const hasData =
+    Object.keys(daily).length > 0 || Object.keys(focusStats).length > 0;
 
   if (!hasData) {
     return (
@@ -288,7 +329,9 @@ function AnalyticsSection({ workspaces }: { workspaces: Workspace[] }) {
         <h3 className="text-[11px] font-medium text-gray-400 dark:text-arc-text-secondary mb-3">
           Analytics
         </h3>
-        <p className="text-sm text-gray-500 dark:text-arc-text-secondary">No data yet</p>
+        <p className="text-sm text-gray-500 dark:text-arc-text-secondary">
+          No data yet
+        </p>
       </section>
     );
   }
@@ -303,7 +346,10 @@ function AnalyticsSection({ workspaces }: { workspaces: Workspace[] }) {
       closed: entry?.closed ?? 0,
     };
   });
-  const maxTabs = Math.max(1, ...last7.map((d) => Math.max(d.opened, d.closed)));
+  const maxTabs = Math.max(
+    1,
+    ...last7.map((d) => Math.max(d.opened, d.closed))
+  );
 
   // Workspace time (aggregate all days)
   const wsTimeMap: Record<string, number> = {};
@@ -364,23 +410,36 @@ function AnalyticsSection({ workspaces }: { workspaces: Workspace[] }) {
       <div className="space-y-5">
         {/* Tabs opened/closed chart */}
         <div>
-          <p className="text-xs text-gray-500 dark:text-arc-text-secondary mb-2">Tabs opened / closed (7 days)</p>
+          <p className="text-xs text-gray-500 dark:text-arc-text-secondary mb-2">
+            Tabs opened / closed (7 days)
+          </p>
           <div className="flex items-end gap-1 h-20">
             {last7.map((day, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+              <div
+                key={i}
+                className="flex-1 flex flex-col items-center gap-0.5"
+              >
                 <div className="flex gap-px items-end w-full h-14">
                   <div
                     className="flex-1 rounded-t-sm bg-arc-accent/80"
-                    style={{ height: `${(day.opened / maxTabs) * 100}%`, minHeight: day.opened > 0 ? 2 : 0 }}
+                    style={{
+                      height: `${(day.opened / maxTabs) * 100}%`,
+                      minHeight: day.opened > 0 ? 2 : 0,
+                    }}
                     title={`Opened: ${day.opened}`}
                   />
                   <div
                     className="flex-1 rounded-t-sm bg-gray-400/50 dark:bg-gray-600/50"
-                    style={{ height: `${(day.closed / maxTabs) * 100}%`, minHeight: day.closed > 0 ? 2 : 0 }}
+                    style={{
+                      height: `${(day.closed / maxTabs) * 100}%`,
+                      minHeight: day.closed > 0 ? 2 : 0,
+                    }}
                     title={`Closed: ${day.closed}`}
                   />
                 </div>
-                <span className="text-[9px] text-gray-400 dark:text-arc-text-secondary">{day.label}</span>
+                <span className="text-[9px] text-gray-400 dark:text-arc-text-secondary">
+                  {day.label}
+                </span>
               </div>
             ))}
           </div>
@@ -389,7 +448,8 @@ function AnalyticsSection({ workspaces }: { workspaces: Workspace[] }) {
               <span className="w-2 h-2 rounded-sm bg-arc-accent/80" /> Opened
             </span>
             <span className="flex items-center gap-1 text-[9px] text-gray-400">
-              <span className="w-2 h-2 rounded-sm bg-gray-400/50 dark:bg-gray-600/50" /> Closed
+              <span className="w-2 h-2 rounded-sm bg-gray-400/50 dark:bg-gray-600/50" />{" "}
+              Closed
             </span>
           </div>
         </div>
@@ -397,7 +457,9 @@ function AnalyticsSection({ workspaces }: { workspaces: Workspace[] }) {
         {/* Workspace time */}
         {wsTimeEntries.length > 0 && (
           <div>
-            <p className="text-xs text-gray-500 dark:text-arc-text-secondary mb-2">Time per workspace</p>
+            <p className="text-xs text-gray-500 dark:text-arc-text-secondary mb-2">
+              Time per workspace
+            </p>
             <div className="space-y-1.5">
               {wsTimeEntries.map(([wsId, mins]) => (
                 <div key={wsId} className="flex items-center gap-2">
@@ -422,12 +484,16 @@ function AnalyticsSection({ workspaces }: { workspaces: Workspace[] }) {
         {/* Top domains */}
         {topDomains.length > 0 && (
           <div>
-            <p className="text-xs text-gray-500 dark:text-arc-text-secondary mb-2">Top domains</p>
+            <p className="text-xs text-gray-500 dark:text-arc-text-secondary mb-2">
+              Top domains
+            </p>
             <div className="space-y-1">
               {topDomains.map(([domain, count], i) => (
                 <div key={domain} className="flex items-center justify-between">
                   <span className="text-xs text-gray-600 dark:text-arc-text-primary truncate">
-                    <span className="text-gray-400 dark:text-arc-text-secondary mr-1">{i + 1}.</span>
+                    <span className="text-gray-400 dark:text-arc-text-secondary mr-1">
+                      {i + 1}.
+                    </span>
                     {domain}
                   </span>
                   <span className="text-[10px] text-gray-400 dark:text-arc-text-secondary shrink-0 ml-2">
@@ -441,28 +507,46 @@ function AnalyticsSection({ workspaces }: { workspaces: Workspace[] }) {
 
         {/* Memory saved */}
         <div>
-          <p className="text-xs text-gray-500 dark:text-arc-text-secondary mb-1">Estimated memory saved</p>
-          <p className="text-sm font-medium text-gray-700 dark:text-arc-text-primary">
-            ~{memorySavedMB >= 1000 ? `${(memorySavedMB / 1000).toFixed(1)} GB` : `${memorySavedMB} MB`}
+          <p className="text-xs text-gray-500 dark:text-arc-text-secondary mb-1">
+            Estimated memory saved
           </p>
-          <p className="text-[10px] text-gray-400 dark:text-arc-text-secondary">from {totalSuspended.toLocaleString()} closed/suspended tabs (~50 MB each)</p>
+          <p className="text-sm font-medium text-gray-700 dark:text-arc-text-primary">
+            ~
+            {memorySavedMB >= 1000
+              ? `${(memorySavedMB / 1000).toFixed(1)} GB`
+              : `${memorySavedMB} MB`}
+          </p>
+          <p className="text-[10px] text-gray-400 dark:text-arc-text-secondary">
+            from {totalSuspended.toLocaleString()} closed/suspended tabs (~50 MB
+            each)
+          </p>
         </div>
 
         {/* Focus time chart */}
         {focusLast7.some((d) => d.minutes > 0) && (
           <div>
-            <p className="text-xs text-gray-500 dark:text-arc-text-secondary mb-2">Deep Work focus time (7 days)</p>
+            <p className="text-xs text-gray-500 dark:text-arc-text-secondary mb-2">
+              Deep Work focus time (7 days)
+            </p>
             <div className="flex items-end gap-1 h-20">
               {focusLast7.map((day, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                <div
+                  key={i}
+                  className="flex-1 flex flex-col items-center gap-0.5"
+                >
                   <div className="flex items-end w-full h-14 justify-center">
                     <div
                       className="w-full rounded-t-sm bg-green-500/70"
-                      style={{ height: `${(day.minutes / maxFocus) * 100}%`, minHeight: day.minutes > 0 ? 2 : 0 }}
+                      style={{
+                        height: `${(day.minutes / maxFocus) * 100}%`,
+                        minHeight: day.minutes > 0 ? 2 : 0,
+                      }}
                       title={`${day.minutes} min`}
                     />
                   </div>
-                  <span className="text-[9px] text-gray-400 dark:text-arc-text-secondary">{day.label}</span>
+                  <span className="text-[9px] text-gray-400 dark:text-arc-text-secondary">
+                    {day.label}
+                  </span>
                 </div>
               ))}
             </div>
@@ -527,7 +611,11 @@ function RoutingRulesSection({
     if (!newPattern.trim()) return;
     const rules = [
       ...settings.routingRules,
-      { pattern: newPattern.trim(), workspaceId: newWorkspaceId, enabled: true },
+      {
+        pattern: newPattern.trim(),
+        workspaceId: newWorkspaceId,
+        enabled: true,
+      },
     ];
     onUpdate({ routingRules: rules });
     setNewPattern("");
@@ -542,8 +630,8 @@ function RoutingRulesSection({
       </h3>
       <div className="space-y-3">
         <p className="text-xs text-gray-500 dark:text-arc-text-secondary">
-          Route new tabs to workspaces based on URL patterns. Use * as
-          wildcard (e.g. *.google.com/*).
+          Route new tabs to workspaces based on URL patterns. Use * as wildcard
+          (e.g. *.google.com/*).
         </p>
         <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
           <SortableContext
@@ -649,7 +737,10 @@ function AutopilotRulesSection({
     chrome.storage.local.get(["autopilotRules"], (result) => {
       setRules((result.autopilotRules as AutopilotRule[]) ?? []);
     });
-    const handleChange = (changes: { [key: string]: chrome.storage.StorageChange }, area: string) => {
+    const handleChange = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      area: string
+    ) => {
       if (area === "local" && changes.autopilotRules) {
         setRules((changes.autopilotRules.newValue as AutopilotRule[]) ?? []);
       }
@@ -668,7 +759,9 @@ function AutopilotRulesSection({
   };
 
   const handleToggleRule = (id: string) => {
-    saveRules(rules.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)));
+    saveRules(
+      rules.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r))
+    );
   };
 
   const handleSaveRule = (rule: AutopilotRule) => {
@@ -705,7 +798,9 @@ function AutopilotRulesSection({
             Enable Autopilot
           </label>
           <button
-            onClick={() => onUpdate({ autopilotEnabled: !settings.autopilotEnabled })}
+            onClick={() =>
+              onUpdate({ autopilotEnabled: !settings.autopilotEnabled })
+            }
             className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
               settings.autopilotEnabled
                 ? "bg-arc-accent"
@@ -726,7 +821,9 @@ function AutopilotRulesSection({
             Show notifications
           </label>
           <button
-            onClick={() => onUpdate({ autopilotNotify: !settings.autopilotNotify })}
+            onClick={() =>
+              onUpdate({ autopilotNotify: !settings.autopilotNotify })
+            }
             className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
               settings.autopilotNotify
                 ? "bg-arc-accent"
@@ -742,7 +839,8 @@ function AutopilotRulesSection({
         </div>
 
         <p className="text-xs text-gray-500 dark:text-arc-text-secondary">
-          Automatically switch workspaces based on time, domain, or display rules.
+          Automatically switch workspaces based on time, domain, or display
+          rules.
         </p>
 
         {/* Rules list */}
@@ -791,7 +889,12 @@ function AutopilotRulesSection({
                     className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-red-500 dark:hover:text-red-400 shrink-0"
                     aria-label="Delete rule"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      className="w-3.5 h-3.5"
+                    >
                       <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
                     </svg>
                   </button>
@@ -803,15 +906,22 @@ function AutopilotRulesSection({
                       key={i}
                       className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary"
                     >
-                      {c.type === "time" ? `Time: ${c.value}` : c.type === "domain" ? `Domain: ${c.value}` : `Displays: ${c.value}`}
+                      {c.type === "time"
+                        ? `Time: ${c.value}`
+                        : c.type === "domain"
+                          ? `Domain: ${c.value}`
+                          : `Displays: ${c.value}`}
                     </span>
                   ))}
                   {rule.conditions.length === 0 && (
-                    <span className="text-[10px] text-gray-400 dark:text-arc-text-secondary italic">No conditions</span>
+                    <span className="text-[10px] text-gray-400 dark:text-arc-text-secondary italic">
+                      No conditions
+                    </span>
                   )}
                 </div>
                 <div className="mt-1 text-[10px] text-gray-400 dark:text-arc-text-secondary">
-                  Target: {workspaces.find((w) => w.id === rule.targetWorkspaceId)
+                  Target:{" "}
+                  {workspaces.find((w) => w.id === rule.targetWorkspaceId)
                     ? `${workspaces.find((w) => w.id === rule.targetWorkspaceId)!.emoji} ${workspaces.find((w) => w.id === rule.targetWorkspaceId)!.name}`
                     : "Unknown"}
                 </div>
@@ -856,8 +966,12 @@ function AutopilotRuleEditor({
   onCancel: () => void;
 }) {
   const [name, setName] = useState(rule.name);
-  const [conditions, setConditions] = useState<AutopilotCondition[]>([...rule.conditions]);
-  const [targetWorkspaceId, setTargetWorkspaceId] = useState(rule.targetWorkspaceId);
+  const [conditions, setConditions] = useState<AutopilotCondition[]>([
+    ...rule.conditions,
+  ]);
+  const [targetWorkspaceId, setTargetWorkspaceId] = useState(
+    rule.targetWorkspaceId
+  );
   const [priority, setPriority] = useState(rule.priority);
 
   const handleAddCondition = () => {
@@ -868,10 +982,18 @@ function AutopilotRuleEditor({
     setConditions(conditions.filter((_, i) => i !== index));
   };
 
-  const handleConditionChange = (index: number, field: "type" | "value", val: string) => {
+  const handleConditionChange = (
+    index: number,
+    field: "type" | "value",
+    val: string
+  ) => {
     const updated = [...conditions];
     if (field === "type") {
-      updated[index] = { ...updated[index], type: val as AutopilotCondition["type"], value: "" };
+      updated[index] = {
+        ...updated[index],
+        type: val as AutopilotCondition["type"],
+        value: "",
+      };
     } else {
       updated[index] = { ...updated[index], value: val };
     }
@@ -903,7 +1025,9 @@ function AutopilotRuleEditor({
 
       {/* Conditions */}
       <div className="space-y-2">
-        <label className="text-xs text-gray-500 dark:text-arc-text-secondary">Conditions</label>
+        <label className="text-xs text-gray-500 dark:text-arc-text-secondary">
+          Conditions
+        </label>
         {conditions.map((cond, i) => (
           <div key={i} className="flex items-center gap-1">
             <select
@@ -912,16 +1036,23 @@ function AutopilotRuleEditor({
               className="text-xs bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-1.5 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 w-28 shrink-0"
             >
               {CONDITION_TYPE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
               ))}
             </select>
             <input
               type="text"
               value={cond.value}
-              onChange={(e) => handleConditionChange(i, "value", e.target.value)}
+              onChange={(e) =>
+                handleConditionChange(i, "value", e.target.value)
+              }
               placeholder={
-                cond.type === "time" ? "09:00-17:00" :
-                cond.type === "domain" ? "*.github.com" : "2"
+                cond.type === "time"
+                  ? "09:00-17:00"
+                  : cond.type === "domain"
+                    ? "*.github.com"
+                    : "2"
               }
               className="text-xs bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 flex-1 min-w-0"
             />
@@ -930,7 +1061,12 @@ function AutopilotRuleEditor({
               className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-red-500 dark:hover:text-red-400 shrink-0"
               aria-label="Remove condition"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                className="w-3 h-3"
+              >
                 <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
               </svg>
             </button>
@@ -946,28 +1082,36 @@ function AutopilotRuleEditor({
 
       {/* Target workspace */}
       <div className="flex items-center justify-between gap-2">
-        <label className="text-xs text-gray-500 dark:text-arc-text-secondary shrink-0">Target workspace</label>
+        <label className="text-xs text-gray-500 dark:text-arc-text-secondary shrink-0">
+          Target workspace
+        </label>
         <select
           value={targetWorkspaceId}
           onChange={(e) => setTargetWorkspaceId(e.target.value)}
           className="text-xs bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 flex-1 min-w-0"
         >
           {workspaces.map((ws) => (
-            <option key={ws.id} value={ws.id}>{ws.emoji} {ws.name}</option>
+            <option key={ws.id} value={ws.id}>
+              {ws.emoji} {ws.name}
+            </option>
           ))}
         </select>
       </div>
 
       {/* Priority */}
       <div className="flex items-center justify-between gap-2">
-        <label className="text-xs text-gray-500 dark:text-arc-text-secondary shrink-0">Priority</label>
+        <label className="text-xs text-gray-500 dark:text-arc-text-secondary shrink-0">
+          Priority
+        </label>
         <select
           value={priority}
           onChange={(e) => setPriority(parseInt(e.target.value, 10))}
           className="text-xs bg-white dark:bg-arc-surface border border-gray-300 dark:border-arc-border rounded-lg px-2 py-1 text-gray-900 dark:text-arc-text-primary transition-colors duration-200 w-28"
         >
           {PRIORITY_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
           ))}
         </select>
       </div>
@@ -1031,13 +1175,18 @@ function ImportWorkspaceSection() {
 
       // Apply imported data
       const pinnedApps = Array.isArray(data.pinnedApps)
-        ? data.pinnedApps.map((app: { url?: string; title?: string; favicon?: string }, i: number) => ({
-            id: crypto.randomUUID(),
-            url: app.url || "",
-            title: app.title || "",
-            favicon: app.favicon || "",
-            sortOrder: i,
-          }))
+        ? data.pinnedApps.map(
+            (
+              app: { url?: string; title?: string; favicon?: string },
+              i: number
+            ) => ({
+              id: crypto.randomUUID(),
+              url: app.url || "",
+              title: app.title || "",
+              favicon: app.favicon || "",
+              sortOrder: i,
+            })
+          )
         : [];
 
       const folderIdMap = new Map<string, string>();
@@ -1046,25 +1195,46 @@ function ImportWorkspaceSection() {
         if (folder.id) folderIdMap.set(folder.id, crypto.randomUUID());
       }
 
-      const folders = importedFolders.map((folder: { id?: string; name?: string; parentId?: string | null; items?: Array<{ url?: string; title?: string; favicon?: string; type?: string; isArchived?: boolean; lastActiveAt?: number }>; isCollapsed?: boolean; sortOrder?: number }, i: number) => ({
-        id: folderIdMap.get(folder.id || "") || crypto.randomUUID(),
-        name: folder.name || "Untitled",
-        parentId: folder.parentId ? (folderIdMap.get(folder.parentId) ?? null) : null,
-        items: Array.isArray(folder.items)
-          ? folder.items.map((item) => ({
-              id: crypto.randomUUID(),
-              type: item.type || "link",
-              tabId: null,
-              url: item.url || "",
-              title: item.title || "",
-              favicon: item.favicon || "",
-              isArchived: item.isArchived || false,
-              lastActiveAt: item.lastActiveAt || 0,
-            }))
-          : [],
-        isCollapsed: folder.isCollapsed ?? false,
-        sortOrder: folder.sortOrder ?? i,
-      }));
+      const folders = importedFolders.map(
+        (
+          folder: {
+            id?: string;
+            name?: string;
+            parentId?: string | null;
+            items?: Array<{
+              url?: string;
+              title?: string;
+              favicon?: string;
+              type?: string;
+              isArchived?: boolean;
+              lastActiveAt?: number;
+            }>;
+            isCollapsed?: boolean;
+            sortOrder?: number;
+          },
+          i: number
+        ) => ({
+          id: folderIdMap.get(folder.id || "") || crypto.randomUUID(),
+          name: folder.name || "Untitled",
+          parentId: folder.parentId
+            ? (folderIdMap.get(folder.parentId) ?? null)
+            : null,
+          items: Array.isArray(folder.items)
+            ? folder.items.map((item) => ({
+                id: crypto.randomUUID(),
+                type: item.type || "link",
+                tabId: null,
+                url: item.url || "",
+                title: item.title || "",
+                favicon: item.favicon || "",
+                isArchived: item.isArchived || false,
+                lastActiveAt: item.lastActiveAt || 0,
+              }))
+            : [],
+          isCollapsed: folder.isCollapsed ?? false,
+          sortOrder: folder.sortOrder ?? i,
+        })
+      );
 
       await updateWorkspace(ws.id, {
         emoji: data.emoji || ws.emoji,
@@ -1080,7 +1250,9 @@ function ImportWorkspaceSection() {
       const pinnedCount = pinnedApps.length;
       const folderCount = folders.length;
       setStatus("success");
-      setMessage(`Workspace ${data.emoji || ""} ${name} imported with ${pinnedCount} pinned app${pinnedCount !== 1 ? "s" : ""} and ${folderCount} folder${folderCount !== 1 ? "s" : ""}`);
+      setMessage(
+        `Workspace ${data.emoji || ""} ${name} imported with ${pinnedCount} pinned app${pinnedCount !== 1 ? "s" : ""} and ${folderCount} folder${folderCount !== 1 ? "s" : ""}`
+      );
     } catch {
       setStatus("error");
       setMessage("Invalid workspace file");
@@ -1097,7 +1269,12 @@ function ImportWorkspaceSection() {
       </h3>
       <div className="space-y-3">
         <label className="flex items-center justify-center gap-2 text-sm text-arc-accent dark:text-arc-accent-hover hover:bg-gray-100 dark:hover:bg-arc-surface-hover rounded-lg px-3 py-2 cursor-pointer transition-colors duration-200 border border-dashed border-gray-300 dark:border-arc-border">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            className="w-4 h-4"
+          >
             <path d="M7.25 10.25a.75.75 0 0 0 1.5 0V4.56l2.22 2.22a.75.75 0 1 0 1.06-1.06l-3.5-3.5a.75.75 0 0 0-1.06 0l-3.5 3.5a.75.75 0 0 0 1.06 1.06l2.22-2.22v5.69Z" />
             <path d="M3.5 9.75a.75.75 0 0 0-1.5 0v1.5A2.75 2.75 0 0 0 4.75 14h6.5A2.75 2.75 0 0 0 14 11.25v-1.5a.75.75 0 0 0-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5Z" />
           </svg>
@@ -1110,13 +1287,16 @@ function ImportWorkspaceSection() {
           />
         </label>
         {status === "success" && (
-          <p className="text-xs text-green-600 dark:text-green-400">{message}</p>
+          <p className="text-xs text-green-600 dark:text-green-400">
+            {message}
+          </p>
         )}
         {status === "error" && (
           <p className="text-xs text-red-500 dark:text-red-400">{message}</p>
         )}
         <p className="text-xs text-gray-500 dark:text-arc-text-secondary">
-          Import an ArcFlow workspace (.json) exported from another browser or device
+          Import an ArcFlow workspace (.json) exported from another browser or
+          device
         </p>
       </div>
     </section>
@@ -1272,7 +1452,10 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
                       ? "ring-2 ring-offset-1 ring-gray-400 dark:ring-offset-arc-surface"
                       : ""
                   }`}
-                  style={{ background: "linear-gradient(135deg, #1a1a2e 50%, #3a3a5e 50%)" }}
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #1a1a2e 50%, #3a3a5e 50%)",
+                  }}
                   title="Default"
                   aria-label={`Reset to default panel color${!settings.panelColor ? " (selected)" : ""}`}
                 />
@@ -1361,7 +1544,9 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
               </label>
               <button
                 onClick={() =>
-                  handleUpdate({ timeMachineEnabled: !settings.timeMachineEnabled })
+                  handleUpdate({
+                    timeMachineEnabled: !settings.timeMachineEnabled,
+                  })
                 }
                 className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
                   settings.timeMachineEnabled
@@ -1387,7 +1572,8 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
               }
             />
             <p className="text-xs text-gray-500 dark:text-arc-text-secondary">
-              Records your browsing history for the Time Machine timeline. Older events are automatically pruned.
+              Records your browsing history for the Time Machine timeline. Older
+              events are automatically pruned.
             </p>
           </div>
         </section>
@@ -1553,7 +1739,8 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
               />
             </div>
             <p className="text-xs text-gray-400 dark:text-arc-text-secondary">
-              Your API key is stored locally on your device. It is only sent to OpenRouter for AI features.
+              Your API key is stored locally on your device. It is only sent to
+              OpenRouter for AI features.
             </p>
             <TestConnectionButton apiKey={settings.openRouterApiKey} />
           </div>
@@ -1601,15 +1788,14 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
               >
                 <span
                   className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                    settings.omniboxEnabled
-                      ? "translate-x-4"
-                      : "translate-x-0"
+                    settings.omniboxEnabled ? "translate-x-4" : "translate-x-0"
                   }`}
                 />
               </button>
             </div>
             <p className="text-xs text-gray-500 dark:text-arc-text-secondary">
-              Type <span className="font-medium">af</span> in address bar to search tabs
+              Type <span className="font-medium">af</span> in address bar to
+              search tabs
             </p>
           </div>
         </section>

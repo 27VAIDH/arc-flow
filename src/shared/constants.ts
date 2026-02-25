@@ -50,4 +50,3 @@ export const TIME_MACHINE_RETENTION_OPTIONS = [
   { label: "14 days", value: 14 },
   { label: "30 days", value: 30 },
 ] as const;
-

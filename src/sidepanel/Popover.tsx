@@ -8,7 +8,13 @@ interface PopoverProps {
   className?: string;
 }
 
-export default function Popover({ x, y, onClose, children, className = "" }: PopoverProps) {
+export default function Popover({
+  x,
+  y,
+  onClose,
+  children,
+  className = "",
+}: PopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

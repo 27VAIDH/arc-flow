@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, memo, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  memo,
+  type RefObject,
+} from "react";
 import { useSwipeGesture } from "./useSwipeGesture";
 import type {
   TabInfo,
@@ -206,12 +214,20 @@ const DraggableTabItem = memo(function DraggableTabItem({
   onTabRename?: (tabId: number, newName: string) => void;
   energyScore?: number;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: `tab:${tab.id}` });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `tab:${tab.id}` });
 
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null) as RefObject<HTMLInputElement>;
+  const inputRef = useRef<HTMLInputElement>(
+    null
+  ) as RefObject<HTMLInputElement>;
   const committedRef = useRef(false);
 
   const hasCustomName = !!displayName;
@@ -438,7 +454,12 @@ function TabDragOverlay({ tab }: { tab: TabInfo }) {
     <DragOverlayCard
       icon={
         tab.favIconUrl ? (
-          <img src={tab.favIconUrl} alt="" className="w-4 h-4 shrink-0" draggable={false} />
+          <img
+            src={tab.favIconUrl}
+            alt=""
+            className="w-4 h-4 shrink-0"
+            draggable={false}
+          />
         ) : (
           <span className="w-4 h-4 shrink-0 rounded bg-gray-200 dark:bg-arc-surface-hover" />
         )
@@ -466,7 +487,12 @@ function FolderItemDragOverlay({ item }: { item: FolderItem }) {
     <DragOverlayCard
       icon={
         item.favicon ? (
-          <img src={item.favicon} alt="" className="w-4 h-4 shrink-0" draggable={false} />
+          <img
+            src={item.favicon}
+            alt=""
+            className="w-4 h-4 shrink-0"
+            draggable={false}
+          />
         ) : (
           <span className="w-4 h-4 shrink-0 rounded bg-gray-200 dark:bg-arc-surface-hover" />
         )
@@ -584,8 +610,17 @@ function FolderPickerDropdown({
               className="p-1 text-green-500 hover:text-green-400 transition-colors"
               title="Create"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="w-4 h-4"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
+                  clipRule="evenodd"
+                />
               </svg>
             </button>
             <button
@@ -596,7 +631,12 @@ function FolderPickerDropdown({
               className="p-1 text-gray-400 hover:text-gray-300 transition-colors"
               title="Cancel"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="w-4 h-4"
+              >
                 <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
               </svg>
             </button>
@@ -672,8 +712,11 @@ export default function App() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [activeDragTab, setActiveDragTab] = useState<TabInfo | null>(null);
   const [activeDragFolder, setActiveDragFolder] = useState<Folder | null>(null);
-  const [activeDragFolderItem, setActiveDragFolderItem] = useState<FolderItem | null>(null);
-  const [activeDragPinned, setActiveDragPinned] = useState<PinnedApp | null>(null);
+  const [activeDragFolderItem, setActiveDragFolderItem] =
+    useState<FolderItem | null>(null);
+  const [activeDragPinned, setActiveDragPinned] = useState<PinnedApp | null>(
+    null
+  );
   const [activeWorkspaceId, setActiveWorkspaceId] = useState("default");
   const [tabWorkspaceMap, setTabWorkspaceMap] = useState<
     Record<string, string>
@@ -689,7 +732,9 @@ export default function App() {
   const [showOrganizeTabs, setShowOrganizeTabs] = useState(false);
   const [showSessionManager, setShowSessionManager] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [tabNameOverrides, setTabNameOverrides] = useState<Record<number, string>>({});
+  const [tabNameOverrides, setTabNameOverrides] = useState<
+    Record<number, string>
+  >({});
   const [tabOrderOverrides, setTabOrderOverrides] = useState<number[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [isDraggingTabs, setIsDraggingTabs] = useState(false);
@@ -712,9 +757,12 @@ export default function App() {
   const mainContentRef = useRef<HTMLElement>(null);
   const activeWorkspaceIdRef = useRef(activeWorkspaceId);
   const [swipeBounce, setSwipeBounce] = useState<"left" | "right" | null>(null);
-  const [workspaceSuggestion, setWorkspaceSuggestion] = useState<WorkspaceSuggestion | null>(null);
+  const [workspaceSuggestion, setWorkspaceSuggestion] =
+    useState<WorkspaceSuggestion | null>(null);
   const [deepWorkActive, setDeepWorkActive] = useState(false);
-  const [tabEnergyScores, setTabEnergyScores] = useState<Record<string, number>>({});
+  const [tabEnergyScores, setTabEnergyScores] = useState<
+    Record<string, number>
+  >({});
 
   // Sorted workspaces for swipe navigation
   const sortedWorkspaces = useMemo(
@@ -776,7 +824,9 @@ export default function App() {
         if (dismissedAt && Date.now() - dismissedAt < 24 * 60 * 60 * 1000) {
           return; // Dismissed within 24 hours
         }
-        const suggestion = result.pendingWorkspaceSuggestion as WorkspaceSuggestion | undefined;
+        const suggestion = result.pendingWorkspaceSuggestion as
+          | WorkspaceSuggestion
+          | undefined;
         if (suggestion && suggestion.suggest) {
           setWorkspaceSuggestion(suggestion);
         }
@@ -1057,7 +1107,9 @@ export default function App() {
           unordered.push(tab);
         }
       }
-      ordered.sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
+      ordered.sort(
+        (a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0)
+      );
       return [...ordered, ...unordered];
     }
 
@@ -1171,7 +1223,17 @@ export default function App() {
     yesterday.setDate(yesterday.getDate() - 1);
     const yKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
     chrome.storage.local.get("dailySnapshots", (result) => {
-      const snapshots = (result.dailySnapshots as Record<string, { tabs: Record<string, { url: string; title: string; favicon: string }[]>; createdAt: number }>) ?? {};
+      const snapshots =
+        (result.dailySnapshots as Record<
+          string,
+          {
+            tabs: Record<
+              string,
+              { url: string; title: string; favicon: string }[]
+            >;
+            createdAt: number;
+          }
+        >) ?? {};
       const snap = snapshots[yKey];
       if (!snap) {
         setToast("No snapshot from yesterday");
@@ -1341,7 +1403,9 @@ export default function App() {
       // Clear suggestion
       setWorkspaceSuggestion(null);
       await chrome.storage.local.remove("pendingWorkspaceSuggestion");
-      setToast(`Created ${workspaceSuggestion.emoji} ${workspaceSuggestion.name} workspace`);
+      setToast(
+        `Created ${workspaceSuggestion.emoji} ${workspaceSuggestion.name} workspace`
+      );
     } catch (err) {
       console.error("Failed to create workspace from suggestion:", err);
       setToast("Failed to create workspace");
@@ -1352,9 +1416,15 @@ export default function App() {
   const handleDupSwitch = useCallback(async () => {
     if (!dupNotification) return;
     // Close the duplicate (new) tab
-    chrome.runtime.sendMessage({ type: "CLOSE_TAB", tabId: dupNotification.newTabId });
+    chrome.runtime.sendMessage({
+      type: "CLOSE_TAB",
+      tabId: dupNotification.newTabId,
+    });
     // Activate the existing tab
-    chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId: dupNotification.existingTabId });
+    chrome.runtime.sendMessage({
+      type: "SWITCH_TAB",
+      tabId: dupNotification.existingTabId,
+    });
     // Switch workspace if needed
     if (dupNotification.existingWorkspaceId !== activeWorkspaceIdRef.current) {
       await setActiveWorkspaceStorage(dupNotification.existingWorkspaceId);
@@ -1386,7 +1456,10 @@ export default function App() {
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const today = new Date().toISOString().slice(0, 10);
-    const safeName = ws.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const safeName = ws.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
     const a = document.createElement("a");
     a.href = url;
     a.download = `arcflow-workspace-${safeName}-${today}.json`;
@@ -1406,7 +1479,11 @@ export default function App() {
       try {
         const text = await file.text();
         const data = JSON.parse(text);
-        if (data.version !== "2.0" || data.type !== "arcflow-workspace" || !data.name) {
+        if (
+          data.version !== "2.0" ||
+          data.type !== "arcflow-workspace" ||
+          !data.name
+        ) {
           setToast("Invalid workspace file");
           return;
         }
@@ -1417,38 +1494,64 @@ export default function App() {
         }
         const ws = await createWorkspace(name);
         const pinnedApps = Array.isArray(data.pinnedApps)
-          ? data.pinnedApps.map((app: { url?: string; title?: string; favicon?: string }, i: number) => ({
-              id: crypto.randomUUID(),
-              url: app.url || "",
-              title: app.title || "",
-              favicon: app.favicon || "",
-              sortOrder: i,
-            }))
+          ? data.pinnedApps.map(
+              (
+                app: { url?: string; title?: string; favicon?: string },
+                i: number
+              ) => ({
+                id: crypto.randomUUID(),
+                url: app.url || "",
+                title: app.title || "",
+                favicon: app.favicon || "",
+                sortOrder: i,
+              })
+            )
           : [];
         const folderIdMap = new Map<string, string>();
         const importedFolders = Array.isArray(data.folders) ? data.folders : [];
         for (const folder of importedFolders) {
           if (folder.id) folderIdMap.set(folder.id, crypto.randomUUID());
         }
-        const folders = importedFolders.map((folder: { id?: string; name?: string; parentId?: string | null; items?: Array<{ url?: string; title?: string; favicon?: string; type?: string; isArchived?: boolean; lastActiveAt?: number }>; isCollapsed?: boolean; sortOrder?: number }, i: number) => ({
-          id: folderIdMap.get(folder.id || "") || crypto.randomUUID(),
-          name: folder.name || "Untitled",
-          parentId: folder.parentId ? (folderIdMap.get(folder.parentId) ?? null) : null,
-          items: Array.isArray(folder.items)
-            ? folder.items.map((item) => ({
-                id: crypto.randomUUID(),
-                type: item.type || "link",
-                tabId: null,
-                url: item.url || "",
-                title: item.title || "",
-                favicon: item.favicon || "",
-                isArchived: item.isArchived || false,
-                lastActiveAt: item.lastActiveAt || 0,
-              }))
-            : [],
-          isCollapsed: folder.isCollapsed ?? false,
-          sortOrder: folder.sortOrder ?? i,
-        }));
+        const folders = importedFolders.map(
+          (
+            folder: {
+              id?: string;
+              name?: string;
+              parentId?: string | null;
+              items?: Array<{
+                url?: string;
+                title?: string;
+                favicon?: string;
+                type?: string;
+                isArchived?: boolean;
+                lastActiveAt?: number;
+              }>;
+              isCollapsed?: boolean;
+              sortOrder?: number;
+            },
+            i: number
+          ) => ({
+            id: folderIdMap.get(folder.id || "") || crypto.randomUUID(),
+            name: folder.name || "Untitled",
+            parentId: folder.parentId
+              ? (folderIdMap.get(folder.parentId) ?? null)
+              : null,
+            items: Array.isArray(folder.items)
+              ? folder.items.map((item) => ({
+                  id: crypto.randomUUID(),
+                  type: item.type || "link",
+                  tabId: null,
+                  url: item.url || "",
+                  title: item.title || "",
+                  favicon: item.favicon || "",
+                  isArchived: item.isArchived || false,
+                  lastActiveAt: item.lastActiveAt || 0,
+                }))
+              : [],
+            isCollapsed: folder.isCollapsed ?? false,
+            sortOrder: folder.sortOrder ?? i,
+          })
+        );
         await updateWorkspace(ws.id, {
           emoji: data.emoji || ws.emoji,
           accentColor: data.accentColor || ws.accentColor,
@@ -1460,7 +1563,9 @@ export default function App() {
         setActiveWorkspaceStorage(ws.id);
         const pinnedCount = pinnedApps.length;
         const folderCount = folders.length;
-        setToast(`Workspace ${data.emoji || ""} ${name} imported with ${pinnedCount} pinned app${pinnedCount !== 1 ? "s" : ""} and ${folderCount} folder${folderCount !== 1 ? "s" : ""}`);
+        setToast(
+          `Workspace ${data.emoji || ""} ${name} imported with ${pinnedCount} pinned app${pinnedCount !== 1 ? "s" : ""} and ${folderCount} folder${folderCount !== 1 ? "s" : ""}`
+        );
       } catch {
         setToast("Invalid workspace file");
       }
@@ -1598,7 +1703,11 @@ export default function App() {
       // Add "Always open [domain] in this workspace" for auto-routing
       try {
         const domain = new URL(tab.url).hostname;
-        if (domain && !domain.startsWith("chrome") && !domain.startsWith("extension")) {
+        if (
+          domain &&
+          !domain.startsWith("chrome") &&
+          !domain.startsWith("extension")
+        ) {
           items.push({
             label: `Always open ${domain} here`,
             onClick: async () => {
@@ -1611,9 +1720,17 @@ export default function App() {
                 setToast(`Rule already exists for ${domain}`);
                 return;
               }
-              const activeWs = workspaces.find((ws) => ws.id === activeWorkspaceId);
-              const newRule = { pattern, workspaceId: activeWorkspaceId, enabled: true };
-              await updateSettings({ routingRules: [...s.routingRules, newRule] });
+              const activeWs = workspaces.find(
+                (ws) => ws.id === activeWorkspaceId
+              );
+              const newRule = {
+                pattern,
+                workspaceId: activeWorkspaceId,
+                enabled: true,
+              };
+              await updateSettings({
+                routingRules: [...s.routingRules, newRule],
+              });
               setToast(
                 `Tabs from ${domain} will auto-route to ${activeWs?.emoji ?? ""} ${activeWs?.name ?? "this workspace"}`
               );
@@ -1890,7 +2007,10 @@ export default function App() {
       }
 
       // Case 1d: Folder item dropped onto pinned apps zone
-      if (activeId.startsWith("folder-item:") && overId === "pinned-drop-zone") {
+      if (
+        activeId.startsWith("folder-item:") &&
+        overId === "pinned-drop-zone"
+      ) {
         const itemId = activeId.replace("folder-item:", "");
         let folderItem: FolderItem | undefined;
         for (const folder of folders) {
@@ -1915,7 +2035,10 @@ export default function App() {
       }
 
       // Case 1e: Folder item dropped onto tab list zone (unpin from folder)
-      if (activeId.startsWith("folder-item:") && overId === "tablist-drop-zone") {
+      if (
+        activeId.startsWith("folder-item:") &&
+        overId === "tablist-drop-zone"
+      ) {
         const itemId = activeId.replace("folder-item:", "");
         let folderItem: FolderItem | undefined;
         let sourceFolderId: string | undefined;
@@ -2086,7 +2209,15 @@ export default function App() {
         return;
       }
     },
-    [tabs, folders, setFolders, filteredTabs, activeWorkspaceId, pinnedApps, setToast]
+    [
+      tabs,
+      folders,
+      setFolders,
+      filteredTabs,
+      activeWorkspaceId,
+      pinnedApps,
+      setToast,
+    ]
   );
 
   const activeDragType = activeDragTab
@@ -2128,29 +2259,32 @@ export default function App() {
       />
 
       {/* Search bar + action buttons (compact header) */}
-      <nav aria-label="Tab search" className={`flex items-center gap-1 px-2 pt-2 pb-1${deepWorkActive ? " ring-1 ring-arc-accent/30 rounded-lg mx-1" : ""}`}>
+      <nav
+        aria-label="Tab search"
+        className={`flex items-center gap-1 px-2 pt-2 pb-1${deepWorkActive ? " ring-1 ring-arc-accent/30 rounded-lg mx-1" : ""}`}
+      >
         <div className="flex-1 min-w-0">
           <SearchBar
-          tabs={tabs}
-          folders={folders}
-          allTabs={tabs}
-          tabWorkspaceMap={tabWorkspaceMap}
-          activeWorkspaceId={activeWorkspaceId}
-          workspaces={workspaces}
-          onSwitchTab={(tabId) => {
-            chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId });
-          }}
-          onSwitchWorkspaceAndTab={(workspaceId, tabId) => {
-            setActiveWorkspaceStorage(workspaceId);
-            setActiveWorkspaceId(workspaceId);
-            setTimeout(() => {
+            tabs={tabs}
+            folders={folders}
+            allTabs={tabs}
+            tabWorkspaceMap={tabWorkspaceMap}
+            activeWorkspaceId={activeWorkspaceId}
+            workspaces={workspaces}
+            onSwitchTab={(tabId) => {
               chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId });
-            }, 100);
-          }}
-          onOpenUrl={(url) => {
-            chrome.runtime.sendMessage({ type: "OPEN_URL", url });
-          }}
-        />
+            }}
+            onSwitchWorkspaceAndTab={(workspaceId, tabId) => {
+              setActiveWorkspaceStorage(workspaceId);
+              setActiveWorkspaceId(workspaceId);
+              setTimeout(() => {
+                chrome.runtime.sendMessage({ type: "SWITCH_TAB", tabId });
+              }, 100);
+            }}
+            onOpenUrl={(url) => {
+              chrome.runtime.sendMessage({ type: "OPEN_URL", url });
+            }}
+          />
         </div>
         <button
           onClick={toggleDeepWork}
@@ -2159,8 +2293,14 @@ export default function App() {
               ? "bg-arc-accent/15 text-arc-accent dark:text-arc-accent-hover"
               : "hover:bg-gray-100 dark:hover:bg-arc-surface-hover text-gray-500 dark:text-arc-text-secondary"
           }`}
-          title={deepWorkActive ? "Exit Deep Work Mode (Ctrl+Shift+D)" : "Enter Deep Work Mode (Ctrl+Shift+D)"}
-          aria-label={deepWorkActive ? "Exit Deep Work Mode" : "Enter Deep Work Mode"}
+          title={
+            deepWorkActive
+              ? "Exit Deep Work Mode (Ctrl+Shift+D)"
+              : "Enter Deep Work Mode (Ctrl+Shift+D)"
+          }
+          aria-label={
+            deepWorkActive ? "Exit Deep Work Mode" : "Enter Deep Work Mode"
+          }
           aria-pressed={deepWorkActive}
         >
           <svg
@@ -2249,7 +2389,9 @@ export default function App() {
       {workspaceSuggestion && (
         <div className="mx-2 mb-2 p-2 rounded-xl border border-arc-accent/20 dark:border-arc-accent/15 bg-white/80 dark:bg-arc-surface/80 shadow-sm animate-fade-in">
           <div className="flex items-start gap-2">
-            <span className="text-lg shrink-0">{workspaceSuggestion.emoji}</span>
+            <span className="text-lg shrink-0">
+              {workspaceSuggestion.emoji}
+            </span>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-800 dark:text-arc-text-primary">
                 Create &ldquo;{workspaceSuggestion.name}&rdquo; workspace?
@@ -2289,20 +2431,20 @@ export default function App() {
           setIsDraggingTabs(false);
         }}
       >
-      {/* Pinned Apps Row (Zone 2) */}
-      <DroppablePinnedZone>
-        <PinnedAppsRow
-          tabs={tabs}
-          pinnedApps={pinnedApps}
-          onContextMenu={setContextMenu}
-        />
-      </DroppablePinnedZone>
+        {/* Pinned Apps Row (Zone 2) */}
+        <DroppablePinnedZone>
+          <PinnedAppsRow
+            tabs={tabs}
+            pinnedApps={pinnedApps}
+            onContextMenu={setContextMenu}
+          />
+        </DroppablePinnedZone>
 
-      <main
-        ref={mainContentRef}
-        className={`flex-1 flex flex-col overflow-y-auto${swipeBounce === "left" ? " swipe-bounce-left" : swipeBounce === "right" ? " swipe-bounce-right" : ""}`}
-        aria-label="Tab management"
-      >
+        <main
+          ref={mainContentRef}
+          className={`flex-1 flex flex-col overflow-y-auto${swipeBounce === "left" ? " swipe-bounce-left" : swipeBounce === "right" ? " swipe-bounce-right" : ""}`}
+          aria-label="Tab management"
+        >
           {/* Folder Tree (Zone 3) */}
           <FolderTree
             onContextMenu={setContextMenu}
@@ -2311,11 +2453,18 @@ export default function App() {
             onItemClick={handleFolderItemClick}
             onItemContextMenu={handleFolderItemContextMenu}
             onItemRename={(folderId, itemId, newTitle) => {
-              setFolders(prev => prev.map(f =>
-                f.id === folderId
-                  ? { ...f, items: f.items.map(i => i.id === itemId ? { ...i, title: newTitle } : i) }
-                  : f
-              ));
+              setFolders((prev) =>
+                prev.map((f) =>
+                  f.id === folderId
+                    ? {
+                        ...f,
+                        items: f.items.map((i) =>
+                          i.id === itemId ? { ...i, title: newTitle } : i
+                        ),
+                      }
+                    : f
+                )
+              );
               renameItemInFolder(folderId, itemId, newTitle);
             }}
             onOpenAllTabs={handleOpenAllTabs}
@@ -2324,79 +2473,87 @@ export default function App() {
 
           {/* Tab list */}
           <DroppableTabListZone>
-          <section className="flex-1 px-1 pt-2" aria-label="Open tabs" data-drop-section="tabs">
-            <div className="flex items-center justify-between px-2 py-1">
-              <p
-                className="text-[11px] text-gray-400 dark:text-arc-text-secondary font-medium"
-                aria-live="polite"
-              >
-                {filteredTabs.length} tab{filteredTabs.length !== 1 ? "s" : ""}{" "}
-                open
-              </p>
-              {filteredTabs.length > 1 && (
-                <button
-                  onClick={() => {
-                    const nonActive = filteredTabs.filter((t) => !t.active);
-                    if (nonActive.length === 0) return;
-                    const confirmed = window.confirm(
-                      `Close ${nonActive.length} tab${nonActive.length !== 1 ? "s" : ""}? The active tab will remain open.`
-                    );
-                    if (!confirmed) return;
-                    chrome.runtime.sendMessage({
-                      type: "CLOSE_TABS",
-                      tabIds: nonActive.map((t) => t.id),
-                    });
-                  }}
-                  className="text-[11px] text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
-                  title="Close all non-active tabs"
-                >
-                  Close All
-                </button>
-              )}
-            </div>
-            <SortableContext
-              items={filteredTabs.map((t) => `tab:${t.id}`)}
-              strategy={verticalListSortingStrategy}
+            <section
+              className="flex-1 px-1 pt-2"
+              aria-label="Open tabs"
+              data-drop-section="tabs"
             >
-              {filteredTabs.length >= VIRTUAL_LIST_THRESHOLD && !isDraggingTabs ? (
-                <List<VirtualTabRowProps>
-                  style={{
-                    height: Math.min(filteredTabs.length * TAB_ITEM_HEIGHT, 400),
-                  }}
-                  rowComponent={VirtualTabRow}
-                  rowCount={filteredTabs.length}
-                  rowHeight={TAB_ITEM_HEIGHT}
-                  rowProps={{
-                    tabs: filteredTabs,
-                    onContextMenu: handleTabContextMenu,
-                    tabNameOverrides,
-                    onTabRename: handleTabRename,
-                    tabEnergyScores,
-                  }}
-                  overscanCount={5}
-                />
-              ) : (
-                <ul
-                  className="flex flex-col gap-1"
-                  role="listbox"
-                  aria-label="Open tabs"
+              <div className="flex items-center justify-between px-2 py-1">
+                <p
+                  className="text-[11px] text-gray-400 dark:text-arc-text-secondary font-medium"
+                  aria-live="polite"
                 >
-                  {filteredTabs.map((tab) => (
-                    <DraggableTabItem
-                      key={tab.id}
-                      tab={tab}
-                      onContextMenu={handleTabContextMenu}
-                      onMouseEnter={handleTabHoverStart}
-                      onMouseLeave={handleTabHoverEnd}
-                      displayName={tabNameOverrides[tab.id]}
-                      onTabRename={handleTabRename}
-                      energyScore={tabEnergyScores[String(tab.id)]}
-                    />
-                  ))}
-                </ul>
-              )}
-            </SortableContext>
-          </section>
+                  {filteredTabs.length} tab
+                  {filteredTabs.length !== 1 ? "s" : ""} open
+                </p>
+                {filteredTabs.length > 1 && (
+                  <button
+                    onClick={() => {
+                      const nonActive = filteredTabs.filter((t) => !t.active);
+                      if (nonActive.length === 0) return;
+                      const confirmed = window.confirm(
+                        `Close ${nonActive.length} tab${nonActive.length !== 1 ? "s" : ""}? The active tab will remain open.`
+                      );
+                      if (!confirmed) return;
+                      chrome.runtime.sendMessage({
+                        type: "CLOSE_TABS",
+                        tabIds: nonActive.map((t) => t.id),
+                      });
+                    }}
+                    className="text-[11px] text-gray-400 dark:text-arc-text-secondary hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
+                    title="Close all non-active tabs"
+                  >
+                    Close All
+                  </button>
+                )}
+              </div>
+              <SortableContext
+                items={filteredTabs.map((t) => `tab:${t.id}`)}
+                strategy={verticalListSortingStrategy}
+              >
+                {filteredTabs.length >= VIRTUAL_LIST_THRESHOLD &&
+                !isDraggingTabs ? (
+                  <List<VirtualTabRowProps>
+                    style={{
+                      height: Math.min(
+                        filteredTabs.length * TAB_ITEM_HEIGHT,
+                        400
+                      ),
+                    }}
+                    rowComponent={VirtualTabRow}
+                    rowCount={filteredTabs.length}
+                    rowHeight={TAB_ITEM_HEIGHT}
+                    rowProps={{
+                      tabs: filteredTabs,
+                      onContextMenu: handleTabContextMenu,
+                      tabNameOverrides,
+                      onTabRename: handleTabRename,
+                      tabEnergyScores,
+                    }}
+                    overscanCount={5}
+                  />
+                ) : (
+                  <ul
+                    className="flex flex-col gap-1"
+                    role="listbox"
+                    aria-label="Open tabs"
+                  >
+                    {filteredTabs.map((tab) => (
+                      <DraggableTabItem
+                        key={tab.id}
+                        tab={tab}
+                        onContextMenu={handleTabContextMenu}
+                        onMouseEnter={handleTabHoverStart}
+                        onMouseLeave={handleTabHoverEnd}
+                        displayName={tabNameOverrides[tab.id]}
+                        onTabRename={handleTabRename}
+                        energyScore={tabEnergyScores[String(tab.id)]}
+                      />
+                    ))}
+                  </ul>
+                )}
+              </SortableContext>
+            </section>
           </DroppableTabListZone>
 
           <DragOverlay>
@@ -2426,27 +2583,27 @@ export default function App() {
             ) : null}
           </DragOverlay>
 
-        {/* Autopilot Undo Banner */}
-        <AutopilotBanner />
+          {/* Autopilot Undo Banner */}
+          <AutopilotBanner />
 
-        {/* Archive Section (Zone 4) */}
-        <ArchiveSection />
+          {/* Archive Section (Zone 4) */}
+          <ArchiveSection />
 
-        {/* Time Machine Section */}
-        <TimeMachineSection />
+          {/* Time Machine Section */}
+          <TimeMachineSection />
 
-        {/* Annotations Section */}
-        <AnnotationsSection />
+          {/* Annotations Section */}
+          <AnnotationsSection />
 
-        {/* Tab Graph Section */}
-        <TabGraphSection />
+          {/* Tab Graph Section */}
+          <TabGraphSection />
 
-        {/* Research Copilot Section */}
-        <ResearchCopilotSection />
+          {/* Research Copilot Section */}
+          <ResearchCopilotSection />
 
-        {/* Recently Closed Section */}
-        <RecentlyClosedSection workspaces={workspaces} />
-      </main>
+          {/* Recently Closed Section */}
+          <RecentlyClosedSection workspaces={workspaces} />
+        </main>
       </DndContext>
 
       {/* Quick Notes */}

@@ -205,8 +205,12 @@ export default function SearchBar({
   }, [fuse, debouncedQuery, allTabs, tabWorkspaceMap, activeWorkspaceId]);
 
   // Determine if we should show "Open in New Tab" action
-  const hasSwitchToTabResults = results.some((r) => r.matchType === "switch-to-tab");
-  const queryLooksLikeUrl = debouncedQuery.includes(".") || debouncedQuery.toLowerCase().startsWith("http");
+  const hasSwitchToTabResults = results.some(
+    (r) => r.matchType === "switch-to-tab"
+  );
+  const queryLooksLikeUrl =
+    debouncedQuery.includes(".") ||
+    debouncedQuery.toLowerCase().startsWith("http");
   const showOpenInNewTab = hasSwitchToTabResults && queryLooksLikeUrl;
 
   // Find index of last Switch-to-Tab result (for inserting the action after it)
@@ -242,7 +246,13 @@ export default function SearchBar({
       setDebouncedQuery("");
       inputRef.current?.blur();
     },
-    [onSwitchTab, onSwitchWorkspaceAndTab, onOpenUrl, tabWorkspaceMap, activeWorkspaceId]
+    [
+      onSwitchTab,
+      onSwitchWorkspaceAndTab,
+      onOpenUrl,
+      tabWorkspaceMap,
+      activeWorkspaceId,
+    ]
   );
 
   const openQueryInNewTab = useCallback(() => {
@@ -283,7 +293,9 @@ export default function SearchBar({
 
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSelectedIndex((prev) => Math.min(prev + 1, totalSelectableItems - 1));
+        setSelectedIndex((prev) =>
+          Math.min(prev + 1, totalSelectableItems - 1)
+        );
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setSelectedIndex((prev) => Math.max(prev - 1, 0));
@@ -296,7 +308,15 @@ export default function SearchBar({
         }
       }
     },
-    [totalSelectableItems, selectedIndex, activateResult, results, openInNewTabIndex, openQueryInNewTab, getResultIndex]
+    [
+      totalSelectableItems,
+      selectedIndex,
+      activateResult,
+      results,
+      openInNewTabIndex,
+      openQueryInNewTab,
+      getResultIndex,
+    ]
   );
 
   // Scroll selected result into view
@@ -325,7 +345,8 @@ export default function SearchBar({
     for (let i = 0; i < results.length; i++) {
       const r = results[i];
       if (r.matchType !== "switch-to-tab") break;
-      const wsId = r.tabId != null ? (tabWorkspaceMap[String(r.tabId)] || "default") : null;
+      const wsId =
+        r.tabId != null ? tabWorkspaceMap[String(r.tabId)] || "default" : null;
       if (wsId === activeWorkspaceId) {
         hasCurrentWs = true;
       } else if (wsId !== null && wsId !== activeWorkspaceId) {
@@ -415,17 +436,22 @@ export default function SearchBar({
         >
           {results.map((result, resultIndex) => {
             // Compute the selectable index accounting for the injected "Open in New Tab" action
-            const selectableIndex = showOpenInNewTab && resultIndex > lastSwitchToTabIndex
-              ? resultIndex + 1
-              : resultIndex;
+            const selectableIndex =
+              showOpenInNewTab && resultIndex > lastSwitchToTabIndex
+                ? resultIndex + 1
+                : resultIndex;
 
             const isOtherWs =
               result.matchType === "switch-to-tab" &&
               result.tabId != null &&
-              (tabWorkspaceMap[String(result.tabId)] || "default") !== activeWorkspaceId;
-            const wsInfo = isOtherWs && result.tabId != null
-              ? workspaceMap[tabWorkspaceMap[String(result.tabId)] || "default"]
-              : null;
+              (tabWorkspaceMap[String(result.tabId)] || "default") !==
+                activeWorkspaceId;
+            const wsInfo =
+              isOtherWs && result.tabId != null
+                ? workspaceMap[
+                    tabWorkspaceMap[String(result.tabId)] || "default"
+                  ]
+                : null;
 
             return (
               <div key={result.id}>

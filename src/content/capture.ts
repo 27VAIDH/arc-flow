@@ -49,9 +49,7 @@ function createOverlayPopup(
     border-left: 3px solid #7c5cfc;
   `;
   const truncated =
-    selectedText.length > 200
-      ? selectedText.slice(0, 200) + "…"
-      : selectedText;
+    selectedText.length > 200 ? selectedText.slice(0, 200) + "…" : selectedText;
   preview.textContent = truncated;
 
   // Source URL display
@@ -172,7 +170,8 @@ chrome.runtime.onMessage.addListener(
     sendResponse: (response: { action: string; annotation?: string }) => void
   ) => {
     if (message.type === "ARCFLOW_CAPTURE_SELECTION") {
-      const selectedText = message.selectedText || window.getSelection()?.toString()?.trim() || "";
+      const selectedText =
+        message.selectedText || window.getSelection()?.toString()?.trim() || "";
       if (!selectedText) {
         sendResponse({ action: "cancel" });
         return;
@@ -194,7 +193,8 @@ chrome.runtime.onMessage.addListener(
     }
 
     if (message.type === "ARCFLOW_CAPTURE_SNIPPET") {
-      const selectedText = message.selectedText || window.getSelection()?.toString()?.trim() || "";
+      const selectedText =
+        message.selectedText || window.getSelection()?.toString()?.trim() || "";
       if (!selectedText) {
         sendResponse({ action: "cancel" });
         return;
@@ -215,7 +215,9 @@ chrome.runtime.onMessage.addListener(
     }
 
     if (message.type === "ARCFLOW_NOTES_FULL") {
-      alert("ArcFlow Notes: Notes are full (5,000 character limit reached). Please clear some notes first.");
+      alert(
+        "ArcFlow Notes: Notes are full (5,000 character limit reached). Please clear some notes first."
+      );
     }
   }
 );

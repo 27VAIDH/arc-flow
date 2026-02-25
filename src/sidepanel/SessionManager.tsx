@@ -39,13 +39,17 @@ export default function SessionManager({
 }: SessionManagerProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [importError, setImportError] = useState<string | null>(null);
-  const [dailySnapshots, setDailySnapshots] = useState<Record<string, DailySnapshot>>({});
+  const [dailySnapshots, setDailySnapshots] = useState<
+    Record<string, DailySnapshot>
+  >({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getSessions().then(setSessions);
     chrome.storage.local.get("dailySnapshots", (result) => {
-      setDailySnapshots((result.dailySnapshots as Record<string, DailySnapshot>) ?? {});
+      setDailySnapshots(
+        (result.dailySnapshots as Record<string, DailySnapshot>) ?? {}
+      );
     });
 
     const handleStorageChange = (
@@ -57,7 +61,10 @@ export default function SessionManager({
         setSessions(updated.sort((a, b) => b.savedAt - a.savedAt));
       }
       if (area === "local" && changes.dailySnapshots) {
-        setDailySnapshots((changes.dailySnapshots.newValue as Record<string, DailySnapshot>) ?? {});
+        setDailySnapshots(
+          (changes.dailySnapshots.newValue as Record<string, DailySnapshot>) ??
+            {}
+        );
       }
     };
 
@@ -235,13 +242,16 @@ export default function SessionManager({
             yesterday.setDate(yesterday.getDate() - 1);
             const yKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
             if (dailySnapshots[yKey]) {
-              const yTotalTabs = Object.values(dailySnapshots[yKey].tabs).reduce((sum, t) => sum + t.length, 0);
+              const yTotalTabs = Object.values(
+                dailySnapshots[yKey].tabs
+              ).reduce((sum, t) => sum + t.length, 0);
               return (
                 <button
                   onClick={() => handleRestoreSnapshot(yKey)}
                   className="w-full mb-2 px-3 py-2 text-xs text-left rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
                 >
-                  Restore yesterday&rsquo;s tabs ({yTotalTabs} tab{yTotalTabs !== 1 ? "s" : ""})
+                  Restore yesterday&rsquo;s tabs ({yTotalTabs} tab
+                  {yTotalTabs !== 1 ? "s" : ""})
                 </button>
               );
             }
@@ -253,8 +263,13 @@ export default function SessionManager({
               .reverse()
               .map((dateKey) => {
                 const snap = dailySnapshots[dateKey];
-                const totalTabs = Object.values(snap.tabs).reduce((sum, t) => sum + t.length, 0);
-                const wsNames = snap.workspaces.map((w) => `${w.emoji} ${w.name}`).join(", ");
+                const totalTabs = Object.values(snap.tabs).reduce(
+                  (sum, t) => sum + t.length,
+                  0
+                );
+                const wsNames = snap.workspaces
+                  .map((w) => `${w.emoji} ${w.name}`)
+                  .join(", ");
                 return (
                   <div
                     key={dateKey}
@@ -263,7 +278,8 @@ export default function SessionManager({
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium">{dateKey}</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                        {totalTabs} tab{totalTabs !== 1 ? "s" : ""} &middot; {wsNames || "No workspaces"}
+                        {totalTabs} tab{totalTabs !== 1 ? "s" : ""} &middot;{" "}
+                        {wsNames || "No workspaces"}
                       </p>
                     </div>
                     <button

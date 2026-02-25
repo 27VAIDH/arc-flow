@@ -89,7 +89,8 @@ function SessionHistoryItem({
           {session.name}
         </p>
         <p className="text-[10px] text-gray-400 dark:text-gray-500">
-          {session.pageIds.length} pages &middot; {formatDate(session.createdAt)}
+          {session.pageIds.length} pages &middot;{" "}
+          {formatDate(session.createdAt)}
         </p>
       </button>
       <button
@@ -118,7 +119,7 @@ function SessionHistoryItem({
 export default function ResearchCopilotSection() {
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [activeSession, setActiveSession] = useState<ResearchSession | null>(
-    null,
+    null
   );
   const [captures, setCaptures] = useState<PageCapture[]>([]);
   const [sessions, setSessions] = useState<ResearchSession[]>([]);
@@ -217,7 +218,7 @@ export default function ResearchCopilotSection() {
       }
       loadSessions();
     },
-    [activeSession, loadSessions],
+    [activeSession, loadSessions]
   );
 
   const handleAnalyzeConnections = useCallback(async () => {
@@ -246,7 +247,7 @@ export default function ResearchCopilotSection() {
       setAnalysisResult(result);
     } catch (e) {
       setAnalysisError(
-        e instanceof Error ? e.message : "Failed to analyze connections",
+        e instanceof Error ? e.message : "Failed to analyze connections"
       );
     } finally {
       setAnalysisLoading(false);
@@ -271,7 +272,9 @@ export default function ResearchCopilotSection() {
         .filter((c) => c.summary)
         .map((c) => c.summary!);
       if (summaries.length < 1) {
-        setBriefError("Need at least 1 page with a summary to generate a brief.");
+        setBriefError(
+          "Need at least 1 page with a summary to generate a brief."
+        );
         setBriefLoading(false);
         return;
       }
@@ -280,7 +283,7 @@ export default function ResearchCopilotSection() {
       setBriefResult(result);
     } catch (e) {
       setBriefError(
-        e instanceof Error ? e.message : "Failed to generate brief",
+        e instanceof Error ? e.message : "Failed to generate brief"
       );
     } finally {
       setBriefLoading(false);
@@ -325,13 +328,11 @@ export default function ResearchCopilotSection() {
         setBriefTopic("");
       }
     },
-    [sessions, loadCaptures],
+    [sessions, loadCaptures]
   );
 
   // Filter completed sessions (not the active one) for history
-  const historySessions = sessions.filter(
-    (s) => s.id !== activeSession?.id,
-  );
+  const historySessions = sessions.filter((s) => s.id !== activeSession?.id);
 
   return (
     <section className="px-1 pb-2" aria-label="Research Copilot">
@@ -463,9 +464,7 @@ export default function ResearchCopilotSection() {
                 </button>
 
                 {briefError && (
-                  <p className="text-[10px] text-red-500 mt-1">
-                    {briefError}
-                  </p>
+                  <p className="text-[10px] text-red-500 mt-1">{briefError}</p>
                 )}
 
                 {briefResult && (
@@ -512,9 +511,7 @@ export default function ResearchCopilotSection() {
                     clipRule="evenodd"
                   />
                 </svg>
-                <span>
-                  Past Sessions ({historySessions.length})
-                </span>
+                <span>Past Sessions ({historySessions.length})</span>
               </button>
 
               {!historyCollapsed && (

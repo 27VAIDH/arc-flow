@@ -26,7 +26,13 @@ export function buildGraphData(
   // Build node map keyed by URL
   const nodeMap = new Map<
     string,
-    { url: string; domain: string; title: string; visitCount: number; isOpen: boolean }
+    {
+      url: string;
+      domain: string;
+      title: string;
+      visitCount: number;
+      isOpen: boolean;
+    }
   >();
 
   for (const event of navEvents) {
@@ -86,7 +92,15 @@ export function buildGraphData(
   }));
 
   // Build navigation edges from referrerTabId chains
-  const edgeWeightMap = new Map<string, { source: string; target: string; weight: number; type: 'navigation' | 'switch' }>();
+  const edgeWeightMap = new Map<
+    string,
+    {
+      source: string;
+      target: string;
+      weight: number;
+      type: "navigation" | "switch";
+    }
+  >();
 
   // Map tabId → most recent URL for that tab (for navigation edges)
   const tabIdToUrl = new Map<number, string>();
@@ -100,7 +114,11 @@ export function buildGraphData(
     ) {
       const sourceUrl = tabIdToUrl.get(event.referrerTabId)!;
       const targetUrl = event.url;
-      if (sourceUrl !== targetUrl && keptUrls.has(sourceUrl) && keptUrls.has(targetUrl)) {
+      if (
+        sourceUrl !== targetUrl &&
+        keptUrls.has(sourceUrl) &&
+        keptUrls.has(targetUrl)
+      ) {
         const key = `nav:${sourceUrl}|${targetUrl}`;
         const existing = edgeWeightMap.get(key);
         if (existing) {

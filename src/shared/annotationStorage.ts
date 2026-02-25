@@ -22,9 +22,7 @@ export async function saveAnnotation(a: Annotation): Promise<void> {
   await setAll(annotations);
 }
 
-export async function getAnnotationsForUrl(
-  url: string,
-): Promise<Annotation[]> {
+export async function getAnnotationsForUrl(url: string): Promise<Annotation[]> {
   const annotations = await getAll();
   return annotations.filter((a) => a.url === url);
 }
@@ -39,7 +37,7 @@ export async function getAllAnnotations(): Promise<Annotation[]> {
 }
 
 export async function exportAnnotations(
-  format: "json" | "markdown",
+  format: "json" | "markdown"
 ): Promise<string> {
   const annotations = await getAll();
 

@@ -225,91 +225,91 @@ function DraggableFolderItem({
 
   return (
     <>
-    {isOverItem && <DropIndicatorLine depth={depth} />}
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      role="treeitem"
-      aria-level={depth + 2}
-      aria-label={`${item.type === "link" ? "Saved link: " : ""}${item.title || item.url}`}
-      tabIndex={0}
-      className={`group flex items-center gap-2 px-2 h-7 text-sm rounded-lg cursor-default hover:bg-gray-100 dark:hover:bg-white/[0.05] focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset transition-colors duration-200 ${item.type === "link" ? "cursor-pointer" : ""}`}
-      onClick={() => {
-        if (!editing) onClick?.(item, folderId);
-      }}
-      onKeyDown={(e) => {
-        if (!editing && (e.key === "Enter" || e.key === " ")) {
-          e.preventDefault();
-          onClick?.(item, folderId);
-        }
-      }}
-      onContextMenu={(e) => onContextMenu?.(e, item, folderId)}
-    >
-      {/* Drag grip (visual hint only — drag listeners on full row) */}
-      <span
-        className="shrink-0 flex items-center text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-30 transition-opacity pointer-events-none"
-        aria-hidden="true"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 16 16"
-          fill="currentColor"
-          className="w-3 h-3"
-        >
-          <path d="M6 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm5-9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
-        </svg>
-      </span>
-      {item.favicon ? (
-        <img
-          src={item.favicon}
-          alt=""
-          className="w-4 h-4 shrink-0"
-          draggable={false}
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = "none";
-          }}
-        />
-      ) : (
-        <span
-          className="w-4 h-4 shrink-0 rounded bg-gray-200 dark:bg-arc-surface-hover"
-          aria-hidden="true"
-        />
-      )}
-      {editing ? (
-        <input
-          ref={inputRef}
-          value={editName}
-          onChange={(e) => setEditName(e.target.value)}
-          onBlur={commitRename}
-          onKeyDown={(e) => {
-            e.stopPropagation();
-            if (e.key === "Enter") commitRename();
-            if (e.key === "Escape") {
-              committedRef.current = true;
-              setEditing(false);
-              setEditName(item.title || item.url);
-            }
-          }}
-          className="flex-1 text-sm bg-white dark:bg-arc-surface border border-arc-accent/50 rounded-md px-1 py-0 outline-none"
-          onClick={(e) => e.stopPropagation()}
-        />
-      ) : (
-        <span
-          className="truncate flex-1 select-none"
-          onDoubleClick={(e) => {
+      {isOverItem && <DropIndicatorLine depth={depth} />}
+      <div
+        ref={setNodeRef}
+        style={style}
+        {...attributes}
+        {...listeners}
+        role="treeitem"
+        aria-level={depth + 2}
+        aria-label={`${item.type === "link" ? "Saved link: " : ""}${item.title || item.url}`}
+        tabIndex={0}
+        className={`group flex items-center gap-2 px-2 h-7 text-sm rounded-lg cursor-default hover:bg-gray-100 dark:hover:bg-white/[0.05] focus:outline-none focus:ring-2 focus:ring-arc-accent/50 focus:ring-inset transition-colors duration-200 ${item.type === "link" ? "cursor-pointer" : ""}`}
+        onClick={() => {
+          if (!editing) onClick?.(item, folderId);
+        }}
+        onKeyDown={(e) => {
+          if (!editing && (e.key === "Enter" || e.key === " ")) {
             e.preventDefault();
-            e.stopPropagation();
-            committedRef.current = false;
-            setEditName(item.title || item.url);
-            setEditing(true);
-          }}
+            onClick?.(item, folderId);
+          }
+        }}
+        onContextMenu={(e) => onContextMenu?.(e, item, folderId)}
+      >
+        {/* Drag grip (visual hint only — drag listeners on full row) */}
+        <span
+          className="shrink-0 flex items-center text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-30 transition-opacity pointer-events-none"
+          aria-hidden="true"
         >
-          {item.title || item.url}
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            className="w-3 h-3"
+          >
+            <path d="M6 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm5-9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
+          </svg>
         </span>
-      )}
-    </div>
+        {item.favicon ? (
+          <img
+            src={item.favicon}
+            alt=""
+            className="w-4 h-4 shrink-0"
+            draggable={false}
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
+        ) : (
+          <span
+            className="w-4 h-4 shrink-0 rounded bg-gray-200 dark:bg-arc-surface-hover"
+            aria-hidden="true"
+          />
+        )}
+        {editing ? (
+          <input
+            ref={inputRef}
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Enter") commitRename();
+              if (e.key === "Escape") {
+                committedRef.current = true;
+                setEditing(false);
+                setEditName(item.title || item.url);
+              }
+            }}
+            className="flex-1 text-sm bg-white dark:bg-arc-surface border border-arc-accent/50 rounded-md px-1 py-0 outline-none"
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span
+            className="truncate flex-1 select-none"
+            onDoubleClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              committedRef.current = false;
+              setEditName(item.title || item.url);
+              setEditing(true);
+            }}
+          >
+            {item.title || item.url}
+          </span>
+        )}
+      </div>
     </>
   );
 }
@@ -390,94 +390,94 @@ function SortableFolder({
 
   return (
     <>
-    {isOverFolder && (
-      <div
-        className="h-0.5 bg-arc-accent rounded-full"
-        style={{ marginLeft: depth * 16 + 4, marginRight: 8 }}
-      />
-    )}
-    <div
-      ref={(node) => {
-        setSortableRef(node);
-        setDroppableRef(node);
-      }}
-      style={{ ...sortableStyle, paddingLeft: depth * 16 }}
-      role="treeitem"
-      aria-expanded={!folder.isCollapsed}
-      aria-level={depth + 1}
-      aria-label={folder.name}
-    >
-      <div
-        className={`group rounded-lg transition-colors duration-200 flex items-center ${
-          isOver
-            ? "bg-indigo-50 dark:bg-arc-accent/10 ring-1 ring-arc-accent/40"
-            : ""
-        }`}
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowRight" && folder.isCollapsed) {
-            e.preventDefault();
-            e.stopPropagation();
-            onToggleCollapse(folder.id);
-          } else if (e.key === "ArrowLeft" && !folder.isCollapsed) {
-            e.preventDefault();
-            e.stopPropagation();
-            onToggleCollapse(folder.id);
-          } else if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            e.stopPropagation();
-            onToggleCollapse(folder.id);
-          }
-        }}
-      >
-        {/* Drag grip */}
-        <span
-          {...attributes}
-          {...listeners}
-          className="shrink-0 flex items-center cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 touch-none pl-1 opacity-0 group-hover:opacity-100 transition-opacity"
-          aria-label="Drag to reorder folder"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 16 16"
-            fill="currentColor"
-            className="w-3 h-3"
-          >
-            <path d="M6 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm5-9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
-          </svg>
-        </span>
-        <FolderHeader
-          folder={folder}
-          onToggleCollapse={onToggleCollapse}
-          onRename={onRename}
-          onContextMenu={onContextMenu}
+      {isOverFolder && (
+        <div
+          className="h-0.5 bg-arc-accent rounded-full"
+          style={{ marginLeft: depth * 16 + 4, marginRight: 8 }}
         />
-      </div>
-      {!folder.isCollapsed && (
-        <div role="group">
-          <SortableContext
-            items={itemIds}
-            strategy={verticalListSortingStrategy}
-          >
-            {folder.items.map((item) => (
-              <DraggableFolderItem
-                key={item.id}
-                item={item}
-                depth={depth}
-                folderId={folder.id}
-                onClick={onItemClick}
-                onContextMenu={onItemContextMenu}
-                onRename={onItemRename}
-                isOverItem={overItemId === item.id}
-              />
-            ))}
-          </SortableContext>
-          {getChildren(folder.id).map((child) =>
-            renderFolder(child, depth + 1)
-          )}
-        </div>
       )}
-    </div>
+      <div
+        ref={(node) => {
+          setSortableRef(node);
+          setDroppableRef(node);
+        }}
+        style={{ ...sortableStyle, paddingLeft: depth * 16 }}
+        role="treeitem"
+        aria-expanded={!folder.isCollapsed}
+        aria-level={depth + 1}
+        aria-label={folder.name}
+      >
+        <div
+          className={`group rounded-lg transition-colors duration-200 flex items-center ${
+            isOver
+              ? "bg-indigo-50 dark:bg-arc-accent/10 ring-1 ring-arc-accent/40"
+              : ""
+          }`}
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowRight" && folder.isCollapsed) {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleCollapse(folder.id);
+            } else if (e.key === "ArrowLeft" && !folder.isCollapsed) {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleCollapse(folder.id);
+            } else if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleCollapse(folder.id);
+            }
+          }}
+        >
+          {/* Drag grip */}
+          <span
+            {...attributes}
+            {...listeners}
+            className="shrink-0 flex items-center cursor-grab active:cursor-grabbing text-gray-300 dark:text-gray-600 touch-none pl-1 opacity-0 group-hover:opacity-100 transition-opacity"
+            aria-label="Drag to reorder folder"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              className="w-3 h-3"
+            >
+              <path d="M6 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm5-9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm0 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
+            </svg>
+          </span>
+          <FolderHeader
+            folder={folder}
+            onToggleCollapse={onToggleCollapse}
+            onRename={onRename}
+            onContextMenu={onContextMenu}
+          />
+        </div>
+        {!folder.isCollapsed && (
+          <div role="group">
+            <SortableContext
+              items={itemIds}
+              strategy={verticalListSortingStrategy}
+            >
+              {folder.items.map((item) => (
+                <DraggableFolderItem
+                  key={item.id}
+                  item={item}
+                  depth={depth}
+                  folderId={folder.id}
+                  onClick={onItemClick}
+                  onContextMenu={onItemContextMenu}
+                  onRename={onItemRename}
+                  isOverItem={overItemId === item.id}
+                />
+              ))}
+            </SortableContext>
+            {getChildren(folder.id).map((child) =>
+              renderFolder(child, depth + 1)
+            )}
+          </div>
+        )}
+      </div>
     </>
   );
 }
