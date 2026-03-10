@@ -35,6 +35,7 @@ import {
   renameItemInFolder,
   reorderSavedItems,
   renameSavedItem,
+  addSavedItem,
 } from "../shared/folderStorage";
 import {
   getActiveWorkspace,
@@ -1669,6 +1670,30 @@ export default function App() {
         });
       }
 
+      // Add "Save to Workspace" — saves as loose item (no folder)
+      items.push({
+        label: "Save to Workspace",
+        onClick: () => {
+          const isDuplicate = savedItems.some((item) => item.url === tab.url);
+          if (isDuplicate) {
+            setToast("Already saved in workspace");
+            return;
+          }
+          const newItem: FolderItem = {
+            id: crypto.randomUUID(),
+            type: "link",
+            tabId: null,
+            url: tab.url,
+            title: tab.title || tab.url,
+            favicon: tab.favIconUrl || "",
+            isArchived: false,
+            lastActiveAt: Date.now(),
+          };
+          addSavedItem(newItem);
+          setToast("Saved to workspace");
+        },
+      });
+
       // Add "Save Link to Folder..." if there are folders
       if (folders.length > 0) {
         items.push({
@@ -1765,7 +1790,7 @@ export default function App() {
 
       setContextMenu({ x: e.clientX, y: e.clientY, items });
     },
-    [pinnedApps, folders, workspaces, activeWorkspaceId]
+    [pinnedApps, folders, workspaces, activeWorkspaceId, savedItems]
   );
 
   const closeContextMenu = useCallback(() => {
