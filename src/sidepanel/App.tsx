@@ -36,6 +36,8 @@ import {
   reorderSavedItems,
   renameSavedItem,
   addSavedItem,
+  moveSavedItemToFolder,
+  moveFolderItemToSavedItems,
 } from "../shared/folderStorage";
 import {
   getActiveWorkspace,
@@ -664,10 +666,10 @@ const customCollisionDetection: CollisionDetection = (args) => {
       String(c.id).startsWith("folder-drop:")
     );
     if (folderDrops.length > 0) return folderDrops;
-    // Then check for pinned-drop-zone and tablist-drop-zone
+    // Then check for pinned-drop-zone, tablist-drop-zone, and saved-items-drop
     const zoneDrops = pointerCollisions.filter((c) => {
       const id = String(c.id);
-      return id === "pinned-drop-zone" || id === "tablist-drop-zone";
+      return id === "pinned-drop-zone" || id === "tablist-drop-zone" || id === "saved-items-drop";
     });
     if (zoneDrops.length > 0) return zoneDrops;
     return pointerCollisions;
@@ -2105,6 +2107,89 @@ export default function App() {
 
         const reordered = arrayMove(pinnedApps, oldIndex, newIndex);
         await reorderPinnedApps(reordered.map((a) => a.id));
+        return;
+      }
+
+      // Case 1g: Tab dropped onto saved items area
+      if (activeId.startsWith("tab:") && overId === "saved-items-drop") {
+        const tabId = parseInt(activeId.replace("tab:", ""), 10);
+        const tab = tabs.find((t) => t.id === tabId);
+        if (!tab) return;
+
+        // Duplicate check
+        if (savedItems.some((i) => i.url === tab.url)) {
+          setToast("Already saved in workspace");
+          return;
+        }
+
+        const newItem: FolderItem = {
+          id: crypto.randomUUID(),
+          type: "link",
+          tabId: null,
+          url: tab.url,
+          title: tab.title || tab.url,
+          favicon: tab.favIconUrl || "",
+          isArchived: false,
+          lastActiveAt: Date.now(),
+        };
+
+        await addSavedItem(newItem);
+        setToast("Saved to workspace");
+        return;
+      }
+
+      // Case 1h: Saved item dropped onto a folder
+      if (
+        activeId.startsWith("saved-item:") &&
+        overId.startsWith("folder-drop:")
+      ) {
+        const itemId = activeId.replace("saved-item:", "");
+        const targetFolderId = overId.replace("folder-drop:", "");
+
+        // Duplicate check against target folder
+        const targetFolder = folders.find((f) => f.id === targetFolderId);
+        const savedItem = savedItems.find((i) => i.id === itemId);
+        if (
+          targetFolder &&
+          savedItem &&
+          targetFolder.items.some((i) => i.url === savedItem.url)
+        ) {
+          setToast("Already saved in this folder");
+          return;
+        }
+
+        try {
+          await moveSavedItemToFolder(itemId, targetFolderId);
+        } catch {
+          // Item not found or target not found
+        }
+        return;
+      }
+
+      // Case 1i: Folder item dropped onto saved items area
+      if (
+        activeId.startsWith("folder-item:") &&
+        overId === "saved-items-drop"
+      ) {
+        const itemId = activeId.replace("folder-item:", "");
+        let folderItem: FolderItem | undefined;
+        for (const folder of folders) {
+          folderItem = folder.items.find((i) => i.id === itemId);
+          if (folderItem) break;
+        }
+        if (!folderItem) return;
+
+        // Duplicate check
+        if (savedItems.some((i) => i.url === folderItem!.url)) {
+          setToast("Already saved in workspace");
+          return;
+        }
+
+        try {
+          await moveFolderItemToSavedItems(itemId);
+        } catch {
+          // Item not found
+        }
         return;
       }
 

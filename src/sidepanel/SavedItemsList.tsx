@@ -6,7 +6,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useDndMonitor } from "@dnd-kit/core";
+import { useDndMonitor, useDroppable } from "@dnd-kit/core";
 
 function DraggableSavedItem({
   item,
@@ -166,6 +166,10 @@ export default function SavedItemsList({
   onItemContextMenu,
   onItemRename,
 }: SavedItemsListProps) {
+  const { setNodeRef: setDroppableRef, isOver: isOverDropZone } = useDroppable({
+    id: "saved-items-drop",
+  });
+
   // Track which saved-item is being hovered for drop indicators
   const [overItemId, setOverItemId] = useState<string | null>(null);
   useDndMonitor({
@@ -190,34 +194,47 @@ export default function SavedItemsList({
     },
   });
 
-  if (savedItems.length === 0) return null;
-
   const sortableIds = savedItems.map((item) => `saved-item:${item.id}`);
+  const isEmpty = savedItems.length === 0;
+
+  // Always render the droppable zone so items can be dropped here even when empty
+  if (isEmpty && !isOverDropZone) return <div ref={setDroppableRef} />;
 
   return (
-    <div className="px-1 pt-3 pb-2">
+    <div
+      ref={setDroppableRef}
+      className={`px-1 pt-3 pb-2 transition-all duration-200 ${
+        isOverDropZone ? "ring-1 ring-arc-accent/30 rounded-xl" : ""
+      }`}
+    >
       <div className="flex items-center px-2 py-1">
         <span className="text-[11px] text-gray-400 dark:text-arc-text-secondary font-medium">
           Saved
         </span>
       </div>
-      <SortableContext
-        items={sortableIds}
-        strategy={verticalListSortingStrategy}
-      >
-        <div className="flex flex-col gap-0.5" role="list" aria-label="Saved items">
-          {savedItems.map((item) => (
-            <DraggableSavedItem
-              key={item.id}
-              item={item}
-              onClick={onItemClick}
-              onContextMenu={onItemContextMenu}
-              onRename={onItemRename}
-              isOverItem={overItemId === item.id}
-            />
-          ))}
+      {isEmpty ? (
+        <div className="px-2 py-2 text-xs text-gray-400 dark:text-arc-text-secondary">
+          Drop here to save
         </div>
-      </SortableContext>
+      ) : (
+        <SortableContext
+          items={sortableIds}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="flex flex-col gap-0.5" role="list" aria-label="Saved items">
+            {savedItems.map((item) => (
+              <DraggableSavedItem
+                key={item.id}
+                item={item}
+                onClick={onItemClick}
+                onContextMenu={onItemContextMenu}
+                onRename={onItemRename}
+                isOverItem={overItemId === item.id}
+              />
+            ))}
+          </div>
+        </SortableContext>
+      )}
     </div>
   );
 }
