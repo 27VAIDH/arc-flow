@@ -14,17 +14,31 @@ function DraggableSavedItem({
   onContextMenu,
   onRename,
   isOverItem,
+  externalEditing,
+  onEditingComplete,
 }: {
   item: FolderItem;
   onClick?: (item: FolderItem) => void;
   onContextMenu?: (e: React.MouseEvent, item: FolderItem) => void;
   onRename?: (itemId: string, newTitle: string) => void;
   isOverItem?: boolean;
+  externalEditing?: boolean;
+  onEditingComplete?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(item.title || item.url);
   const inputRef = useRef<HTMLInputElement>(null);
   const committedRef = useRef(false);
+
+  // Allow external trigger of editing mode (from context menu Rename)
+  useEffect(() => {
+    if (externalEditing && !editing) {
+      committedRef.current = false;
+      setEditName(item.title || item.url);
+      setEditing(true);
+      onEditingComplete?.();
+    }
+  }, [externalEditing]);
 
   const {
     attributes,
@@ -158,6 +172,8 @@ interface SavedItemsListProps {
   onItemClick?: (item: FolderItem) => void;
   onItemContextMenu?: (e: React.MouseEvent, item: FolderItem) => void;
   onItemRename?: (itemId: string, newTitle: string) => void;
+  editingItemId?: string | null;
+  onEditingComplete?: () => void;
 }
 
 export default function SavedItemsList({
@@ -165,6 +181,8 @@ export default function SavedItemsList({
   onItemClick,
   onItemContextMenu,
   onItemRename,
+  editingItemId,
+  onEditingComplete,
 }: SavedItemsListProps) {
   const { setNodeRef: setDroppableRef, isOver: isOverDropZone } = useDroppable({
     id: "saved-items-drop",
@@ -230,6 +248,8 @@ export default function SavedItemsList({
                 onContextMenu={onItemContextMenu}
                 onRename={onItemRename}
                 isOverItem={overItemId === item.id}
+                externalEditing={editingItemId === item.id}
+                onEditingComplete={onEditingComplete}
               />
             ))}
           </div>
