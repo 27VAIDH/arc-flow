@@ -33,6 +33,8 @@ import {
   reorderFolders,
   reorderItemsInFolder,
   renameItemInFolder,
+  reorderSavedItems,
+  renameSavedItem,
 } from "../shared/folderStorage";
 import {
   getActiveWorkspace,
@@ -64,6 +66,7 @@ import AutopilotBanner from "./AutopilotBanner";
 import TabPreviewCard from "./TabPreviewCard";
 import type { TabPreviewInfo } from "./TabPreviewCard";
 import { buildCommands } from "./commandRegistry";
+import SavedItemsList from "./SavedItemsList";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
 import Popover from "./Popover";
 import {
@@ -706,6 +709,7 @@ export default function App() {
   const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [pinnedApps, setPinnedApps] = useState<PinnedApp[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
+  const [savedItems, setSavedItems] = useState<FolderItem[]>([]);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [activeDragTab, setActiveDragTab] = useState<TabInfo | null>(null);
   const [activeDragFolder, setActiveDragFolder] = useState<Folder | null>(null);
@@ -963,6 +967,7 @@ export default function App() {
         setFolders(
           [...(ws.folders ?? [])].sort((a, b) => a.sortOrder - b.sortOrder)
         );
+        setSavedItems([...(ws.savedItems ?? [])]);
       }, 0);
     }
   }, [activeWorkspaceId, workspaces]);
@@ -1901,6 +1906,12 @@ export default function App() {
             break;
           }
         }
+      } else if (id.startsWith("saved-item:")) {
+        const itemId = id.replace("saved-item:", "");
+        const item = savedItems.find((i) => i.id === itemId);
+        if (item) {
+          setActiveDragFolderItem(item);
+        }
       } else if (id.startsWith("pinned:")) {
         const pinnedId = id.replace("pinned:", "");
         const app = pinnedApps.find((a) => a.id === pinnedId);
@@ -1909,7 +1920,7 @@ export default function App() {
         }
       }
     },
-    [tabs, folders, pinnedApps]
+    [tabs, folders, savedItems, pinnedApps]
   );
 
   const handleDragEnd = useCallback(
@@ -2141,6 +2152,28 @@ export default function App() {
         return;
       }
 
+      // Case 3b: Reorder saved items within saved items list
+      if (
+        activeId.startsWith("saved-item:") &&
+        overId.startsWith("saved-item:")
+      ) {
+        const activeItemId = activeId.replace("saved-item:", "");
+        const overItemId = overId.replace("saved-item:", "");
+
+        const oldIndex = savedItems.findIndex((i) => i.id === activeItemId);
+        const newIndex = savedItems.findIndex((i) => i.id === overItemId);
+
+        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+          const reordered = arrayMove(savedItems, oldIndex, newIndex);
+
+          // Optimistic update
+          setSavedItems(reordered);
+
+          await reorderSavedItems(reordered.map((i) => i.id));
+        }
+        return;
+      }
+
       // Case 4: Reorder tabs within the tab list
       if (activeId.startsWith("tab:") && overId.startsWith("tab:")) {
         const activeTabId = parseInt(activeId.replace("tab:", ""), 10);
@@ -2211,6 +2244,7 @@ export default function App() {
       tabs,
       folders,
       setFolders,
+      savedItems,
       filteredTabs,
       activeWorkspaceId,
       pinnedApps,
@@ -2486,6 +2520,25 @@ export default function App() {
             }}
             onOpenAllTabs={handleOpenAllTabs}
             onCloseAllTabs={handleCloseAllTabs}
+          />
+
+          {/* Saved Items (loose items below folders) */}
+          <SavedItemsList
+            savedItems={savedItems}
+            onItemClick={(item) => {
+              chrome.runtime.sendMessage({
+                type: "OPEN_URL",
+                url: item.url,
+              });
+            }}
+            onItemRename={(itemId, newTitle) => {
+              setSavedItems((prev) =>
+                prev.map((i) =>
+                  i.id === itemId ? { ...i, title: newTitle } : i
+                )
+              );
+              renameSavedItem(itemId, newTitle);
+            }}
           />
 
           {/* Tab list */}
