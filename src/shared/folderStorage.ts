@@ -12,6 +12,12 @@ import {
   renameItemInFolderInWorkspace,
   reorderFoldersInWorkspace,
   reorderItemsInFolderInWorkspace,
+  addSavedItemToWorkspace,
+  removeSavedItemFromWorkspace,
+  renameSavedItemInWorkspace,
+  reorderSavedItemsInWorkspace,
+  moveSavedItemToFolderInWorkspace,
+  moveFolderItemToSavedItemsInWorkspace,
 } from "./workspaceStorage";
 
 export async function getFolders(): Promise<Folder[]> {
@@ -92,4 +98,46 @@ export async function reorderItemsInFolder(
 ): Promise<void> {
   const wsId = await getActiveWorkspaceId();
   return reorderItemsInFolderInWorkspace(wsId, folderId, orderedItemIds);
+}
+
+// ── Saved Items facades ──
+
+export async function addSavedItem(item: FolderItem): Promise<void> {
+  const wsId = await getActiveWorkspaceId();
+  return addSavedItemToWorkspace(wsId, item);
+}
+
+export async function removeSavedItem(itemId: string): Promise<void> {
+  const wsId = await getActiveWorkspaceId();
+  return removeSavedItemFromWorkspace(wsId, itemId);
+}
+
+export async function renameSavedItem(
+  itemId: string,
+  newTitle: string
+): Promise<void> {
+  const wsId = await getActiveWorkspaceId();
+  return renameSavedItemInWorkspace(wsId, itemId, newTitle);
+}
+
+export async function reorderSavedItems(
+  orderedItemIds: string[]
+): Promise<void> {
+  const wsId = await getActiveWorkspaceId();
+  return reorderSavedItemsInWorkspace(wsId, orderedItemIds);
+}
+
+export async function moveSavedItemToFolder(
+  itemId: string,
+  targetFolderId: string
+): Promise<void> {
+  const wsId = await getActiveWorkspaceId();
+  return moveSavedItemToFolderInWorkspace(wsId, itemId, targetFolderId);
+}
+
+export async function moveFolderItemToSavedItems(
+  itemId: string
+): Promise<void> {
+  const wsId = await getActiveWorkspaceId();
+  return moveFolderItemToSavedItemsInWorkspace(wsId, itemId);
 }

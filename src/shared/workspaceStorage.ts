@@ -713,6 +713,121 @@ export async function moveFolderItemToFolderInWorkspace(
   await saveWorkspaces(workspaces);
 }
 
+// ── Workspace-scoped Saved Items CRUD ──
+
+export async function addSavedItemToWorkspace(
+  workspaceId: string,
+  item: FolderItem
+): Promise<void> {
+  const workspaces = await getWorkspaces();
+  const ws = workspaces.find((w) => w.id === workspaceId);
+  if (!ws) throw new Error(`Workspace "${workspaceId}" not found.`);
+
+  ws.savedItems.push(item);
+  await saveWorkspaces(workspaces);
+}
+
+export async function removeSavedItemFromWorkspace(
+  workspaceId: string,
+  itemId: string
+): Promise<void> {
+  const workspaces = await getWorkspaces();
+  const ws = workspaces.find((w) => w.id === workspaceId);
+  if (!ws) return;
+
+  ws.savedItems = ws.savedItems.filter((i) => i.id !== itemId);
+  await saveWorkspaces(workspaces);
+}
+
+export async function renameSavedItemInWorkspace(
+  workspaceId: string,
+  itemId: string,
+  newTitle: string
+): Promise<void> {
+  const workspaces = await getWorkspaces();
+  const ws = workspaces.find((w) => w.id === workspaceId);
+  if (!ws) return;
+
+  const item = ws.savedItems.find((i) => i.id === itemId);
+  if (item) item.title = newTitle;
+
+  await saveWorkspaces(workspaces);
+}
+
+export async function reorderSavedItemsInWorkspace(
+  workspaceId: string,
+  orderedItemIds: string[]
+): Promise<void> {
+  const workspaces = await getWorkspaces();
+  const ws = workspaces.find((w) => w.id === workspaceId);
+  if (!ws) return;
+
+  const reordered: FolderItem[] = [];
+  for (const id of orderedItemIds) {
+    const item = ws.savedItems.find((i) => i.id === id);
+    if (item) reordered.push(item);
+  }
+  for (const item of ws.savedItems) {
+    if (!orderedItemIds.includes(item.id)) {
+      reordered.push(item);
+    }
+  }
+  ws.savedItems = reordered;
+  await saveWorkspaces(workspaces);
+}
+
+export async function moveSavedItemToFolderInWorkspace(
+  workspaceId: string,
+  itemId: string,
+  targetFolderId: string
+): Promise<void> {
+  const workspaces = await getWorkspaces();
+  const ws = workspaces.find((w) => w.id === workspaceId);
+  if (!ws) throw new Error(`Workspace "${workspaceId}" not found.`);
+
+  const itemIndex = ws.savedItems.findIndex((i) => i.id === itemId);
+  if (itemIndex === -1) {
+    throw new Error(`Item "${itemId}" not found in saved items.`);
+  }
+
+  const targetFolder = ws.folders.find((f) => f.id === targetFolderId);
+  if (!targetFolder) {
+    throw new Error(`Target folder "${targetFolderId}" not found.`);
+  }
+
+  const [item] = ws.savedItems.splice(itemIndex, 1);
+  targetFolder.items.push(item);
+
+  await saveWorkspaces(workspaces);
+}
+
+export async function moveFolderItemToSavedItemsInWorkspace(
+  workspaceId: string,
+  itemId: string
+): Promise<void> {
+  const workspaces = await getWorkspaces();
+  const ws = workspaces.find((w) => w.id === workspaceId);
+  if (!ws) throw new Error(`Workspace "${workspaceId}" not found.`);
+
+  let item: FolderItem | undefined;
+
+  for (const folder of ws.folders) {
+    const found = folder.items.find((i) => i.id === itemId);
+    if (found) {
+      folder.items = folder.items.filter((i) => i.id !== itemId);
+      item = found;
+      break;
+    }
+  }
+
+  if (!item) {
+    throw new Error(`Item "${itemId}" not found in any folder.`);
+  }
+
+  ws.savedItems.push(item);
+  await saveWorkspaces(workspaces);
+}
+
 export async function updateFolderInWorkspace(
   workspaceId: string,
   folderId: string,
