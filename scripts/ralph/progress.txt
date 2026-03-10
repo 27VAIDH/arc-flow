@@ -135,3 +135,32 @@ Typecheck and tests pass. There are still 2 stories with `passes: false` (US-005
   - When adding droppable zones, always render the ref element even when empty (use hidden div) so dnd-kit can detect it
   - moveSavedItemToFolder and moveFolderItemToSavedItems are facade functions in folderStorage.ts that handle workspace resolution
 ---
+
+## Iteration 5 - Tue Mar 10 22:34:51 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260310-222026/iter-5.log
+---
+**US-005 complete.** Implemented drag-and-drop between loose items and folders:
+
+- **tab → saved-items-drop**: Saves tab as loose FolderItem (with duplicate check + toast)
+- **saved-item → folder-drop**: Moves saved item into a folder via `moveSavedItemToFolder()`
+- **folder-item → saved-items-drop**: Moves folder item to saved items via `moveFolderItemToSavedItems()`
+- **saved-item reorder**: Already handled from US-003
+- **customCollisionDetection** updated to recognize `saved-items-drop` as a valid zone target
+- **SavedItemsList.tsx**: Added `useDroppable` zone with drop indicator ring; hidden droppable div when empty so dnd-kit can still detect it
+
+Typecheck and tests pass. There is still 1 story with `passes: false` (US-006).
+---
+
+## 2026-03-11 01:33 - US-006
+- Context menu and inline rename for loose saved items were mostly implemented in prior iterations (US-003/US-004/US-005)
+- The handleSavedItemContextMenu in App.tsx already had all 4 menu items: Open in New Tab, Rename, Move to Folder..., Delete
+- The savedItemPicker state and FolderPickerDropdown for Move to Folder were already wired
+- The editingSavedItemId state for rename-from-context-menu was already in App.tsx
+- **Fix needed**: SavedItemsList.tsx interface was missing `editingItemId` and `onEditingComplete` props — added them and passed through to DraggableSavedItem's `externalEditing`/`onEditingComplete` props
+- Double-click inline rename was already working from US-003
+- Files changed: src/sidepanel/SavedItemsList.tsx
+- **Learnings for future iterations:**
+  - When multiple stories build on each other, earlier iterations may implement most of a later story's requirements — always check what's already done before starting
+  - Props passed from parent must match the child component's interface — typecheck catches this
+---
