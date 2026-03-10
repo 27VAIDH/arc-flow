@@ -14,6 +14,8 @@ Started: Tue Mar 10 22:20:26 IST 2026
 - DnD item prefixes: `tab:`, `folder:`, `folder-item:`, `saved-item:`, `pinned:` — each has corresponding drag start/end cases
 - savedItems state syncs via the existing workspaces storage change listener (no separate listener needed)
 - Context menu handlers build ContextMenuItem[] array and call setContextMenu — add savedItems to deps when referencing it
+- customCollisionDetection priority: folder-drop > zone targets (pinned/tablist/saved-items) > pointer collisions > rect intersection
+- Droppable zones must always render their ref element (even if hidden) so dnd-kit can detect them as drop targets
 
 ## 2026-03-10 22:22 - US-001
 - Added `savedItems: FolderItem[]` to Workspace interface in types.ts
@@ -101,4 +103,35 @@ Typecheck and tests pass. There are still 3 stories with `passes: false` (US-004
   - Context menu items in handleTabContextMenu are built as an array and set via setContextMenu — just push new items
   - Remember to add state variables used inside useCallback to the dependency array
   - FolderItem for saved links uses type: "link", tabId: null
+---
+
+## Iteration 4 - Tue Mar 10 22:31:40 IST 2026
+Tool: claude
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260310-222026/iter-4.log
+---
+**US-004 complete.** Added "Save to Workspace" context menu option to `handleTabContextMenu` in `App.tsx`:
+- Always visible in tab context menu (no folder requirement)
+- Creates a `FolderItem` with `type: "link"` and saves via `addSavedItem()`
+- Duplicate check against `savedItems` by URL — shows "Already saved in workspace" toast if duplicate
+- Shows "Saved to workspace" toast on success
+- "Save Link to Folder..." remains unchanged when folders exist
+
+Typecheck and tests pass. There are still 2 stories with `passes: false` (US-005, US-006).
+---
+
+## 2026-03-10 22:34 - US-005
+- Updated customCollisionDetection to recognize `saved-items-drop` as a valid zone target
+- Added 3 new drag cases in handleDragEnd:
+  - tab → saved-items-drop: saves tab as loose FolderItem with duplicate check
+  - saved-item → folder-drop: moves saved item to folder via moveSavedItemToFolder()
+  - folder-item → saved-items-drop: moves folder item to saved items via moveFolderItemToSavedItems()
+- Added useDroppable zone in SavedItemsList.tsx with id "saved-items-drop"
+- Drop indicator ring shown when hovering over saved items area
+- Empty state: hidden droppable div when no items + not hovering; shows "Drop here to save" when hovering with empty list
+- Imported moveSavedItemToFolder and moveFolderItemToSavedItems from folderStorage
+- Files changed: src/sidepanel/App.tsx, src/sidepanel/SavedItemsList.tsx
+- **Learnings for future iterations:**
+  - customCollisionDetection prefers folder-drop targets first, then zone targets (pinned/tablist/saved-items), then falls back to pointer collisions
+  - When adding droppable zones, always render the ref element even when empty (use hidden div) so dnd-kit can detect it
+  - moveSavedItemToFolder and moveFolderItemToSavedItems are facade functions in folderStorage.ts that handle workspace resolution
 ---
