@@ -10,6 +10,7 @@ export interface Workspace {
   notesCollapsed: boolean;
   notesLastEditedAt: number;
   panelColor?: string;
+  savedItems: FolderItem[];
 }
 
 export interface WorkspaceTemplate {
