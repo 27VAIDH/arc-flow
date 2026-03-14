@@ -36,6 +36,7 @@ import {
   reorderSavedItems,
   renameSavedItem,
   addSavedItem,
+  removeSavedItem,
   moveSavedItemToFolder,
   moveFolderItemToSavedItems,
 } from "../shared/folderStorage";
@@ -731,6 +732,12 @@ export default function App() {
     x: number;
     y: number;
   } | null>(null);
+  const [savedItemPicker, setSavedItemPicker] = useState<{
+    itemId: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [editingSavedItemId, setEditingSavedItemId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showToolsPanel, setShowToolsPanel] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -1908,6 +1915,56 @@ export default function App() {
     []
   );
 
+  const handleSavedItemContextMenu = useCallback(
+    (e: React.MouseEvent, item: FolderItem) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const items: ContextMenuItem[] = [];
+
+      items.push({
+        label: "Open in New Tab",
+        onClick: () => {
+          chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
+        },
+      });
+
+      items.push({
+        label: "Rename",
+        onClick: () => {
+          setEditingSavedItemId(item.id);
+        },
+      });
+
+      if (folders.length > 0) {
+        items.push({
+          label: "Move to Folder...",
+          onClick: () => {
+            setSavedItemPicker({ itemId: item.id, x: e.clientX, y: e.clientY });
+          },
+        });
+      }
+
+      items.push({
+        label: "Delete",
+        onClick: () => {
+          removeSavedItem(item.id);
+        },
+      });
+
+      setContextMenu({ x: e.clientX, y: e.clientY, items });
+    },
+    [folders]
+  );
+
+  const handleMoveSavedItemToFolder = useCallback(
+    async (folderId: string) => {
+      if (!savedItemPicker) return;
+      await moveSavedItemToFolder(savedItemPicker.itemId, folderId);
+      setSavedItemPicker(null);
+    },
+    [savedItemPicker]
+  );
+
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
       const id = String(event.active.id);
@@ -2641,6 +2698,7 @@ export default function App() {
                 url: item.url,
               });
             }}
+            onItemContextMenu={handleSavedItemContextMenu}
             onItemRename={(itemId, newTitle) => {
               setSavedItems((prev) =>
                 prev.map((i) =>
@@ -2649,6 +2707,8 @@ export default function App() {
               );
               renameSavedItem(itemId, newTitle);
             }}
+            editingItemId={editingSavedItemId}
+            onEditingComplete={() => setEditingSavedItemId(null)}
           />
 
           {/* Tab list */}
@@ -2811,6 +2871,17 @@ export default function App() {
           y={folderPicker.y}
           onSelect={handleSaveLinkToFolder}
           onClose={() => setFolderPicker(null)}
+        />
+      )}
+
+      {/* Saved Item → Folder Picker */}
+      {savedItemPicker && (
+        <FolderPickerDropdown
+          folders={folders}
+          x={savedItemPicker.x}
+          y={savedItemPicker.y}
+          onSelect={handleMoveSavedItemToFolder}
+          onClose={() => setSavedItemPicker(null)}
         />
       )}
 

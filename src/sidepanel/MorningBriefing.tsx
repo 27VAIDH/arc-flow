@@ -232,11 +232,16 @@ export default function MorningBriefing({
   }
 
   return (
-    <div className="mx-4 mb-2 p-3 rounded-xl border border-arc-accent/20 dark:border-arc-accent/15 bg-white/80 dark:bg-arc-surface/80 shadow-sm animate-fade-in">
+    <div className="mx-4 mt-2 mb-2 p-3 rounded-xl border border-arc-accent/20 dark:border-arc-accent/15 bg-white/80 dark:bg-arc-surface/80 shadow-sm animate-fade-in">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-800 dark:text-arc-text-primary mb-1.5">
-            Good morning
+            {(() => {
+              const hour = new Date().getHours();
+              if (hour < 12) return "Good morning";
+              if (hour < 17) return "Good afternoon";
+              return "Good evening";
+            })()}
           </p>
 
           {/* Total tabs + per-workspace breakdown */}
