@@ -33,6 +33,12 @@ import {
   reorderFolders,
   reorderItemsInFolder,
   renameItemInFolder,
+  reorderSavedItems,
+  renameSavedItem,
+  addSavedItem,
+  removeSavedItem,
+  moveSavedItemToFolder,
+  moveFolderItemToSavedItems,
 } from "../shared/folderStorage";
 import {
   getActiveWorkspace,
@@ -64,6 +70,7 @@ import AutopilotBanner from "./AutopilotBanner";
 import TabPreviewCard from "./TabPreviewCard";
 import type { TabPreviewInfo } from "./TabPreviewCard";
 import { buildCommands } from "./commandRegistry";
+import SavedItemsList from "./SavedItemsList";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
 import Popover from "./Popover";
 import {
@@ -660,10 +667,10 @@ const customCollisionDetection: CollisionDetection = (args) => {
       String(c.id).startsWith("folder-drop:")
     );
     if (folderDrops.length > 0) return folderDrops;
-    // Then check for pinned-drop-zone and tablist-drop-zone
+    // Then check for pinned-drop-zone, tablist-drop-zone, and saved-items-drop
     const zoneDrops = pointerCollisions.filter((c) => {
       const id = String(c.id);
-      return id === "pinned-drop-zone" || id === "tablist-drop-zone";
+      return id === "pinned-drop-zone" || id === "tablist-drop-zone" || id === "saved-items-drop";
     });
     if (zoneDrops.length > 0) return zoneDrops;
     return pointerCollisions;
@@ -706,6 +713,7 @@ export default function App() {
   const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [pinnedApps, setPinnedApps] = useState<PinnedApp[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
+  const [savedItems, setSavedItems] = useState<FolderItem[]>([]);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [activeDragTab, setActiveDragTab] = useState<TabInfo | null>(null);
   const [activeDragFolder, setActiveDragFolder] = useState<Folder | null>(null);
@@ -724,6 +732,12 @@ export default function App() {
     x: number;
     y: number;
   } | null>(null);
+  const [savedItemPicker, setSavedItemPicker] = useState<{
+    itemId: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [editingSavedItemId, setEditingSavedItemId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showToolsPanel, setShowToolsPanel] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -963,6 +977,7 @@ export default function App() {
         setFolders(
           [...(ws.folders ?? [])].sort((a, b) => a.sortOrder - b.sortOrder)
         );
+        setSavedItems([...(ws.savedItems ?? [])]);
       }, 0);
     }
   }, [activeWorkspaceId, workspaces]);
@@ -1664,6 +1679,30 @@ export default function App() {
         });
       }
 
+      // Add "Save to Workspace" — saves as loose item (no folder)
+      items.push({
+        label: "Save to Workspace",
+        onClick: () => {
+          const isDuplicate = savedItems.some((item) => item.url === tab.url);
+          if (isDuplicate) {
+            setToast("Already saved in workspace");
+            return;
+          }
+          const newItem: FolderItem = {
+            id: crypto.randomUUID(),
+            type: "link",
+            tabId: null,
+            url: tab.url,
+            title: tab.title || tab.url,
+            favicon: tab.favIconUrl || "",
+            isArchived: false,
+            lastActiveAt: Date.now(),
+          };
+          addSavedItem(newItem);
+          setToast("Saved to workspace");
+        },
+      });
+
       // Add "Save Link to Folder..." if there are folders
       if (folders.length > 0) {
         items.push({
@@ -1760,7 +1799,7 @@ export default function App() {
 
       setContextMenu({ x: e.clientX, y: e.clientY, items });
     },
-    [pinnedApps, folders, workspaces, activeWorkspaceId]
+    [pinnedApps, folders, workspaces, activeWorkspaceId, savedItems]
   );
 
   const closeContextMenu = useCallback(() => {
@@ -1876,6 +1915,56 @@ export default function App() {
     []
   );
 
+  const handleSavedItemContextMenu = useCallback(
+    (e: React.MouseEvent, item: FolderItem) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const items: ContextMenuItem[] = [];
+
+      items.push({
+        label: "Open in New Tab",
+        onClick: () => {
+          chrome.runtime.sendMessage({ type: "OPEN_URL", url: item.url });
+        },
+      });
+
+      items.push({
+        label: "Rename",
+        onClick: () => {
+          setEditingSavedItemId(item.id);
+        },
+      });
+
+      if (folders.length > 0) {
+        items.push({
+          label: "Move to Folder...",
+          onClick: () => {
+            setSavedItemPicker({ itemId: item.id, x: e.clientX, y: e.clientY });
+          },
+        });
+      }
+
+      items.push({
+        label: "Delete",
+        onClick: () => {
+          removeSavedItem(item.id);
+        },
+      });
+
+      setContextMenu({ x: e.clientX, y: e.clientY, items });
+    },
+    [folders]
+  );
+
+  const handleMoveSavedItemToFolder = useCallback(
+    async (folderId: string) => {
+      if (!savedItemPicker) return;
+      await moveSavedItemToFolder(savedItemPicker.itemId, folderId);
+      setSavedItemPicker(null);
+    },
+    [savedItemPicker]
+  );
+
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
       const id = String(event.active.id);
@@ -1901,6 +1990,12 @@ export default function App() {
             break;
           }
         }
+      } else if (id.startsWith("saved-item:")) {
+        const itemId = id.replace("saved-item:", "");
+        const item = savedItems.find((i) => i.id === itemId);
+        if (item) {
+          setActiveDragFolderItem(item);
+        }
       } else if (id.startsWith("pinned:")) {
         const pinnedId = id.replace("pinned:", "");
         const app = pinnedApps.find((a) => a.id === pinnedId);
@@ -1909,7 +2004,7 @@ export default function App() {
         }
       }
     },
-    [tabs, folders, pinnedApps]
+    [tabs, folders, savedItems, pinnedApps]
   );
 
   const handleDragEnd = useCallback(
@@ -2072,6 +2167,89 @@ export default function App() {
         return;
       }
 
+      // Case 1g: Tab dropped onto saved items area
+      if (activeId.startsWith("tab:") && overId === "saved-items-drop") {
+        const tabId = parseInt(activeId.replace("tab:", ""), 10);
+        const tab = tabs.find((t) => t.id === tabId);
+        if (!tab) return;
+
+        // Duplicate check
+        if (savedItems.some((i) => i.url === tab.url)) {
+          setToast("Already saved in workspace");
+          return;
+        }
+
+        const newItem: FolderItem = {
+          id: crypto.randomUUID(),
+          type: "link",
+          tabId: null,
+          url: tab.url,
+          title: tab.title || tab.url,
+          favicon: tab.favIconUrl || "",
+          isArchived: false,
+          lastActiveAt: Date.now(),
+        };
+
+        await addSavedItem(newItem);
+        setToast("Saved to workspace");
+        return;
+      }
+
+      // Case 1h: Saved item dropped onto a folder
+      if (
+        activeId.startsWith("saved-item:") &&
+        overId.startsWith("folder-drop:")
+      ) {
+        const itemId = activeId.replace("saved-item:", "");
+        const targetFolderId = overId.replace("folder-drop:", "");
+
+        // Duplicate check against target folder
+        const targetFolder = folders.find((f) => f.id === targetFolderId);
+        const savedItem = savedItems.find((i) => i.id === itemId);
+        if (
+          targetFolder &&
+          savedItem &&
+          targetFolder.items.some((i) => i.url === savedItem.url)
+        ) {
+          setToast("Already saved in this folder");
+          return;
+        }
+
+        try {
+          await moveSavedItemToFolder(itemId, targetFolderId);
+        } catch {
+          // Item not found or target not found
+        }
+        return;
+      }
+
+      // Case 1i: Folder item dropped onto saved items area
+      if (
+        activeId.startsWith("folder-item:") &&
+        overId === "saved-items-drop"
+      ) {
+        const itemId = activeId.replace("folder-item:", "");
+        let folderItem: FolderItem | undefined;
+        for (const folder of folders) {
+          folderItem = folder.items.find((i) => i.id === itemId);
+          if (folderItem) break;
+        }
+        if (!folderItem) return;
+
+        // Duplicate check
+        if (savedItems.some((i) => i.url === folderItem!.url)) {
+          setToast("Already saved in workspace");
+          return;
+        }
+
+        try {
+          await moveFolderItemToSavedItems(itemId);
+        } catch {
+          // Item not found
+        }
+        return;
+      }
+
       // Case 2: Folder item dropped onto a different folder
       if (
         activeId.startsWith("folder-item:") &&
@@ -2137,6 +2315,28 @@ export default function App() {
         } else if (sourceFolder && targetFolder) {
           // Move between folders
           await moveItemToFolder(activeItemId, targetFolder.id);
+        }
+        return;
+      }
+
+      // Case 3b: Reorder saved items within saved items list
+      if (
+        activeId.startsWith("saved-item:") &&
+        overId.startsWith("saved-item:")
+      ) {
+        const activeItemId = activeId.replace("saved-item:", "");
+        const overItemId = overId.replace("saved-item:", "");
+
+        const oldIndex = savedItems.findIndex((i) => i.id === activeItemId);
+        const newIndex = savedItems.findIndex((i) => i.id === overItemId);
+
+        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+          const reordered = arrayMove(savedItems, oldIndex, newIndex);
+
+          // Optimistic update
+          setSavedItems(reordered);
+
+          await reorderSavedItems(reordered.map((i) => i.id));
         }
         return;
       }
@@ -2211,6 +2411,7 @@ export default function App() {
       tabs,
       folders,
       setFolders,
+      savedItems,
       filteredTabs,
       activeWorkspaceId,
       pinnedApps,
@@ -2488,6 +2689,28 @@ export default function App() {
             onCloseAllTabs={handleCloseAllTabs}
           />
 
+          {/* Saved Items (loose items below folders) */}
+          <SavedItemsList
+            savedItems={savedItems}
+            onItemClick={(item) => {
+              chrome.runtime.sendMessage({
+                type: "OPEN_URL",
+                url: item.url,
+              });
+            }}
+            onItemContextMenu={handleSavedItemContextMenu}
+            onItemRename={(itemId, newTitle) => {
+              setSavedItems((prev) =>
+                prev.map((i) =>
+                  i.id === itemId ? { ...i, title: newTitle } : i
+                )
+              );
+              renameSavedItem(itemId, newTitle);
+            }}
+            editingItemId={editingSavedItemId}
+            onEditingComplete={() => setEditingSavedItemId(null)}
+          />
+
           {/* Tab list */}
           <DroppableTabListZone>
             <section
@@ -2648,6 +2871,17 @@ export default function App() {
           y={folderPicker.y}
           onSelect={handleSaveLinkToFolder}
           onClose={() => setFolderPicker(null)}
+        />
+      )}
+
+      {/* Saved Item → Folder Picker */}
+      {savedItemPicker && (
+        <FolderPickerDropdown
+          folders={folders}
+          x={savedItemPicker.x}
+          y={savedItemPicker.y}
+          onSelect={handleMoveSavedItemToFolder}
+          onClose={() => setSavedItemPicker(null)}
         />
       )}
 

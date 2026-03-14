@@ -37,6 +37,10 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
 
   useEffect(() => {
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    if (!chrome.history?.search) {
+      setTopSites([]);
+      return;
+    }
     chrome.history
       .search({ text: "", maxResults: 10, startTime: thirtyDaysAgo })
       .then((items) => {

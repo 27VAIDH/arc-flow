@@ -6,7 +6,7 @@ const ACTIVE_WORKSPACE_KEY = "activeWorkspaceId";
 const SCHEMA_VERSION_KEY = "schemaVersion";
 const TAB_WORKSPACE_MAP_KEY = "tabWorkspaceMap";
 
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 4;
 
 const DEFAULT_WORKSPACE_ID = "default";
 const MAX_PINNED_APPS = 12;
@@ -23,6 +23,7 @@ function createDefaultWorkspace(): Workspace {
     notes: "",
     notesCollapsed: true,
     notesLastEditedAt: 0,
+    savedItems: [],
   };
 }
 
@@ -56,7 +57,7 @@ async function migrateToV2(): Promise<void> {
   // Atomic write: update workspaces, bump schema, remove legacy keys
   await chrome.storage.local.set({
     [WORKSPACES_KEY]: workspaces,
-    [SCHEMA_VERSION_KEY]: CURRENT_SCHEMA_VERSION,
+    [SCHEMA_VERSION_KEY]: 2,
   });
   await chrome.storage.local.remove(["pinnedApps", "folders"]);
 }
@@ -72,6 +73,23 @@ async function migrateToV3(): Promise<void> {
     if (ws.notes === undefined) ws.notes = "";
     if (ws.notesCollapsed === undefined) ws.notesCollapsed = true;
     if (ws.notesLastEditedAt === undefined) ws.notesLastEditedAt = 0;
+  }
+
+  await chrome.storage.local.set({
+    [WORKSPACES_KEY]: workspaces,
+    [SCHEMA_VERSION_KEY]: 3,
+  });
+}
+
+/**
+ * Migrate from V3 to V4: add savedItems field to each workspace.
+ */
+async function migrateToV4(): Promise<void> {
+  const result = await chrome.storage.local.get(WORKSPACES_KEY);
+  const workspaces = (result[WORKSPACES_KEY] as Workspace[]) ?? [];
+
+  for (const ws of workspaces) {
+    if (ws.savedItems === undefined) ws.savedItems = [];
   }
 
   await chrome.storage.local.set({
@@ -103,6 +121,9 @@ async function ensureInitialized(): Promise<void> {
   if (version < 3) {
     await migrateToV3();
   }
+  if (version < 4) {
+    await migrateToV4();
+  }
 }
 
 export async function getWorkspaces(): Promise<Workspace[]> {
@@ -128,6 +149,7 @@ export async function createWorkspace(
 
   let pinnedApps: PinnedApp[] = [];
   let folders: Folder[] = [];
+  let savedItems: FolderItem[] = [];
 
   if (cloneFromId) {
     const source = workspaces.find((w) => w.id === cloneFromId);
@@ -155,6 +177,12 @@ export async function createWorkspace(
           id: crypto.randomUUID(),
         })),
       }));
+
+      // Deep-copy saved items with new IDs
+      savedItems = (source.savedItems ?? []).map((item) => ({
+        ...item,
+        id: crypto.randomUUID(),
+      }));
     }
   }
 
@@ -169,6 +197,7 @@ export async function createWorkspace(
     notes: "",
     notesCollapsed: true,
     notesLastEditedAt: 0,
+    savedItems,
   };
 
   workspaces.push(newWorkspace);
@@ -228,6 +257,7 @@ export async function createWorkspaceFromTemplate(
     notes: "",
     notesCollapsed: true,
     notesLastEditedAt: 0,
+    savedItems: [],
   };
 
   workspaces.push(newWorkspace);
@@ -680,6 +710,121 @@ export async function moveFolderItemToFolderInWorkspace(
   sourceFolder.items = sourceFolder.items.filter((i) => i.id !== itemId);
   targetFolder.items.push(item);
 
+  await saveWorkspaces(workspaces);
+}
+
+// ── Workspace-scoped Saved Items CRUD ──
+
+export async function addSavedItemToWorkspace(
+  workspaceId: string,
+  item: FolderItem
+): Promise<void> {
+  const workspaces = await getWorkspaces();
+  const ws = workspaces.find((w) => w.id === workspaceId);
+  if (!ws) throw new Error(`Workspace "${workspaceId}" not found.`);
+
+  ws.savedItems.push(item);
+  await saveWorkspaces(workspaces);
+}
+
+export async function removeSavedItemFromWorkspace(
+  workspaceId: string,
+  itemId: string
+): Promise<void> {
+  const workspaces = await getWorkspaces();
+  const ws = workspaces.find((w) => w.id === workspaceId);
+  if (!ws) return;
+
+  ws.savedItems = ws.savedItems.filter((i) => i.id !== itemId);
+  await saveWorkspaces(workspaces);
+}
+
+export async function renameSavedItemInWorkspace(
+  workspaceId: string,
+  itemId: string,
+  newTitle: string
+): Promise<void> {
+  const workspaces = await getWorkspaces();
+  const ws = workspaces.find((w) => w.id === workspaceId);
+  if (!ws) return;
+
+  const item = ws.savedItems.find((i) => i.id === itemId);
+  if (item) item.title = newTitle;
+
+  await saveWorkspaces(workspaces);
+}
+
+export async function reorderSavedItemsInWorkspace(
+  workspaceId: string,
+  orderedItemIds: string[]
+): Promise<void> {
+  const workspaces = await getWorkspaces();
+  const ws = workspaces.find((w) => w.id === workspaceId);
+  if (!ws) return;
+
+  const reordered: FolderItem[] = [];
+  for (const id of orderedItemIds) {
+    const item = ws.savedItems.find((i) => i.id === id);
+    if (item) reordered.push(item);
+  }
+  for (const item of ws.savedItems) {
+    if (!orderedItemIds.includes(item.id)) {
+      reordered.push(item);
+    }
+  }
+  ws.savedItems = reordered;
+  await saveWorkspaces(workspaces);
+}
+
+export async function moveSavedItemToFolderInWorkspace(
+  workspaceId: string,
+  itemId: string,
+  targetFolderId: string
+): Promise<void> {
+  const workspaces = await getWorkspaces();
+  const ws = workspaces.find((w) => w.id === workspaceId);
+  if (!ws) throw new Error(`Workspace "${workspaceId}" not found.`);
+
+  const itemIndex = ws.savedItems.findIndex((i) => i.id === itemId);
+  if (itemIndex === -1) {
+    throw new Error(`Item "${itemId}" not found in saved items.`);
+  }
+
+  const targetFolder = ws.folders.find((f) => f.id === targetFolderId);
+  if (!targetFolder) {
+    throw new Error(`Target folder "${targetFolderId}" not found.`);
+  }
+
+  const [item] = ws.savedItems.splice(itemIndex, 1);
+  targetFolder.items.push(item);
+
+  await saveWorkspaces(workspaces);
+}
+
+export async function moveFolderItemToSavedItemsInWorkspace(
+  workspaceId: string,
+  itemId: string
+): Promise<void> {
+  const workspaces = await getWorkspaces();
+  const ws = workspaces.find((w) => w.id === workspaceId);
+  if (!ws) throw new Error(`Workspace "${workspaceId}" not found.`);
+
+  let item: FolderItem | undefined;
+
+  for (const folder of ws.folders) {
+    const found = folder.items.find((i) => i.id === itemId);
+    if (found) {
+      folder.items = folder.items.filter((i) => i.id !== itemId);
+      item = found;
+      break;
+    }
+  }
+
+  if (!item) {
+    throw new Error(`Item "${itemId}" not found in any folder.`);
+  }
+
+  ws.savedItems.push(item);
   await saveWorkspaces(workspaces);
 }
 

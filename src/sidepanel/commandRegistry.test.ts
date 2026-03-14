@@ -50,6 +50,7 @@ describe("buildCommands", () => {
         notes: "",
         notesCollapsed: true,
         notesLastEditedAt: 0,
+        savedItems: [],
       },
       {
         id: "ws-2",
@@ -62,6 +63,7 @@ describe("buildCommands", () => {
         notes: "",
         notesCollapsed: true,
         notesLastEditedAt: 0,
+        savedItems: [],
       },
     ];
 

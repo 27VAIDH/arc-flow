@@ -1,938 +1,175 @@
 # Ralph Progress Log
-Started: Tue Feb 24 18:49:55 IST 2026
+Started: Tue Mar 10 22:20:26 IST 2026
 ---
 
 ## Codebase Patterns
-- Storage: Chrome Storage API (chrome.storage.local) for most data; IndexedDB for large/frequent data (navigation events)
-- Service worker opens/closes DB per write (no persistent connection — worker may suspend)
-- Alarms registered in chrome.runtime.onInstalled, handled in chrome.alarms.onAlarm listener
-- All alarm handlers use .catch(() => {}) for silent failure with retry on next alarm
-- Message types defined as discriminated unions in types.ts (ServiceWorkerMessage, SidePanelMessage)
-- crypto.randomUUID() available in service worker for generating IDs
-- chrome.webNavigation.onCommitted fires before page title is available; title fetched via chrome.tabs.get()
-- chrome.storage.local.get() returns Record<string, any> — cast results explicitly to avoid TS errors
-- Tab switch tracking uses undirected pairs (A→B and B→A count together) for affinity
-- Autopilot scoring: score = matchedConditions × rule.priority; all conditions must match for a rule to score
-- Settings toggle pattern: use `handleUpdate({ field: !settings.field })` with toggle button styling from existing sections
-- TIME_MACHINE_RETENTION_OPTIONS constant in constants.ts for dropdown (7/14/30 days)
-- pruneOldEvents() in navigationDb.ts accepts optional maxAgeDays parameter (defaults to 30)
-- Tree building: chain events via referrerTabId; best parent = most recent event on referrer tab before child's timestamp
-- getNavEventsSince() returns all events from a timestamp; filter client-side for end bound
-- Graph building: nodes keyed by URL, edges keyed by type:source|target; tabId→URL map built from sorted navEvents for resolving references
-- Content scripts: each content script gets its own entry in manifest.json content_scripts array and its own vite entry point (content-xxx naming convention)
-- IndexedDB for large data (nav events, page captures); chrome.storage.local for small data (annotations, settings, affinity)
-- Content script annotations: use imperative DOM (no React), XPath for text location with fallbackScrollY, messages to service worker for persistence
-- crypto.randomUUID() available in content scripts for generating annotation IDs
-- Autopilot rules stored in chrome.storage.local under key `autopilotRules` (AutopilotRule[])
-- Notification-based user confirmation: chrome.notifications.create with buttons, handle via onButtonClicked listener
-- Autopilot switch uses 5-second delay timer (cancellable via notification button or AUTOPILOT_UNDO message)
-- AI services: aiResearchService.ts has summarizePage(), connectPages(), generateBrief() — each reads API key from settings, enforces 2s rate limit
-- Annotation rendering: XPath + textOffset + textLength for precise location; fallback to scrollY floating indicator when XPath fails
-- Service worker GET_ANNOTATIONS uses sendResponse pattern (return true for async); content scripts use chrome.runtime.sendMessage with callback
-- Research sessions: managed via researchDb.ts (IndexedDB); sidepanel listens for PAGE_TEXT_CAPTURED via chrome.runtime.onMessage for live capture updates
-- Autopilot learning: manual workspace switches tracked in `autopilotLearningLog` (chrome.storage.local); suggestions stored in `autopilotLearningSuggestion`
-- To distinguish autopilot vs manual workspace switches, use a `lastAutopilotSwitchedTo` flag set before setActiveWorkspace() calls from autopilot code
+- Schema migrations follow pattern: migrateToVN() reads workspaces, patches missing fields with defaults, writes back with version N
+- Each migration function should set schema version to its own number (not CURRENT_SCHEMA_VERSION) so migrations chain correctly
+- ensureInitialized() chains migrations with `if (version < N)` blocks
+- createWorkspace() deep-copies with new UUIDs when cloning — remember to clone new array fields too
+- Test fixtures for Workspace objects are in commandRegistry.test.ts — update when adding new required fields
+- Quality commands: `npm run typecheck` and `npm run test:run`
+- folderStorage.ts is a facade layer: each function gets active workspace ID then delegates to workspaceStorage.ts
+- Saved items CRUD in workspaceStorage.ts follows same patterns as folder items CRUD (get workspaces, find ws, mutate, save)
+- DnD item prefixes: `tab:`, `folder:`, `folder-item:`, `saved-item:`, `pinned:` — each has corresponding drag start/end cases
+- savedItems state syncs via the existing workspaces storage change listener (no separate listener needed)
+- Context menu handlers build ContextMenuItem[] array and call setContextMenu — add savedItems to deps when referencing it
+- customCollisionDetection priority: folder-drop > zone targets (pinned/tablist/saved-items) > pointer collisions > rect intersection
+- Droppable zones must always render their ref element (even if hidden) so dnd-kit can detect them as drop targets
 
-## 2026-02-24 - INFRA-01
-- Implemented IndexedDB-backed navigation event tracking system
-- Files created: src/shared/navigationDb.ts
-- Files modified: src/shared/types.ts, src/background/service-worker.ts, public/manifest.json
+## 2026-03-10 22:22 - US-001
+- Added `savedItems: FolderItem[]` to Workspace interface in types.ts
+- Bumped CURRENT_SCHEMA_VERSION to 4
+- Added migrateToV4() that initializes savedItems: [] on existing workspaces
+- Updated ensureInitialized() to call migrateToV4() when version < 4
+- Updated createDefaultWorkspace(), createWorkspace(), createWorkspaceFromTemplate() to include savedItems: []
+- createWorkspace() clones savedItems when cloning from source workspace
+- Fixed migrateToV2/V3 to use literal version numbers instead of CURRENT_SCHEMA_VERSION
+- Fixed test fixtures in commandRegistry.test.ts to include savedItems: []
+- Files changed: src/shared/types.ts, src/shared/workspaceStorage.ts, src/sidepanel/commandRegistry.test.ts
 - **Learnings for future iterations:**
-  - IndexedDB must be opened/closed per operation since service workers can suspend
-  - chrome.webNavigation.onCommitted fires for subframes too — filter by frameId === 0
-  - Page title not available at onCommitted time; need chrome.tabs.get() which may fail if tab closed
-  - Skip chrome://, chrome-extension://, and about: URLs from tracking
-  - Session ID is regenerated on service worker restart (using crypto.randomUUID())
+  - Migration functions were using CURRENT_SCHEMA_VERSION instead of their own version number — fixed V2 and V3 to use literals
+  - Test file commandRegistry.test.ts has inline Workspace objects that need updating when interface changes
 ---
 
-## Iteration 1 - Tue Feb 24 18:53:49 IST 2026
+## Iteration 1 - Tue Mar 10 22:23:16 IST 2026
 Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-184955/iter-1.log
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260310-222026/iter-1.log
 ---
-INFRA-01 is complete. There are still stories with `passes: false` remaining (INFRA-02 is next at priority 2).
+**US-001 complete.** Added `savedItems: FolderItem[]` to the Workspace interface, created V3→V4 migration, updated all workspace creation functions, and fixed tests. Typecheck and tests pass.
 
-**INFRA-01 Summary:**
-- Added `NavigationEvent` interface to `types.ts`
-- Created `src/shared/navigationDb.ts` with IndexedDB wrapper (`initNavigationDb`, `addNavEvent`, `getNavEvents`, `getNavEventsSince`, `pruneOldEvents`)
-- Added `chrome.webNavigation.onCommitted` listener in service-worker.ts to record navigation events
-- DB opened/closed per write (service worker safe)
-- Events pruned after 30 days via daily alarm
-- Added `webNavigation` permission to manifest.json
-- Typecheck and tests pass
+There are still 5 stories with `passes: false` (US-002 through US-006).
 ---
 
-## 2026-02-24 - INFRA-02
-- Implemented tab switch affinity tracking via chrome.storage.local
-- Files created: src/shared/affinityStorage.ts
-- Files modified: src/shared/types.ts, src/background/service-worker.ts
+## 2026-03-10 22:25 - US-002
+- Added 6 workspace-scoped savedItems CRUD functions to workspaceStorage.ts:
+  - addSavedItemToWorkspace, removeSavedItemFromWorkspace, renameSavedItemInWorkspace
+  - reorderSavedItemsInWorkspace, moveSavedItemToFolderInWorkspace, moveFolderItemToSavedItemsInWorkspace
+- Added 6 facade wrappers in folderStorage.ts:
+  - addSavedItem, removeSavedItem, renameSavedItem, reorderSavedItems, moveSavedItemToFolder, moveFolderItemToSavedItems
+- Files changed: src/shared/workspaceStorage.ts, src/shared/folderStorage.ts
 - **Learnings for future iterations:**
-  - chrome.storage.local.get() returns `Record<string, any>` — need explicit cast for typed arrays
-  - Linter auto-converts `let` to `const` if no reassignment detected in same scope — use `let` only when reassignment is nearby
-  - previousActiveTabId tracked as module-level variable in service worker for tab switch pairs
-  - Affinity pairs use undirected keys (min:max) so A→B and B→A count together
-  - Storage log capped at 10,000 entries to prevent unbounded growth
+  - Follow same error handling patterns: throw for missing workspace, silent return for missing items in remove/rename
+  - reorder pattern: build new array from orderedIds, append any items not in the list
+  - moveFolderItemToSavedItems searches across all folders to find and extract the item
 ---
 
-## Iteration 2 - Tue Feb 24 18:56:47 IST 2026
+## Iteration 2 - Tue Mar 10 22:25:13 IST 2026
 Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-184955/iter-2.log
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260310-222026/iter-2.log
 ---
-**INFRA-02 is complete.** There are still stories with `passes: false` remaining (US-T1-01 is next at priority 3).
+**US-002 complete.** Added 6 CRUD functions to `workspaceStorage.ts` and 6 facade wrappers to `folderStorage.ts`. Typecheck and tests pass.
 
-**INFRA-02 Summary:**
-- Added `TabSwitchEntry` interface to `types.ts` with `from`, `to`, `timestamp` fields
-- Created `src/shared/affinityStorage.ts` with `recordSwitch()`, `getAffinityPairs(minCount)`, `pruneOldSwitches(maxAgeDays)`
-- Storage key is `tabSwitchLog` in `chrome.storage.local`
-- Added tab switch recording in `chrome.tabs.onActivated` listener in service-worker.ts using `previousActiveTabId` tracking
-- Switch log capped at 10,000 entries
-- Typecheck and tests pass
+There are still 4 stories with `passes: false` (US-003 through US-006).
 ---
 
-## 2026-02-24 - US-T1-01
-- Implemented Time Machine settings: enable/disable tracking, retention period (7/14/30 days)
-- Files modified: src/shared/types.ts, src/shared/constants.ts, src/sidepanel/SettingsPanel.tsx, src/background/service-worker.ts
+## 2026-03-10 22:29 - US-003
+- Created SavedItemsList.tsx component with DraggableSavedItem (follows DraggableFolderItem pattern)
+- Updated App.tsx: added savedItems state, loaded from workspace on switch, synced via workspaces storage change listener
+- Rendered SavedItemsList below FolderTree with click-to-open, inline rename, and drag-to-reorder support
+- Added saved-item handling to handleDragStart and handleDragEnd (reorder case)
+- Section label "Saved" shown above items matching "Folders" label style
+- Files changed: src/sidepanel/SavedItemsList.tsx (new), src/sidepanel/App.tsx
 - **Learnings for future iterations:**
-  - Settings interface in types.ts must match DEFAULT_SETTINGS in constants.ts exactly
-  - SettingsPanel uses `handleUpdate()` for partial settings updates — same pattern for all new settings
-  - Toggle button styling: `bg-arc-accent` when enabled, `bg-gray-300 dark:bg-arc-surface-hover` when disabled
-  - Prune alarm handler reads settings to get retention days, then passes to pruneOldEvents()
-  - `getSettings()` is already imported in service-worker.ts — no additional import needed
+  - savedItems sync is handled through the existing workspaces storage change listener — no separate listener needed
+  - saved-item DnD uses `saved-item:` prefix to distinguish from `folder-item:` prefix
+  - DraggableSavedItem is simpler than DraggableFolderItem — no depth/folderId needed since items are at root level
 ---
 
-## Iteration 3 - Tue Feb 24 19:00:16 IST 2026
+## Iteration 3 - Tue Mar 10 22:29:29 IST 2026
 Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-184955/iter-3.log
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260310-222026/iter-3.log
 ---
-**US-T1-01 is complete.** There are still stories with `passes: false` remaining (US-T1-02 is next at priority 4).
+**US-003 complete.** Created `SavedItemsList.tsx` component and updated `App.tsx` to:
+- Load `savedItems` state from active workspace on switch
+- Sync via existing `chrome.storage.onChanged` workspaces listener
+- Render `SavedItemsList` below `FolderTree` with "Saved" section label
+- Support click-to-open (opens URL in new tab), inline rename on double-click, and drag-to-reorder
+- Visual style matches `DraggableFolderItem` (same height, padding, hover state, favicon + title)
 
-**US-T1-01 Summary:**
-- Extended `Settings` interface with `timeMachineEnabled: boolean` and `timeMachineRetentionDays: number`
-- Added `DEFAULT_SETTINGS` values: `timeMachineEnabled: true`, `timeMachineRetentionDays: 30`
-- Added `TIME_MACHINE_RETENTION_OPTIONS` constant (7/14/30 days)
-- Added Time Machine section to `SettingsPanel.tsx` with toggle and retention dropdown
-- Service worker now checks `timeMachineEnabled` before recording navigation events
-- Prune alarm handler reads `timeMachineRetentionDays` from settings
-- Typecheck and tests pass
+Typecheck and tests pass. There are still 3 stories with `passes: false` (US-004, US-005, US-006).
 ---
 
-## 2026-02-24 - US-T1-02
-- Implemented Navigation Tree Builder for Time Machine feature
-- Files created: src/shared/timeMachineStorage.ts
-- Files modified: src/shared/types.ts
+## 2026-03-10 22:31 - US-004
+- Added "Save to Workspace" context menu item to handleTabContextMenu in App.tsx
+- Imports addSavedItem from folderStorage facade
+- Creates FolderItem with type "link", saves via addSavedItem()
+- Duplicate check: if savedItems already has item with same URL, shows "Already saved in workspace" toast
+- Toast confirmation "Saved to workspace" on success
+- Added savedItems to handleTabContextMenu dependency array
+- "Save Link to Folder..." still appears when folders exist (unchanged)
+- Files changed: src/sidepanel/App.tsx
 - **Learnings for future iterations:**
-  - Tree building chains events via referrerTabId; best parent is the most recent event on the referrer tab before the child's timestamp
-  - getNavEventsSince() in navigationDb.ts returns all events from a timestamp onward; filter client-side for end bound
-  - NavTreeNode is a recursive type — children sorted oldest-first for natural reading, roots sorted newest-first
-  - Orphan events (no referrer or no matching parent) become root nodes
-  - eventsByTabId map is key for efficient parent lookup during tree construction
+  - Context menu items in handleTabContextMenu are built as an array and set via setContextMenu — just push new items
+  - Remember to add state variables used inside useCallback to the dependency array
+  - FolderItem for saved links uses type: "link", tabId: null
 ---
 
-## Iteration 1 - Tue Feb 24 19:09:10 IST 2026
+## Iteration 4 - Tue Mar 10 22:31:40 IST 2026
 Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-190718/iter-1.log
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260310-222026/iter-4.log
 ---
-**US-T1-02 is complete.** There are still stories with `passes: false` remaining (US-A-01 is next at priority 5).
+**US-004 complete.** Added "Save to Workspace" context menu option to `handleTabContextMenu` in `App.tsx`:
+- Always visible in tab context menu (no folder requirement)
+- Creates a `FolderItem` with `type: "link"` and saves via `addSavedItem()`
+- Duplicate check against `savedItems` by URL — shows "Already saved in workspace" toast if duplicate
+- Shows "Saved to workspace" toast on success
+- "Save Link to Folder..." remains unchanged when folders exist
 
-**US-T1-02 Summary:**
-- Added `NavTreeNode` interface to `types.ts`: `{ event: NavigationEvent, children: NavTreeNode[] }`
-- Created `src/shared/timeMachineStorage.ts` with:
-  - `buildNavigationTree(events)` — chains events via `referrerTabId`, orphans become roots, sorted newest-first
-  - `getTreesForTimeRange(start, end)` — fetches from IndexedDB and builds trees for a time window
-- Typecheck and tests pass
+Typecheck and tests pass. There are still 2 stories with `passes: false` (US-005, US-006).
 ---
 
-## 2026-02-24 - US-A-01
-- Implemented Annotation data model and chrome.storage.local-backed storage layer
-- Files created: src/shared/annotationStorage.ts
-- Files modified: src/shared/types.ts
+## 2026-03-10 22:34 - US-005
+- Updated customCollisionDetection to recognize `saved-items-drop` as a valid zone target
+- Added 3 new drag cases in handleDragEnd:
+  - tab → saved-items-drop: saves tab as loose FolderItem with duplicate check
+  - saved-item → folder-drop: moves saved item to folder via moveSavedItemToFolder()
+  - folder-item → saved-items-drop: moves folder item to saved items via moveFolderItemToSavedItems()
+- Added useDroppable zone in SavedItemsList.tsx with id "saved-items-drop"
+- Drop indicator ring shown when hovering over saved items area
+- Empty state: hidden droppable div when no items + not hovering; shows "Drop here to save" when hovering with empty list
+- Imported moveSavedItemToFolder and moveFolderItemToSavedItems from folderStorage
+- Files changed: src/sidepanel/App.tsx, src/sidepanel/SavedItemsList.tsx
 - **Learnings for future iterations:**
-  - Annotation storage uses chrome.storage.local (not IndexedDB) — annotations are small, don't need indexing
-  - Storage key is `annotations` — same pattern as other chrome.storage.local stores (tabSwitchLog, etc.)
-  - saveAnnotation() does upsert — checks by id, updates if exists, appends if new
-  - exportAnnotations() supports both JSON and Markdown formats; Markdown groups by page URL
-  - Annotation interface has XPath + textOffset + textLength for precise text location, plus fallbackScrollY for when XPath fails
+  - customCollisionDetection prefers folder-drop targets first, then zone targets (pinned/tablist/saved-items), then falls back to pointer collisions
+  - When adding droppable zones, always render the ref element even when empty (use hidden div) so dnd-kit can detect it
+  - moveSavedItemToFolder and moveFolderItemToSavedItems are facade functions in folderStorage.ts that handle workspace resolution
 ---
 
-## Iteration 2 - Tue Feb 24 19:11:00 IST 2026
+## Iteration 5 - Tue Mar 10 22:34:51 IST 2026
 Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-190718/iter-2.log
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260310-222026/iter-5.log
 ---
-**US-A-01 is complete.** There are still stories with `passes: false` remaining (US-AP-01 is next at priority 6).
+**US-005 complete.** Implemented drag-and-drop between loose items and folders:
 
-**US-A-01 Summary:**
-- Added `Annotation` interface to `types.ts` with all required fields: id, url, pageTitle, type ('highlight' | 'note'), text, comment, color, xpath, textOffset, textLength, fallbackScrollY, createdAt
-- Created `src/shared/annotationStorage.ts` with:
-  - `saveAnnotation(a)` — upsert by id
-  - `getAnnotationsForUrl(url)` — filter by URL
-  - `deleteAnnotation(id)` — remove by id
-  - `getAllAnnotations()` — return all
-  - `exportAnnotations(format)` — JSON or Markdown export
-- Storage key is `annotations` in `chrome.storage.local`
-- Typecheck and tests pass
+- **tab → saved-items-drop**: Saves tab as loose FolderItem (with duplicate check + toast)
+- **saved-item → folder-drop**: Moves saved item into a folder via `moveSavedItemToFolder()`
+- **folder-item → saved-items-drop**: Moves folder item to saved items via `moveFolderItemToSavedItems()`
+- **saved-item reorder**: Already handled from US-003
+- **customCollisionDetection** updated to recognize `saved-items-drop` as a valid zone target
+- **SavedItemsList.tsx**: Added `useDroppable` zone with drop indicator ring; hidden droppable div when empty so dnd-kit can still detect it
+
+Typecheck and tests pass. There is still 1 story with `passes: false` (US-006).
 ---
 
-## 2026-02-24 - US-AP-01
-- Implemented Autopilot Rules Data Model — interfaces and settings defaults
-- Files modified: src/shared/types.ts, src/shared/constants.ts
+## 2026-03-11 01:33 - US-006
+- Context menu and inline rename for loose saved items were mostly implemented in prior iterations (US-003/US-004/US-005)
+- The handleSavedItemContextMenu in App.tsx already had all 4 menu items: Open in New Tab, Rename, Move to Folder..., Delete
+- The savedItemPicker state and FolderPickerDropdown for Move to Folder were already wired
+- The editingSavedItemId state for rename-from-context-menu was already in App.tsx
+- **Fix needed**: SavedItemsList.tsx interface was missing `editingItemId` and `onEditingComplete` props — added them and passed through to DraggableSavedItem's `externalEditing`/`onEditingComplete` props
+- Double-click inline rename was already working from US-003
+- Files changed: src/sidepanel/SavedItemsList.tsx
 - **Learnings for future iterations:**
-  - AutopilotCondition uses a discriminated `type` field ('time' | 'domain' | 'displayCount') with a string `value` for flexibility
-  - AutopilotRule has `priority` field for scoring engine to weight matched rules
-  - Autopilot disabled by default (`autopilotEnabled: false`) but notifications enabled (`autopilotNotify: true`)
-  - Settings interface and DEFAULT_SETTINGS must stay in sync — add to both simultaneously
+  - When multiple stories build on each other, earlier iterations may implement most of a later story's requirements — always check what's already done before starting
+  - Props passed from parent must match the child component's interface — typecheck catches this
 ---
 
-## Iteration 1 - Tue Feb 24 19:12:18 IST 2026
+## Iteration 1 - Wed Mar 11 01:34:04 IST 2026
 Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-191218/iter-1.log
+Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260311-013153/iter-1.log
 ---
-Error: Claude Code cannot be launched inside another Claude Code session.
-Nested sessions share runtime resources and will crash all active sessions.
-To bypass this check, unset the CLAUDECODE environment variable.
-⚠️  timeout failed with ITER_TIMEOUT='1200'. Running without timeout.
-Error: Claude Code cannot be launched inside another Claude Code session.
-Nested sessions share runtime resources and will crash all active sessions.
-To bypass this check, unset the CLAUDECODE environment variable.
----
-
-## Iteration 2 - Tue Feb 24 19:12:20 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-191218/iter-2.log
----
-Error: Claude Code cannot be launched inside another Claude Code session.
-Nested sessions share runtime resources and will crash all active sessions.
-To bypass this check, unset the CLAUDECODE environment variable.
-⚠️  timeout failed with ITER_TIMEOUT='1200'. Running without timeout.
-Error: Claude Code cannot be launched inside another Claude Code session.
-Nested sessions share runtime resources and will crash all active sessions.
-To bypass this check, unset the CLAUDECODE environment variable.
----
-
-## Iteration 3 - Tue Feb 24 19:12:23 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-191218/iter-3.log
----
-Error: Claude Code cannot be launched inside another Claude Code session.
-Nested sessions share runtime resources and will crash all active sessions.
-To bypass this check, unset the CLAUDECODE environment variable.
-⚠️  timeout failed with ITER_TIMEOUT='1200'. Running without timeout.
-Error: Claude Code cannot be launched inside another Claude Code session.
-Nested sessions share runtime resources and will crash all active sessions.
-To bypass this check, unset the CLAUDECODE environment variable.
----
-
-## 2026-02-24 - US-AP-02
-- Implemented Autopilot Scoring Engine — pure-function evaluation of autopilot rules
-- Files created: src/shared/autopilotEngine.ts
-- Files modified: src/shared/types.ts
-- **Learnings for future iterations:**
-  - AutopilotContext interface has currentTime (Date), activeTabUrl (string), displayCount (number)
-  - Time conditions use 'HH:MM-HH:MM' format and support cross-midnight ranges (e.g., '22:00-06:00')
-  - Domain conditions support wildcard patterns ('*.example.com') and exact match
-  - DisplayCount condition compares integer equality
-  - All conditions must match for a rule to be scored (AND logic)
-  - Score = matched condition count × rule priority; highest score wins
-  - getBestMatch() returns null when no rules match (no enabled rules, no conditions, or no full match)
----
-
-## Iteration 1 - Tue Feb 24 19:14:41 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-191248/iter-1.log
----
-**US-AP-02 is complete.** There are still stories with `passes: false` remaining (US-G-01 is next at priority 8).
-
-**US-AP-02 Summary:**
-- Added `AutopilotContext` interface (`currentTime`, `activeTabUrl`, `displayCount`) and `ScoredRule` interface to `types.ts`
-- Created `src/shared/autopilotEngine.ts` with:
-  - `scoreRules(rules, context)` — evaluates all enabled rules, returns scored results sorted by score descending
-  - `getBestMatch(rules, context)` — returns highest-scoring rule or null
-- Time conditions support `HH:MM-HH:MM` format including cross-midnight ranges
-- Domain conditions support wildcard patterns (`*.example.com`) and exact match
-- DisplayCount conditions check integer equality
-- All conditions must match (AND logic); score = matched count × rule priority
-- Typecheck and tests pass
----
-
-## 2026-02-24 - US-G-01
-- Implemented Graph Data Builder — builds graph nodes + edges from navigation events and tab switch affinity
-- Files created: src/shared/tabGraphStorage.ts
-- Files modified: src/shared/types.ts
-- **Learnings for future iterations:**
-  - GraphNode uses URL as its ID (unique key for deduplication)
-  - Nodes built from navEvents (visitCount) + openTabs (isOpen flag); open tabs always included even without nav events
-  - Navigation edges built by tracking tabId→URL mapping over sorted events, then linking via referrerTabId
-  - Switch edges built by resolving affinity pair tabIds to URLs using tabId→URL map or open tab URLs
-  - Edges keyed by type:source|target to aggregate weights across multiple events
-  - Nodes capped at 50 by highest visitCount
-  - getDomain() uses URL constructor with try/catch for robustness
----
-
-## Iteration 2 - Tue Feb 24 19:16:58 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-191248/iter-2.log
----
-**US-G-01 is complete.** There are still stories with `passes: false` remaining (US-R-01 is next at priority 9).
-
-**US-G-01 Summary:**
-- Added `GraphNode`, `GraphEdge`, and `GraphData` interfaces to `types.ts`
-- Created `src/shared/tabGraphStorage.ts` with `buildGraphData(navEvents, affinityPairs, openTabs)` function
-- Nodes built from navigation events (visit counts) + open tabs (isOpen flag), capped at 50
-- Navigation edges derived from referrerTabId chains; switch edges from affinity pairs
-- Edges have correct type classification (`navigation` vs `switch`) with aggregated weights
-- Typecheck and tests pass
----
-
-## 2026-02-24 - US-R-01
-- Implemented Research Mode Toggle & Page Text Capture
-- Files created: src/shared/researchDb.ts, src/content/research.ts
-- Files modified: src/shared/types.ts, public/manifest.json, vite.config.ts
-- **Learnings for future iterations:**
-  - Research data uses IndexedDB (like navigation events) since page text can be 50KB+ per capture
-  - Content script is a no-op until triggered by CAPTURE_PAGE_TEXT message — keeps overhead zero
-  - Content script returns text, title, and URL synchronously via sendResponse
-  - Manifest needs separate content_scripts entry for research.ts (not bundled with capture.ts)
-  - Vite config needs a separate entry point for each content script (content-research)
-  - ResearchSession stores pageIds as string array; captures reference sessionId via index
-  - deleteSession cascades to delete all associated page captures
----
-
-## Iteration 3 - Tue Feb 24 19:20:07 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-191248/iter-3.log
----
-**US-R-01 is complete.** There are still stories with `passes: false` remaining (US-A-02 is next at priority 10).
-
-**US-R-01 Summary:**
-- Added `PageCapture` interface (`id`, `url`, `title`, `text`, `sessionId`, `capturedAt`, `summary?`) and `ResearchSession` interface (`id`, `name`, `pageIds`, `createdAt`) to `types.ts`
-- Extended `ServiceWorkerMessage` with `PAGE_TEXT_CAPTURED` type and `SidePanelMessage` with `CAPTURE_PAGE_TEXT` type
-- Created `src/shared/researchDb.ts` with IndexedDB wrapper: `initResearchDb()`, `savePageCapture()`, `getCaptures(sessionId)`, `saveSession()`, `getSessions()`, `deleteSession(sessionId)` (cascades to captures)
-- Created `src/content/research.ts` — no-op content script that extracts `document.body.innerText` only when triggered by `CAPTURE_PAGE_TEXT` message
-- Registered research content script in `manifest.json` (all URLs, `document_idle`)
-- Added `content-research` entry point to `vite.config.ts`
-- Typecheck and tests pass
----
-
-## 2026-02-24 - US-A-02
-- Implemented Content Script Annotation Toolbar with floating toolbar on text selection
-- Files created: src/content/annotate.ts
-- Files modified: src/shared/types.ts, src/background/service-worker.ts, public/manifest.json, vite.config.ts
-- **Learnings for future iterations:**
-  - Floating toolbar positioned relative to selection bounding rect (fixed positioning, translateX(-50%) for centering)
-  - XPath generation walks up DOM tree; text offset calculated via TreeWalker within parent element
-  - Content script uses mouseup + debounce for selection detection (100ms delay)
-  - Toolbar dismissed on mousedown outside via document-level listener
-  - Note input replaces toolbar in-place (same position) with input + save button
-  - SAVE_ANNOTATION and DELETE_ANNOTATION added to SidePanelMessage union type (content scripts use same message channel)
-  - Service worker imports annotationStorage and calls saveAnnotation/deleteAnnotation directly
-  - z-index 2147483647 (max 32-bit int) ensures toolbar is above all page content
----
-
-## Iteration 1 - Tue Feb 24 19:29:13 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-192530/iter-1.log
----
-**US-A-02 is complete.** There are still stories with `passes: false` remaining (US-AP-03 is next at priority 11).
-
-**US-A-02 Summary:**
-- Created `src/content/annotate.ts` — floating annotation toolbar that appears on text selection
-  - 3 highlight color buttons: yellow (#FFEB3B), green (#81C784), blue (#64B5F6)
-  - Note button opens inline text input for adding comments
-  - XPath + fallbackScrollY captured for each annotation
-  - Toolbar dismissed on click outside
-- Extended `SidePanelMessage` with `SAVE_ANNOTATION` and `DELETE_ANNOTATION` message types in `types.ts`
-- Added service worker handlers for `SAVE_ANNOTATION` and `DELETE_ANNOTATION` using `annotationStorage`
-- Registered content script in `manifest.json` (all URLs, document_idle) and `vite.config.ts` (content-annotate entry)
-- Typecheck and tests pass
----
-
-## 2026-02-24 - US-AP-03
-- Implemented Autopilot Background Worker — wired scoring engine into service worker with alarm-based evaluation
-- Files modified: src/shared/types.ts, src/background/service-worker.ts, public/manifest.json
-- **Learnings for future iterations:**
-  - Autopilot rules stored in chrome.storage.local under key `autopilotRules` (AutopilotRule[])
-  - chrome.notifications.create with buttons for user-facing confirmations; handle via onButtonClicked listener
-  - 5-second cancellable delay before workspace switch (clearTimeout pattern)
-  - autopilotPreviousWorkspaceId tracks last workspace for undo; cleared on successful undo or cancel
-  - AUTOPILOT_SWITCH sent as ServiceWorkerMessage (service worker → sidepanel), AUTOPILOT_UNDO sent as SidePanelMessage (sidepanel → service worker)
-  - evaluateAutopilot() is a no-op when autopilotEnabled is false or no rules exist
-  - Display count retrieved via chrome.system.display.getInfo() for multi-monitor condition matching
----
-
-## Iteration 2 - Tue Feb 24 19:33:01 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-192530/iter-2.log
----
-**US-AP-03 is complete.** There are still stories with `passes: false` remaining (US-G-02 is next at priority 12).
-
-**US-AP-03 Summary:**
-- Extended `ServiceWorkerMessage` with `AUTOPILOT_SWITCH` (workspaceId + workspaceName) and `AUTOPILOT_UNDO` types
-- Extended `SidePanelMessage` with `AUTOPILOT_UNDO` type
-- Added `evaluateAutopilot` alarm (every 5 minutes) in `onInstalled`
-- Implemented `evaluateAutopilot()` — loads rules from storage, builds context (time, active tab URL, display count), runs scoring engine, switches workspace if best match differs
-- Notification shown before switching (if `autopilotNotify` enabled) with Cancel button
-- 5-second cancellable delay before actual workspace switch
-- `AUTOPILOT_UNDO` message handler reverts to previous workspace
-- `notifications` permission added to `manifest.json`
-- No-op when `autopilotEnabled` is false or no rules exist
-- Typecheck and tests pass
----
-
-## 2026-02-24 - US-G-02
-- Implemented Graph Layout Hook with force-directed algorithm for SVG visualization
-- Files created: src/sidepanel/useGraphLayout.ts
-- Files modified: src/shared/types.ts
-- **Learnings for future iterations:**
-  - LayoutResult extends GraphNode/GraphEdge with position fields (x, y for nodes; x1, y1, x2, y2 for edges)
-  - Force-directed layout uses repulsion between all pairs + attraction along edges, 100 iterations
-  - useMemo with [data, width, height] deps ensures stable layout on re-render
-  - Padding of 20px keeps nodes from canvas edges
-  - computeLayout is a pure function extracted outside the hook for testability
-  - Node positions initialized randomly; velocity damped at 0.9 per iteration for convergence
----
-
-## Iteration 3 - Tue Feb 24 19:34:50 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-192530/iter-3.log
----
-**US-G-02 is complete.** There are still stories with `passes: false` remaining (US-R-02 is next at priority 13).
-
-**US-G-02 Summary:**
-- Added `LayoutNode`, `LayoutEdge`, and `LayoutResult` interfaces to `types.ts` — extend `GraphNode`/`GraphEdge` with position fields
-- Created `src/sidepanel/useGraphLayout.ts` with:
-  - `useGraphLayout(data, width, height)` React hook returning `LayoutResult`
-  - Force-directed algorithm: repulsion between all node pairs + attraction along edges
-  - Runs 100 iterations synchronously on mount (via `useMemo`)
-  - Nodes clamped within bounds with 20px padding
-  - Velocity damped at 0.9 per iteration for stable convergence
-- Typecheck and tests pass
----
-
-## 2026-02-24 - US-R-02
-- Implemented Auto-Summarization via AI using OpenRouter API
-- Files created: src/shared/aiResearchService.ts
-- Files modified: src/background/service-worker.ts
-- **Learnings for future iterations:**
-  - aiResearchService.ts follows same OpenRouter pattern as aiGroupingService.ts (same base URL, auth, model)
-  - 2-second rate limiter enforced via module-level lastCallTime + waitForRateLimit() async helper
-  - Page text truncated to 8000 chars for summarization to stay within token limits
-  - Service worker handles CAPTURE_PAGE_TEXT by forwarding to active tab content script, then saving + summarizing
-  - Capture broadcast to sidepanel twice: once immediately (no summary), once after AI summarization completes
-  - summarizePage(), connectPages(), generateBrief() each read API key from settings independently
-  - 30-second timeout for AI calls (longer than 10s used in grouping service, since summarization prompts are larger)
----
-
-## Iteration 1 - Tue Feb 24 21:01:07 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-205724/iter-1.log
----
-**US-R-02 is complete.** There are still stories with `passes: false` remaining (US-T1-03 is next at priority 14).
-
-**US-R-02 Summary:**
-- Created `src/shared/aiResearchService.ts` with:
-  - `summarizePage(text)` — summarizes page content in 2-3 paragraphs
-  - `connectPages(summaries)` — analyzes connections across multiple pages (themes, contradictions, gaps)
-  - `generateBrief(summaries, topic)` — generates comprehensive research brief with Summary/Key Findings/Sources
-- All functions follow the OpenRouter API pattern from `aiGroupingService.ts` (same base URL, auth, model)
-- 2-second minimum gap between API calls enforced via rate limiter
-- Service worker handles `CAPTURE_PAGE_TEXT` message: forwards to active tab content script, saves capture to IndexedDB, calls `summarizePage()`, stores summary alongside capture
-- Broadcasts `PAGE_TEXT_CAPTURED` twice: immediately (no summary) and after AI summarization completes
-- Handles API errors gracefully (logs error, does not crash)
-- Typecheck and tests pass
----
-
-## 2026-02-24 - US-T1-03
-- Implemented Timeline View Section for Time Machine feature
-- Files created: src/sidepanel/TimeMachineSection.tsx
-- Files modified: src/sidepanel/App.tsx, src/sidepanel/commandRegistry.ts, src/sidepanel/commandRegistry.test.ts
-- **Learnings for future iterations:**
-  - Collapsible section pattern: `<section>` wrapper with toggle button, chevron icon with rotate-90, conditional content rendering
-  - Date range selector uses pill buttons with `bg-arc-accent text-white` for active state
-  - TreeNode component is recursive with `depth` prop for indentation (16px per level)
-  - Expand/collapse default: depth < 2 starts expanded
-  - getFaviconUrl uses `new URL(url).origin + /favicon.ico` pattern
-  - Command registry: add callback param to both destructured params and type signature, update test's defaultHandlers
-  - scrollIntoView with `behavior: "smooth"` for command palette scroll-to-section
-  - getTreesForTimeRange returns NavTreeNode[] sorted newest-first
----
-
-## Iteration 2 - Tue Feb 24 21:05:25 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-205724/iter-2.log
----
-**US-T1-03 is complete.** There are still stories with `passes: false` remaining (US-A-03 is next at priority 15).
-
-**US-T1-03 Summary:**
-- Created `src/sidepanel/TimeMachineSection.tsx` — collapsible sidebar section with:
-  - Date range selector (Today / Yesterday / This Week)
-  - Recursive tree nodes showing favicon + title (truncated) + time
-  - Click tree node opens URL in new tab
-  - Expand/collapse tree branches (depth < 2 expanded by default)
-  - Reacts to `chrome.storage.onChanged` for live updates
-  - Hidden when Time Machine is disabled in settings
-- Added `TimeMachineSection` rendering in `App.tsx` (between Archive and Recently Closed)
-- Registered "Time Machine" command in `commandRegistry.ts` with scroll-to-section action
-- Updated test file with `onTimeMachine` handler
-- Typecheck and tests pass
----
-
-## 2026-02-24 - US-A-03
-- Implemented Annotation Highlight Rendering on page load
-- Files modified: src/content/annotate.ts, src/shared/types.ts, src/background/service-worker.ts
-- **Learnings for future iterations:**
-  - XPath resolution uses document.evaluate() with FIRST_ORDERED_NODE_TYPE for finding annotation targets
-  - Text range finding walks text nodes with TreeWalker, accumulating offsets to find exact start position
-  - surroundContents() can fail when range spans multiple elements — fallback extracts and reinserts via extractContents/insertNode
-  - Fallback indicators use absolute positioning at fallbackScrollY with a colored bar on left margin
-  - GET_ANNOTATIONS message uses sendResponse pattern (return true for async) — content script calls chrome.runtime.sendMessage with callback
-  - SCROLL_TO_ANNOTATION listener in content script handles scroll-to + highlight pulse animation
-  - Mark elements use `background-color: ${color}40` (25% opacity) + `border-bottom: 2px solid` for subtle highlighting
-  - Note indicators rendered as inline emoji after mark element with vertical-align: super
----
-
-## Iteration 3 - Tue Feb 24 21:09:18 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-205724/iter-3.log
----
-**US-A-03 is complete.** There are still stories with `passes: false` remaining (US-A-04 is next at priority 16).
-
-**US-A-03 Summary:**
-- Modified `src/content/annotate.ts` to render saved annotations on page load:
-  - On load, queries service worker for annotations matching current URL via `GET_ANNOTATIONS` message
-  - Highlights rendered as `<mark>` wrappers with stored color (25% opacity background + 2px border-bottom)
-  - Note indicators (📝) visible on annotated text
-  - XPath resolution via `document.evaluate()` with text offset walking for precise location
-  - Fallback to `scrollY` with floating colored bar indicator when XPath fails
-  - `SCROLL_TO_ANNOTATION` message listener for scroll-to + highlight pulse animation
-- Extended `SidePanelMessage` with `GET_ANNOTATIONS` and `SCROLL_TO_ANNOTATION` types
-- Extended `ServiceWorkerMessage` with `ANNOTATIONS_LOADED` type
-- Added `GET_ANNOTATIONS` handler in service-worker.ts (async sendResponse pattern)
-- Typecheck and tests pass
----
-
-## 2026-02-24 - US-A-04
-- Implemented Annotations Sidebar Section with annotations grouped by page
-- Files created: src/sidepanel/AnnotationsSection.tsx
-- Files modified: src/sidepanel/App.tsx, src/sidepanel/commandRegistry.ts, src/sidepanel/commandRegistry.test.ts
-- **Learnings for future iterations:**
-  - Annotations grouped by page URL using Map; groups sorted by lastAnnotatedAt descending
-  - PageGroup component is collapsible (default collapsed), shows pageTitle + count + date
-  - Delete button uses opacity-0 group-hover:opacity-100 for show-on-hover pattern
-  - Color dot rendered via Tailwind classes mapped from hex color constants (#FFEB3B → bg-yellow-400)
-  - chrome.storage.onChanged listener on `annotations` key for live updates
-  - Command registry pattern: add handler param + type signature + test defaultHandlers simultaneously
-  - Section placement in App.tsx: after TimeMachineSection, before RecentlyClosedSection
----
-
-## Iteration 1 - Tue Feb 24 21:46:37 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-214252/iter-1.log
----
-**US-A-04 is complete.** There are still stories with `passes: false` remaining (US-AP-04 is next at priority 17).
-
-**US-A-04 Summary:**
-- Created `src/sidepanel/AnnotationsSection.tsx` — collapsible sidebar section with:
-  - Annotations grouped by page URL, each group showing page title + annotation count + last annotated date
-  - Expand group to see individual annotations with color indicator dot + text snippet + optional comment
-  - Delete button per annotation (visible on hover)
-  - Empty state message when no annotations exist
-  - Live updates via `chrome.storage.onChanged` listener on `annotations` key
-- Registered "Annotations" command in `commandRegistry.ts` with scroll-to-section action
-- Updated test file with `onAnnotations` handler
-- Section rendered in `App.tsx` between Time Machine and Recently Closed sections
-- Typecheck and tests pass
----
-
-## 2026-02-24 - US-AP-04
-- Implemented Autopilot Settings UI in SettingsPanel.tsx
-- Files modified: src/sidepanel/SettingsPanel.tsx
-- **Learnings for future iterations:**
-  - Autopilot rules stored in chrome.storage.local under key `autopilotRules` — loaded/saved independently from Settings
-  - AutopilotRulesSection manages its own state for rules (separate from Settings state) with chrome.storage.onChanged listener
-  - Rule editor uses local component state (name, conditions, targetWorkspaceId, priority) — only persisted on Save
-  - Condition type change resets value to empty string to avoid stale format mismatches
-  - CONDITION_TYPE_OPTIONS and PRIORITY_OPTIONS defined as module-level constants for reuse
-  - Target workspace dropdown populated from workspaces prop — same pattern as RoutingRulesSection
----
-
-## Iteration 2 - Tue Feb 24 21:55:38 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-214252/iter-2.log
----
-**US-AP-04 is complete.** There are still stories with `passes: false` remaining (US-G-03 is next at priority 18).
-
-**US-AP-04 Summary:**
-- Added Autopilot section to `SettingsPanel.tsx` with:
-  - Enable/disable toggle for `autopilotEnabled`
-  - Notification preference toggle for `autopilotNotify`
-  - Rules list showing each rule with name, priority badge, enable toggle, edit/delete buttons, conditions summary, and target workspace
-  - Rule editor form with: name input, conditions list (time range / domain pattern / display count with add/remove), target workspace dropdown populated from existing workspaces, priority selector (1-5)
-- Rules stored in `chrome.storage.local` under `autopilotRules` key with live updates via `chrome.storage.onChanged`
-- Follows existing SettingsPanel patterns (toggle styling, section headers, form styling)
-- Typecheck and tests pass
----
-
-## 2026-02-24 - US-G-03
-- Implemented Tab Graph SVG Visualization sidebar section
-- Files created: src/sidepanel/TabGraphSection.tsx
-- Files modified: src/sidepanel/App.tsx, src/sidepanel/commandRegistry.ts, src/sidepanel/commandRegistry.test.ts
-- **Learnings for future iterations:**
-  - Graph data loaded from last 7 days of nav events + affinity pairs with minCount=1
-  - Domain colors assigned from a fixed palette of 10 colors, cycled by domain index
-  - Force-directed layout via useGraphLayout hook (GRAPH_WIDTH=320, GRAPH_HEIGHT=280)
-  - Edge opacity scales linearly from 0.2 to 1.0 based on weight/maxWeight
-  - Switch edges rendered with strokeDasharray for visual distinction from navigation edges
-  - Open tabs get larger circle radius (7 vs 5) and white stroke border
-  - Tooltip positioned relative to SVG bounding rect with pointer-events-none
-  - Node click: if isOpen, finds tab by URL and switches to it; otherwise opens new tab
-  - chrome.tabs.query({}) returns all tabs for mapping open tab URLs to graph nodes
-
-## Iteration 3 - Tue Feb 24 21:59:35 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-214252/iter-3.log
----
-**US-G-03 is complete.** There are still stories with `passes: false` remaining (US-R-03 is next at priority 19).
-
-**US-G-03 Summary:**
-- Created `src/sidepanel/TabGraphSection.tsx` — collapsible sidebar section with:
-  - SVG graph rendering nodes as circles colored by domain (10-color palette)
-  - Edge opacity reflects weight (0.2 to 1.0 scale), dashed lines for switch edges
-  - Click node switches to tab (if open) or opens URL in new tab
-  - Hover tooltip shows full title + visit count + open status
-  - Open tabs get larger circles (7px vs 5px) with white stroke border
-  - Empty state when no browsing data exists
-  - Graph data loaded from last 7 days of navigation events + affinity pairs
-  - Live updates via `chrome.storage.onChanged`
-- Registered "Tab Graph" command in `commandRegistry.ts` with scroll-to-section action
-- Updated test file with `onTabGraph` handler
-- Section rendered in `App.tsx` after Annotations section
-- Typecheck and tests pass
----
-
-## 2026-02-24 - US-R-03
-- Implemented Research Copilot Sidebar Section
-- Files created: src/sidepanel/ResearchCopilotSection.tsx
-- Files modified: src/sidepanel/App.tsx, src/sidepanel/commandRegistry.ts, src/sidepanel/commandRegistry.test.ts
-- **Learnings for future iterations:**
-  - ResearchCopilotSection manages active session state locally; sessions persisted via researchDb.ts (IndexedDB)
-  - Capture button sends CAPTURE_PAGE_TEXT message to service worker; listens for PAGE_TEXT_CAPTURED via chrome.runtime.onMessage
-  - Session history list collapsed by default; filters out active session from history
-  - Captured pages show summary with expand/collapse; "Summarizing..." shown while AI processes
-  - Uses crypto.randomUUID() for session IDs (available in sidepanel context)
-  - Section placement in App.tsx: after TabGraphSection, before RecentlyClosedSection
-  - Command registry: add onResearchCopilot handler + type signature + test defaultHandlers simultaneously
----
-
-## Iteration 1 - Tue Feb 24 22:16:12 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-220653/iter-1.log
----
-**US-R-03 is complete.** There are still stories with `passes: false` remaining (US-T1-04 is next at priority 20).
-
-**US-R-03 Summary:**
-- Created `src/sidepanel/ResearchCopilotSection.tsx` — collapsible sidebar section with:
-  - "Start Research" button creates new session (persisted to IndexedDB via `researchDb.ts`)
-  - "Capture This Page" button sends `CAPTURE_PAGE_TEXT` message to service worker
-  - Captured pages shown with title + summary (expandable, "Summarizing..." while AI processes)
-  - "Stop Research" ends session
-  - Session history list (collapsed by default) with delete and restore actions
-  - Empty state message when no session and no history
-  - Live updates via `chrome.runtime.onMessage` listener for `PAGE_TEXT_CAPTURED`
-- Registered "Research Copilot" command in `commandRegistry.ts` with scroll-to-section action
-- Updated test file with `onResearchCopilot` handler
-- Section rendered in `App.tsx` after Tab Graph section
-- Typecheck and tests pass
----
-
-## 2026-02-24 - US-T1-04
-- Implemented Restore Tab State from Timeline feature
-- Files modified: src/sidepanel/TimeMachineSection.tsx
-- **Learnings for future iterations:**
-  - TreeNode component passes ancestorUrls prop down recursively to build the path from root to any node
-  - collectPathUrls() creates the full URL path by appending current node URL to ancestor URLs
-  - chrome.windows.create() returns potentially undefined window — use optional chaining (newWindow?.id)
-  - Restore button uses opacity-0 group-hover:opacity-100 pattern (same as delete button in AnnotationsSection)
-  - window.confirm() for confirmation dialog when restoring >5 tabs — simple and effective
-  - restorePath() opens first URL via chrome.windows.create, then adds remaining tabs to that window
----
-
-## Iteration 2 - Tue Feb 24 22:18:40 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-220653/iter-2.log
----
-**US-T1-04 is complete.** There are still stories with `passes: false` remaining (US-T1-05 is next at priority 21).
-
-**US-T1-04 Summary:**
-- Modified `src/sidepanel/TimeMachineSection.tsx` to add restore functionality:
-  - Restore button (refresh icon) appears on tree node hover via `opacity-0 group-hover:opacity-100`
-  - `collectPathUrls()` builds the full URL path from root to selected node by passing `ancestorUrls` prop recursively through TreeNode components
-  - `restorePath()` opens all URLs in a new window: first URL via `chrome.windows.create()`, remaining via `chrome.tabs.create()` with the new window's ID
-  - Confirmation dialog (`window.confirm`) shown when restoring >5 tabs
-- Typecheck and tests pass
----
-
-## 2026-02-24 - US-T1-05
-- Implemented Branching Tree Visualization with CSS connector lines and animated expand/collapse
-- Files modified: src/sidepanel/TimeMachineSection.tsx
-- **Learnings for future iterations:**
-  - CSS connector lines: vertical border-left for parent-to-children, horizontal border-top for each child connector
-  - Vertical line positioned at `depth * 16 + 11` (center of expand button area), horizontal line 9px wide from vertical line to child content
-  - Animated expand/collapse uses CSS grid trick: `grid-template-rows` transitioning between `0fr` and `1fr` with `overflow-hidden` inner div
-  - Branch points (nodes with children) highlighted with accent-colored expand chevron and font-medium
-  - Leaf nodes get a small dot indicator (1px rounded circle) instead of empty spacer
-  - `transition-[grid-template-rows] duration-200 ease-in-out` for smooth animation
----
-
-## Iteration 3 - Tue Feb 24 22:21:26 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260224-220653/iter-3.log
----
-**US-T1-05 is complete.** There are still stories with `passes: false` remaining (US-T1-06 is next at priority 22).
-
-**US-T1-05 Summary:**
-- Modified `src/sidepanel/TimeMachineSection.tsx` to add branching tree visualization:
-  - **CSS connector lines**: Vertical `border-left` lines connect parent to children, horizontal `border-top` lines connect each child to the vertical line
-  - **16px depth indentation**: Maintained existing `depth * 16` indentation with connector lines aligned to expand button centers
-  - **Branch points highlighted**: Nodes with children get accent-colored expand chevrons and `font-medium` text; leaf nodes get small dot indicators
-  - **Animated expand/collapse**: CSS grid `grid-template-rows` transition from `0fr` to `1fr` with 200ms ease-in-out for smooth expand/collapse animations
-- Typecheck and tests pass
----
-
-## 2026-02-25 - US-T1-06
-- Implemented Search and Filter Timeline for Time Machine section
-- Files modified: src/sidepanel/TimeMachineSection.tsx
-- **Learnings for future iterations:**
-  - useDebounce custom hook pattern: useState + useEffect with setTimeout/clearTimeout for cleanup
-  - Tree filtering uses two-pass approach: treeHasMatch() checks if subtree contains any match, nodeMatchesFilter() checks individual node
-  - When filtering is active, auto-expand all matching subtrees (override manual expand state)
-  - Matching nodes highlighted with bg-yellow-100 dark:bg-yellow-900/30 for visual feedback
-  - Domain list collected by recursively walking all tree nodes and extracting hostnames via URL constructor
-  - Non-matching subtrees return null from TreeNode component (hidden entirely)
----
-
-## Iteration 1 - Wed Feb 25 00:22:35 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260225-001951/iter-1.log
----
-**US-T1-06 is complete.** There are still stories with `passes: false` remaining (US-T1-07 is next at priority 23).
-
-**US-T1-06 Summary:**
-- Modified `src/sidepanel/TimeMachineSection.tsx` to add search and filter functionality:
-  - **Search input** at top of section filters tree nodes by title or URL (case-insensitive substring match)
-  - **Domain filter dropdown** populated from all domains in current tree data
-  - **300ms debounce** on search input via custom `useDebounce` hook
-  - **Matching nodes highlighted** with yellow background (`bg-yellow-100 dark:bg-yellow-900/30`)
-  - **Non-matching subtrees hidden** entirely (return null from TreeNode)
-  - **Auto-expand** matching subtrees when filtering is active
-  - Helper functions: `getDomain()`, `collectDomains()`, `nodeMatchesFilter()`, `treeHasMatch()`
-- Typecheck and tests pass
----
-
-## 2026-02-25 00:24 - US-T1-07
-- Implemented Export Timeline as Markdown feature
-- Files changed: src/sidepanel/TimeMachineSection.tsx
-- Added `treeToMarkdown()` recursive function converting NavTreeNode trees to indented Markdown with `[title](url) (HH:MM)` format
-- Added `exportTreesAsMarkdown()` that wraps trees with a header showing the date range
-- Added Export button (download icon) in section header, visible when section is expanded and trees exist
-- Copies Markdown to clipboard via `navigator.clipboard.writeText()`
-- Toast notification "Copied to clipboard!" shown for 2 seconds
-- **Learnings for future iterations:**
-  - The Time Machine section header uses absolute positioning for action buttons (right-aligned), requiring `relative` on the section container
-  - Toast notifications use `animate-pulse` from Tailwind for visual feedback
----
-
-## Iteration 2 - Wed Feb 25 00:25:02 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260225-001951/iter-2.log
----
-**US-T1-07 complete.** Remaining stories with `passes: false`:
-- US-A-05 (priority 24) - Scroll-to-Annotation from Sidebar
-- US-A-06 (priority 25) - Export Annotations
-- US-AP-05 (priority 26) - Autopilot Undo & Learning Mode
-- US-G-04 (priority 27) - Cluster Actions
-- US-G-05 (priority 28) - Graph List Fallback Toggle
-- US-R-04 (priority 29) - Cross-Page Analysis
-- US-R-05 (priority 30) - Generate Research Brief
----
-
-## 2026-02-25 00:28 IST - US-A-05
-- Implemented scroll-to-annotation from sidebar
-- Clicking an annotation item in AnnotationsSection sends SCROLL_TO_ANNOTATION message to service worker
-- Service worker finds existing tab with matching URL (switches to it) or opens new tab, then relays scroll message to content script
-- Content script already had SCROLL_TO_ANNOTATION handler with smooth scroll + highlight pulse
-- Added `url` field to SCROLL_TO_ANNOTATION message type in SidePanelMessage
-- Delete button uses e.stopPropagation() to prevent triggering scroll on delete click
-- Files changed: src/shared/types.ts, src/background/service-worker.ts, src/sidepanel/AnnotationsSection.tsx
-- **Learnings for future iterations:**
-  - chrome.tabs.query({ url }) can find tabs by URL — useful for tab lookup
-  - chrome.tabs.TabChangeInfo type doesn't exist in this project's chrome types — use inline `{ status?: string }` instead
-  - When adding click handlers to items that also have action buttons, use e.stopPropagation() on the button to prevent parent click
-  - For new tab + scroll workflows, use chrome.tabs.onUpdated listener with 500ms delay after "complete" for content script init
----
-
-## Iteration 3 - Wed Feb 25 00:27:59 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260225-001951/iter-3.log
----
-**US-A-05 completed.** There are still stories with `passes: false` remaining (US-A-06, US-AP-05, US-G-04, US-G-05, US-R-04, US-R-05).
----
-
-## 2026-02-25 - US-A-06
-- Implemented export annotations feature with JSON download and Markdown clipboard copy
-- Files modified: src/sidepanel/AnnotationsSection.tsx, src/shared/annotationStorage.ts
-- **Learnings for future iterations:**
-  - Export dropdown pattern: relative container with absolute dropdown, outside-click listener for dismissal
-  - JSON file download: create Blob → URL.createObjectURL → programmatic anchor click → revokeObjectURL
-  - Clipboard write: navigator.clipboard.writeText() works in sidepanel context
-  - Toast notifications: fixed position with auto-dismiss via setTimeout
-  - exportAnnotations() in annotationStorage.ts already had JSON and Markdown formats; just needed color emoji prefixes added
----
-
-## Iteration 1 - Wed Feb 25 00:52:34 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260225-005010/iter-1.log
----
-**US-A-06 is complete.** There are still stories with `passes: false` remaining:
-
-- US-AP-05 (priority 26) - Autopilot Undo & Learning Mode
-- US-G-04 (priority 27) - Cluster Actions
-- US-G-05 (priority 28) - Graph List Fallback Toggle
-- US-R-04 (priority 29) - Cross-Page Analysis
-- US-R-05 (priority 30) - Generate Research Brief
-
-**US-A-06 Summary:**
-- Added export dropdown to Annotations sidebar section header (download icon button)
-- JSON export downloads as `.json` file via Blob + programmatic anchor click
-- Markdown export copies to clipboard with toast notification
-- Updated markdown format to include color emoji prefixes (yellow/green/blue circles) for highlights as blockquotes
-- Typecheck and tests pass
----
-
-## 2026-02-25 - US-AP-05
-- Implemented Autopilot Undo banner and Learning Mode
-- Files created: src/sidepanel/AutopilotBanner.tsx
-- Files modified: src/shared/types.ts, src/shared/constants.ts, src/background/service-worker.ts, src/sidepanel/App.tsx
-- **Learnings for future iterations:**
-  - Linter aggressively converts `let` to `const` for module-level variables; need assignments in same file scope or linter will rewrite
-  - AutopilotBanner listens for AUTOPILOT_SWITCH messages via chrome.runtime.onMessage independently (not via App.tsx message handler)
-  - Learning mode tracks manual switches by listening to chrome.storage.onChanged for `activeWorkspaceId` key
-  - Autopilot-initiated switches are filtered via `lastAutopilotSwitchedTo` flag set before each setActiveWorkspace() call from autopilot code
-  - Pattern detection groups by 2-hour time blocks and domains, suggests rule after 5+ consistent switches
-  - Learning suggestions stored in `autopilotLearningSuggestion` key for sidepanel to display
----
-
-## Iteration 2 - Wed Feb 25 00:58:20 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260225-005010/iter-2.log
----
-**US-AP-05 is complete.** There are still stories with `passes: false` remaining:
-
-- US-G-04 (priority 27) - Cluster Actions (Create Folder, AI Summarize)
-- US-G-05 (priority 28) - Graph List Fallback Toggle
-- US-R-04 (priority 29) - Cross-Page Analysis
-- US-R-05 (priority 30) - Generate Research Brief
-
-**US-AP-05 Summary:**
-- Created `AutopilotBanner.tsx` — shows "Switched to {workspace} — Undo (10s)" banner with countdown timer when autopilot switches workspace
-- Undo button sends `AUTOPILOT_UNDO` message to service worker to revert
-- Banner auto-dismisses after 10s countdown
-- Added `autopilotLearning: boolean` to Settings interface and DEFAULT_SETTINGS (defaults to false)
-- Learning mode in service worker tracks manual workspace switches (filtered from autopilot-initiated ones via `lastAutopilotSwitchedTo` flag)
-- Pattern detection groups switches by 2-hour time blocks and domains, suggests rule after 5+ consistent patterns
-- Banner rendered in App.tsx
-- Typecheck and tests pass
----
-
-## 2026-02-25 01:01 - US-G-04
-- Implemented right-click context menu on graph node clusters (same domain group)
-- "Create Folder" action creates a folder with all pages from the domain cluster using folderStorage.ts
-- "AI Summarize" action sends cluster pages to OpenRouter API for a summary using same API pattern as aiGroupingService.ts
-- Context menu dismisses on click outside
-- Summary card displayed below graph with close button
-- Files changed: src/sidepanel/TabGraphSection.tsx
-- **Learnings for future iterations:**
-  - Graph nodes are LayoutNode which extends GraphNode with x,y — domain field available for clustering
-  - folderStorage.ts createFolder() + addItemToFolder() pattern for programmatically creating folders with items
-  - OpenRouter API pattern: same base URL, Bearer auth, model "google/gemini-2.0-flash-001" — used across aiGroupingService.ts and aiResearchService.ts
-  - Context menu positioning: use .closest(".relative")?.getBoundingClientRect() for container-relative positioning
----
-
-## Iteration 3 - Wed Feb 25 01:01:13 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260225-005010/iter-3.log
----
-US-G-04 is complete. There are still stories with `passes: false` (US-G-05, US-R-04, US-R-05), so another iteration will pick up the next one.
-
-**Summary of US-G-04 implementation:**
-- Added right-click context menu on graph nodes showing cluster actions for same-domain node groups
-- **Create Folder**: Creates a new folder in the active workspace with all pages from the domain cluster
-- **AI Summarize**: Sends the cluster's page titles/URLs to OpenRouter API and displays a summary card below the graph
-- Context menu dismisses on click outside
-- All quality checks pass (typecheck + tests)
----
-
-## 2026-02-25 09:39 - US-G-05
-- Implemented toggle between SVG graph view and flat list view in TabGraphSection.tsx
-- List view shows nodes sorted by visit count with domain grouping headers and color indicators
-- Same click behavior (switch to tab or open URL) in both views
-- View preference persisted in chrome.storage.local under key `tabGraphViewMode`
-- Toggle button in section header shows list icon when in graph mode and graph icon when in list mode
-- Files changed: src/sidepanel/TabGraphSection.tsx
-- **Learnings for future iterations:**
-  - The `domainColorMap` useMemo is computed from layout.nodes (graph view data), so it can be reused in list view too
-  - `getDomainColor` mutates the Map passed to it — used existing pattern rather than creating a new one
----
-
-## Iteration 1 - Wed Feb 25 09:39:44 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260225-093709/iter-1.log
----
-**US-G-05 completed.** Remaining stories with `passes: false`:
-- **US-R-04** (priority 29) - Cross-Page Analysis
-- **US-R-05** (priority 30) - Generate Research Brief
-
-The next iteration will pick up US-R-04.
----
-
-## 2026-02-25 09:41 - US-R-04
-- Implemented "Analyze Connections" button in ResearchCopilotSection.tsx
-- Button disabled when <2 captured pages, shows loading state during analysis
-- Calls connectPages() from aiResearchService.ts with page summaries
-- Results displayed in a styled card below captured pages
-- Results cached per session using useRef to avoid re-fetching on re-render
-- Analysis state cleared when stopping/switching sessions, restored from cache on session restore
-- Files changed: src/sidepanel/ResearchCopilotSection.tsx
-- **Learnings for future iterations:**
-  - connectPages() expects string[] of summaries, not full PageCapture objects
-  - useRef for caching is preferable to useState to avoid triggering re-renders on cache writes
-  - Analysis error state should be separate from result state for clean UX
----
-
-## Iteration 2 - Wed Feb 25 09:42:11 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260225-093709/iter-2.log
----
-**US-R-04 complete.** There is still one story with `passes: false` — **US-R-05: Generate Research Brief** (priority 30). Another iteration will pick it up.
----
-
-## 2026-02-25 09:43 - US-R-05
-- Implemented Generate Research Brief feature in ResearchCopilotSection.tsx
-- Added optional topic input field for focused briefs
-- Added 'Generate Brief' button (enabled when >=1 page captured)
-- Brief results displayed with formatted output (Summary, Key Findings, Sources sections rendered via whitespace-pre-wrap)
-- Added 'Copy to Clipboard' button with copied confirmation state
-- Added 'Export Markdown' button that downloads .md file
-- Brief results cached per session+topic combo to avoid re-fetching on re-render
-- Files changed: src/sidepanel/ResearchCopilotSection.tsx
-- **Learnings for future iterations:**
-  - The generateBrief() function in aiResearchService.ts was already fully implemented — only UI integration was needed
-  - Brief caching uses session ID + topic as composite key since different topics produce different briefs
-  - Blob URL download pattern: create Blob → URL.createObjectURL → click anchor → revokeObjectURL for file downloads from extension sidepanel
----
-
-## Iteration 3 - Wed Feb 25 09:44:29 IST 2026
-Tool: claude
-Log: /Users/vaidhprakashchoudhary/Documents/Projects/Development/fun-projects/arc-flow/scripts/ralph/runs/20260225-093709/iter-3.log
----
-All 30 stories now have `passes: true`.
+All 6 stories now have `passes: true`.
 
 <promise>COMPLETE</promise>
 ---
